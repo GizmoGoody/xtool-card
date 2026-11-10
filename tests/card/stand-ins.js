@@ -66,6 +66,22 @@ const P2 = [
   ["binary_sensor.p2_cover", "cover_open", "off"],
   ["switch.p2_red_dot", "ir_led_global", "off"],
 ];
+const P2_OVERVIEW_CAMERA = [
+  ["camera.p2_overview", "camera_overview", "idle", { entity_picture: "/api/camera_proxy/camera.p2_overview?token=c" }],
+  ["select.p2_overview_crop", "crop_preset", "Sync to Mode", { options: ["Sync to Mode", "Custom"] }],
+  ["number.p2_overview_exposure", "exposure", "128", { min: 0, max: 255, step: 1 }],
+  ["number.p2_overview_thumbnail", "thumbnail_refresh", "300", { min: 5, max: 600, step: 1, unit_of_measurement: "s" }],
+  ["switch.p2_overview_target", "overlay_laser_target", "off"],
+  ["switch.p2_overview_slats", "overlay_slat_lines", "on"],
+];
+const P2_CLOSE_CAMERA = [
+  ["camera.p2_close", "camera_closeup", "idle", { entity_picture: "/api/camera_proxy/camera.p2_close?token=d" }],
+  ["select.p2_close_crop", "crop_preset", "Custom", { options: ["Sync to Mode", "Custom"] }],
+  ["number.p2_close_exposure", "exposure", "128", { min: 0, max: 255, step: 1 }],
+  ["number.p2_close_thumbnail", "thumbnail_refresh", "300", { min: 5, max: 600, step: 1, unit_of_measurement: "s" }],
+  ["switch.p2_close_studio", "overlay_close_camera_studio", "off"],
+  ["switch.p2_close_custom", "overlay_close_camera_custom", "on"],
+];
 
 /**
  * A hass object. changes: { entity_id: state or { state, attributes } }.
@@ -81,6 +97,8 @@ window.makeHass = (changes = {}) => {
       dev_f2_deep: { id: "dev_f2_deep", model: "xTool F2 Ultra UV Deep camera", via_device_id: "dev_f2" },
       dev_if2: { id: "dev_if2", model: "xTool SafetyPro IF2 2.0", via_device_id: "dev_f2" },
       dev_p2: { id: "dev_p2", model: "xTool P2", via_device_id: null },
+      dev_p2_overview: { id: "dev_p2_overview", model: "xTool P2 Overview camera", via_device_id: "dev_p2" },
+      dev_p2_close: { id: "dev_p2_close", model: "xTool P2 Close camera", via_device_id: "dev_p2" },
     },
     calls: [],
     // The state (or the state given) as Home Assistant shows it: here with its unit
@@ -95,7 +113,8 @@ window.makeHass = (changes = {}) => {
     },
   };
   const started = new Date(Date.now() - 728000).toISOString();  // 12:08 ago
-  for (const [device, list] of [["dev_f2", F2], ["dev_f2_main", F2_MAIN_CAMERA], ["dev_f2_deep", F2_DEEP_CAMERA], ["dev_if2", IF2], ["dev_p2", P2]]) {
+  for (const [device, list] of [["dev_f2", F2], ["dev_f2_main", F2_MAIN_CAMERA], ["dev_f2_deep", F2_DEEP_CAMERA], ["dev_if2", IF2],
+    ["dev_p2", P2], ["dev_p2_overview", P2_OVERVIEW_CAMERA], ["dev_p2_close", P2_CLOSE_CAMERA]]) {
     for (const [entity_id, translation_key, state, attributes = {}] of list) {
       hass.entities[entity_id] = { entity_id, device_id: device, platform: "xtool", translation_key, entity_category: CATEGORIES[entity_id] };
       hass.states[entity_id] = { entity_id, state, attributes: { friendly_name: entity_id, ...attributes }, last_changed: started };

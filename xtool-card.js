@@ -39,7 +39,7 @@
  * Every corner, size and text color comes from the theme's variables.
  */
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.0-alpha.1";
 const DOMAIN = "xtool";
 const CARD_TYPE = "xtool-card";
 const EDITOR_TYPE = "xtool-card-editor";
@@ -114,8 +114,30 @@ const CAMERA_ROLES = {
   perspective: [["perspective", "camera_deep_perspective"], ["select"]],
   // The P2's crop presets, one select for each camera
   crop_preset: [["crop_preset"], ["select"]],
+  exposure: [["exposure"], ["number"]],
+  thumbnail_refresh: [["thumbnail_refresh", "camera_thumbnail_refresh"], ["number"]],
 };
 const CROP_ROLES = ["crop_width", "crop_height", "crop_center_x", "crop_center_y"];
+const CAMERA_OVERLAYS = [
+  ["overlay_work_bed", "Work bed", "mdi:vector-rectangle"],
+  ["overlay_process_on_slats", "Process on slats", "mdi:vector-rectangle"],
+  ["overlay_honeycomb_panel", "Honeycomb panel", "mdi:vector-rectangle"],
+  ["overlay_slats_removed", "Slats removed", "mdi:vector-rectangle"],
+  ["overlay_close_camera_uncropped", "Close camera (uncropped)", "mdi:vector-rectangle"],
+  ["overlay_close_camera_studio", "Close camera (studio)", "mdi:vector-rectangle"],
+  ["overlay_close_camera_custom", "Close camera (custom)", "mdi:vector-rectangle"],
+  ["overlay_close_camera_image", "Close camera (image)", "mdi:image"],
+  ["overlay_studio", "Studio", "mdi:vector-rectangle"],
+  ["overlay_custom", "Custom", "mdi:vector-rectangle"],
+  ["overlay_overview_work_bed", "Overview (work bed)", "mdi:vector-rectangle"],
+  ["overlay_overview_process_on_slats", "Overview (process on slats)", "mdi:vector-rectangle"],
+  ["overlay_overview_honeycomb_panel", "Overview (honeycomb panel)", "mdi:vector-rectangle"],
+  ["overlay_overview_slats_removed", "Overview (slats removed)", "mdi:vector-rectangle"],
+  ["overlay_laser_target", "Laser target", "mdi:crosshairs-gps"],
+  ["overlay_slat_lines", "Slat lines", "mdi:format-align-justify"],
+  ["overlay_red_dot_close", "Red dot (close)", "mdi:circle-double"],
+  ["overlay_red_dot_quick", "Red dot (quick)", "mdi:circle-double"],
+];
 // Reset crop: the calibrated 200 x 200 mm area, centered
 const CROP_RESET = { width: 200, height: 200, center_x: 0, center_y: 0 };
 // The cameras, in the order the camera feature offers them
@@ -191,7 +213,8 @@ function camerasOf(hass, entityId) {
 /** A camera's own setting (CAMERA_ROLES), on the camera's device. */
 function cameraSetting(hass, camera, role) {
   const device = hass?.entities?.[camera]?.device_id;
-  return device ? findRole(deviceEntities(hass, device), CAMERA_ROLES[role]) : undefined;
+  const spec = CAMERA_ROLES[role] ?? [[role], ["switch"]];
+  return device ? findRole(deviceEntities(hass, device), spec) : undefined;
 }
 
 const isXtool = (hass, entityId) => hass?.entities?.[entityId]?.platform === DOMAIN;
@@ -1202,6 +1225,27 @@ class XtoolCamera extends XtoolFeature {
         key: "crop_preset", label: `Crop: ${stateObj?.state}. Tap to choose`, text: stateObj?.state ?? "Crop", icon: "mdi:crop",
         color: "primary", pressed: false, disabled: !this._usable(preset), alwaysText: true,
         action: () => fire(this, "hass-more-info", { entityId: preset }),
+      });
+    }
+    for (const [role, label, icon] of CAMERA_OVERLAYS) {
+      const entityId = cameraSetting(this._hass, this._camera, role);
+      if (!entityId) continue;
+      const on = isOn(this._hass.states[entityId]);
+      buttons.push({
+        key: role, label, text: label, icon, color: "primary", pressed: on, disabled: !this._usable(entityId),
+        action: () => performAction(this, `switch.${on ? "turn_off" : "turn_on"}`, entityId),
+      });
+    }
+    for (const [role, label, icon] of [
+      ["exposure", "Exposure", "mdi:brightness-6"],
+      ["thumbnail_refresh", "Thumbnail refresh interval", "mdi:camera-refresh"],
+    ]) {
+      const entityId = cameraSetting(this._hass, this._camera, role);
+      if (!entityId) continue;
+      buttons.push({
+        key: role, label: `${label}. Tap to choose`, text: label, icon, color: "primary",
+        pressed: false, disabled: !this._usable(entityId), alwaysText: true,
+        action: () => fire(this, "hass-more-info", { entityId }),
       });
     }
     return buttons;

@@ -13,6 +13,9 @@ The card is developed separately from the [xTool Laser integration](https://gith
 
 This card is in **Alpha** and is being developed alongside the xTool Laser integration. It is not yet a stable, broadly validated release.
 
+The current release is **0.1.0-alpha.1**. Alpha releases use SemVer prerelease
+versions; later Alpha releases increment the final prerelease number.
+
 - **Developed with:** xTool F2 Ultra UV and xTool P2.
 - **Hardware-tested:** xTool F2 Ultra UV.
 - **P2 status:** P2 entities and card support are implemented, but the card still needs dedicated end-to-end hardware validation on a P2.
@@ -44,7 +47,7 @@ The card requires [GizmoGoody/ha-xtool](https://github.com/GizmoGoody/ha-xtool).
 For the card features currently in this repository:
 
 - The integration's existing laser, camera, accessory, and control entities are required.
-- The P2 features depend primarily on upstream [PR #60](https://github.com/thecodingdad/ha-xtool/pull/60), which adds the P2 cameras, crops, overlays, measuring, laser positioning, lights, safety entities, and related protocol support.
+- The P2 features depend primarily on upstream [PR #60](https://github.com/thecodingdad/ha-xtool/pull/60), which adds the P2 cameras, crop presets, camera exposure and thumbnail controls, overlays, measuring, laser positioning, lights, safety entities, and related protocol support.
 - PR #60 is built on or incorporates the camera and entity work from [PR #43](https://github.com/thecodingdad/ha-xtool/pull/43), [PR #52](https://github.com/thecodingdad/ha-xtool/pull/52), [PR #53](https://github.com/thecodingdad/ha-xtool/pull/53), and [PR #54](https://github.com/thecodingdad/ha-xtool/pull/54).
 - Other card controls use the integration changes in the open [xTool Laser pull requests](https://github.com/thecodingdad/ha-xtool/pulls). Until those changes are merged and released, matching development versions of the integration may be required.
 

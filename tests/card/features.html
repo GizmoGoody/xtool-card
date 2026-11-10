@@ -278,6 +278,25 @@
     check("camera, live", live.shadowRoot.querySelector("hui-image").cameraView === "live" && live.shadowRoot.querySelector("hui-image").cameraImage === "camera.f2_deep"
       && topKeys(live).map((k) => k.dataset.key).join() === "perspective", "the chosen camera, live, without camera buttons (its perspective stays)");
 
+    const p2Hass = makeHass();
+    const p2Camera = addFeature({ type: "custom:xtool-camera", camera: "Overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    await wait(60);
+    check("P2 camera", topKeys(p2Camera).map((k) => k.dataset.key).join() ===
+      "camera.p2_overview,camera.p2_close,crop_preset,overlay_laser_target,overlay_slat_lines,exposure,thumbnail_refresh",
+      "overview camera, crop preset, overlays, exposure and thumbnail refresh");
+    check("P2 camera", keyNamed(p2Camera, "overlay_laser_target").getAttribute("aria-pressed") === "false"
+      && keyNamed(p2Camera, "overlay_slat_lines").getAttribute("aria-pressed") === "true",
+      "overlay switches show their current states");
+    keyNamed(p2Camera, "overlay_laser_target").click();
+    check("P2 camera", JSON.stringify(lastCall(p2Hass)) === JSON.stringify({ domain: "switch", service: "turn_on", data: { entity_id: "switch.p2_overview_target" } }),
+      "an overlay switch uses Home Assistant's switch service");
+    let p2Info;
+    p2Camera.addEventListener("hass-more-info", (ev) => (p2Info = ev.detail.entityId));
+    keyNamed(p2Camera, "exposure").click();
+    check("P2 camera", p2Info === "number.p2_overview_exposure", "exposure opens its Home Assistant control");
+    check("P2 camera", window.customCardFeatures.find((f) => f.type === "xtool-camera").isSupported(p2Hass, { entity_id: "sensor.p2_status" }),
+      "the P2 camera is offered by the feature picker");
+
     const offCamera = addFeature({ type: "custom:xtool-camera" }, { hass: makeHass({ "sensor.f2_status": "off" }) });
     await wait(60);
     check("camera, off", offCamera.style.display === "" && offCamera.shadowRoot.querySelector(".shot hui-image")?.cameraImage === "camera.f2_main",
@@ -574,7 +593,7 @@
 
     // The features are offered only for lasers that have their parts
     const offered = Object.fromEntries(window.customCardFeatures.map((f) => [f.type, f.isSupported(makeHass(), { entity_id: "sensor.p2_status" })]));
-    check("feature picker", offered["xtool-job"] && offered["xtool-peripherals"] && !offered["xtool-fill-light"] && !offered["xtool-if2-fan"] && !offered["xtool-laser"] && !offered["xtool-measure"] && !offered["xtool-camera"] && !offered["xtool-focus"],
+    check("feature picker", offered["xtool-job"] && offered["xtool-peripherals"] && !offered["xtool-fill-light"] && !offered["xtool-if2-fan"] && !offered["xtool-laser"] && !offered["xtool-measure"] && offered["xtool-camera"] && !offered["xtool-focus"],
       `offered for the P2: ${Object.entries(offered).filter(([, v]) => v).map(([k]) => k).join(", ")}`);
   });
 </script>
