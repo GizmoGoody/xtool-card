@@ -4,7 +4,7 @@ A Home Assistant dashboard card and tile features for xTool laser entities.
 
 The card is developed separately from the [xTool Laser integration](https://github.com/GizmoGoody/ha-xtool), but it requires that integration for the entities it displays and controls.
 
-![xTool Card](docs/xtool-card.png)
+![xTool Card](https://raw.githubusercontent.com/GizmoGoody/xtool-card/main/docs/xtool-card.png)
 
 ## Installation
 
