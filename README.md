@@ -43,51 +43,51 @@ Adding a repository from a link needs a connection to GitHub, which the Marketpl
 
 ## xTool Laser integration status and dependencies
 
-The primary integration is [GizmoGoody/ha-xtool](https://github.com/GizmoGoody/ha-xtool).
-The card is currently ahead of its released integration. Until the required
-development PRs below are merged into that repository and released, the card
-must be paired with a matching development build of the integration. The PRs
-are still open as of this Alpha release.
-
-The card's integration dependencies are:
+The primary integration is the upstream
+[thecodingdad/ha-xtool repository](https://github.com/thecodingdad/ha-xtool).
+This card has the following dependencies:
 
 - **Core entities (released integration):** the laser status, job buttons,
   power, exhaust, lights, safety checks, settings, and ordinary camera
   entities used by the base card features.
-- **PR #28 — F-series fill-light percentage:** enables the F2 Ultra UV
+- **[PR #28](https://github.com/thecodingdad/ha-xtool/pull/28) — F-series fill-light percentage:** enables the F2 Ultra UV
   fill-light brightness feature to use the same percentage as Studio.
-- **PR #31 — IF2 2.0 fan:** enables the SafetyPro IF2 fan feature with Off,
+- **[PR #31](https://github.com/thecodingdad/ha-xtool/pull/31) — IF2 2.0 fan:** enables the SafetyPro IF2 fan feature with Off,
   Auto, and speed controls.
-- **PRs #37, #38, #41, #42, and #43 — F2 camera chain:** enable reliable
+- **[PRs #37](https://github.com/thecodingdad/ha-xtool/pull/37), [#38](https://github.com/thecodingdad/ha-xtool/pull/38), [#41](https://github.com/thecodingdad/ha-xtool/pull/41), [#42](https://github.com/thecodingdad/ha-xtool/pull/42), and [#43](https://github.com/thecodingdad/ha-xtool/pull/43) — F2 camera chain:** enable reliable
   F2 camera snapshots/live view, thumbnail refresh, camera-specific devices,
   crop controls, Deep camera perspective, and the calibration image used by
   the camera feature.
-- **PR #40 — F2 focus height:** enables the F2 focus feature with Autofocus
+- **[PR #40](https://github.com/thecodingdad/ha-xtool/pull/40) — F2 focus height:** enables the F2 focus feature with Autofocus
   and typed or stepped focus height.
-- **PRs #45, #46, and #47 — F2 status and sensors:** enable the additional
+- **[PRs #45](https://github.com/thecodingdad/ha-xtool/pull/45), [#46](https://github.com/thecodingdad/ha-xtool/pull/46), and [#47](https://github.com/thecodingdad/ha-xtool/pull/47) — F2 status and sensors:** enable the additional
   F2 status pictures and the F2 sensor/state-content values, including the
   red-dot state.
-- **PRs #49 and #50 — job result and last-job time:** enable failed-job
+- **[PRs #49](https://github.com/thecodingdad/ha-xtool/pull/49) and [#50](https://github.com/thecodingdad/ha-xtool/pull/50) — job result and last-job time:** enable failed-job
   reporting and the Last job time value shown by the card's state content.
-- **PR #52 — held written values:** makes card controls show newly written
+- **[PR #52](https://github.com/thecodingdad/ha-xtool/pull/52) — held written values:** makes card controls show newly written
   values immediately and retain them until the device reports them.
-- **PR #53 — sleeping WS-V2 devices:** keeps sleeping-device controls from
+- **[PR #53](https://github.com/thecodingdad/ha-xtool/pull/53) — sleeping WS-V2 devices:** keeps sleeping-device controls from
   triggering invalid settings reads.
-- **PR #54 — camera request queue:** prevents camera requests from piling up,
+- **[PR #54](https://github.com/thecodingdad/ha-xtool/pull/54) — camera request queue:** prevents camera requests from piling up,
   improving the card's camera feature.
-- **PR #55 — Access control:** enables the card's Access control behavior,
+- **[PR #55](https://github.com/thecodingdad/ha-xtool/pull/55) — Access control:** enables the card's Access control behavior,
   including the corresponding job, focus, and safety restrictions.
-- **PR #56 — F2 focus lens support:** limits the focus feature to the lens
+- **[PR #56](https://github.com/thecodingdad/ha-xtool/pull/56) — F2 focus lens support:** limits the focus feature to the lens
   configuration on which it is usable.
-- **PR #57 — automatic power-off:** keeps the card's Power control aligned
+- **[PR #57](https://github.com/thecodingdad/ha-xtool/pull/57) — automatic power-off:** keeps the card's Power control aligned
   with the device after Idle or Sleeping.
-- **PR #58 — push during accessory polling:** improves the freshness of
+- **[PR #58](https://github.com/thecodingdad/ha-xtool/pull/58) — push during accessory polling:** improves the freshness of
   accessory state shown by the controls and state content.
-- **PR #60 — P2 support:** enables the P2 Overview and Close cameras, crop
+- **[PR #60](https://github.com/thecodingdad/ha-xtool/pull/60) — P2 support:** enables the P2 Overview and Close cameras, crop
   presets, exposure and thumbnail controls, overlays, processing mode,
   thickness/distance measurement, laser positioning, red dots, fill lights,
   safety entities, and related P2 protocol support. PR #60 incorporates or
   depends on several of the camera and state changes above.
+
+In the meantime, [GizmoGoody/ha-xtool](https://github.com/GizmoGoody/ha-xtool)
+contains the features required for the card's functionality as documented
+above in [Status](#status).
 
 The card and integration are versioned and released independently. A card
 update can require newer integration entities, and an integration update can
