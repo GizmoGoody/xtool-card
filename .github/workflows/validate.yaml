@@ -1,0 +1,29 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  validate-hacs:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v4"
+      - name: HACS validation
+        uses: "hacs/action@main"
+        with:
+          category: "plugin"
+
+  test-card:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v4"
+      - name: Install Chromium
+        uses: "browser-actions/setup-chrome@v1"
+      - name: Run card tests
+        run: python tests/card/run_card_tests.py
