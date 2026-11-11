@@ -144,11 +144,11 @@ and its connected camera/accessory devices.
 | `custom:xtool-fill-light` | F2 Ultra UV and devices with a dimmable xTool fill light | `lights`: every available dimmable fill light. Uses Home Assistant's light-brightness feature. |
 | `custom:xtool-safety` | All devices with safety entities; P2 adds lid and baseplate indicators | `controls`: every available safety control; `display`: `icons`. |
 | `custom:xtool-settings` | Devices with configuration switches | `controls`: every available setting; `display`: `icons`. |
-| `custom:xtool-camera` | F2 Ultra UV, P2, and any device exposing xTool camera entities | `camera`: first available camera; `camera_view`: `auto`; `display`: `names`; `show_time`: `false`; `crop` and `show_perspective`: `true` when the required entities exist. Selector entities such as crop preset and perspective are rendered as pickers. |
+| `custom:xtool-camera` | F2 Ultra UV, P2, and any device exposing xTool camera entities | `camera`: first available camera; `controls`: no action buttons by default (select and reorder camera, Crop, Exposure, and overlay buttons); `camera_view`: `auto`; `display`: `names`; `show_time`: `false`; `crop`: `true` when the required crop entities exist. Crop and selector entities such as crop preset and perspective are presented as pickers or picture interactions rather than requiring a button for every option. |
 | `custom:xtool-if2-fan` | SafetyPro IF2 / IF2 2.0 connected to a supported laser | IF2 2.0: `controls`: `off`, `auto`, `speed`; `display`: `names`. Original IF2: shows all gear choices; optional `options` customizes their order. |
 | `custom:xtool-focus` | F2 Ultra UV with the supported focus-height entities | No configuration keys. |
-| `custom:xtool-laser` | P2 with laser-position entities | `display`: `names`. Provides a combined X,Y target field, gesture arrows, Move, and Home. |
-| `custom:xtool-measure` | P2 with measure entities | `display`: `names`. Provides processing mode, a separate thickness/distance field, a separate measured-value field, and Measure. |
+| `custom:xtool-laser` | P2 with laser-position entities | `display`: `names`. Provides one half-width row with X adjustment, a combined X,Y target field, Y adjustment, Move, and Home. Hold an adjustment arrow and drag farther for faster movement. |
+| `custom:xtool-measure` | P2 with measure entities | `display`: `names`. Provides processing mode, a separate half-width thickness/distance field with buttons, a separate measured-value field, and Measure. |
 
 The tile card's standard `features`, `features_position`, `state_content`,
 `tap_action`, `hold_action`, `double_tap_action`, `name`, and `time_format`

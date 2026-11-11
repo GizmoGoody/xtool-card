@@ -81,7 +81,7 @@ const ROLES = {
   measure_height: [["thickness_or_distance"], ["number"]],
   measured: [["measured_thickness_or_distance"], ["sensor"]],
   baseplate: [["baseplate"], ["binary_sensor"]],
-  flame_alarm: [["flame_alarm_v2", "flame_alarm"], ["switch"]],
+  flame_alarm: [["flame_alarm_v2", "flame_alarm"], ["switch", "select", "button"]],
   enclosure_stop: [["gap_check"], ["switch"]],
   moved_stop: [["stops_when_moved", "move_stop"], ["switch"]],
   access_control: [["md_mode"], ["switch"]],
@@ -1157,6 +1157,10 @@ class XtoolCamera extends XtoolFeature {
         background: linear-gradient(to top, rgba(0, 0, 0, .6), rgba(0, 0, 0, 0));
       }
       .shot .time:empty { display: none; }
+      .picker { display: block; box-sizing: border-box; width: 100%; height: var(--feature-height, 42px);
+        margin-bottom: var(--feature-button-spacing, 12px); padding: 0 12px; border: 0;
+        border-radius: var(--feature-border-radius, 12px); color: var(--primary-text-color);
+        background: var(--ha-card-background, rgba(127,127,127,.16)); font: inherit; }
       .row:empty { display: none; }`;
     this._shot = document.createElement("button");
     this._shot.type = "button";
@@ -1168,24 +1172,44 @@ class XtoolCamera extends XtoolFeature {
     this._images = new Map();
     this._selectors = document.createElement("div");
     this._selectors.className = "selectors";
-    this._row.before(this._selectors);
+    this._picker = document.createElement("select");
+    this._picker.className = "picker";
+    this._picker.setAttribute("aria-label", "Camera");
+    this._picker.addEventListener("change", () => {
+      this._picked = this._picker.value;
+      this._first = undefined;
+      this._cropping = false;
+      this._key = undefined;
+      this._render();
+      this._showCamera();
+    });
+    this._row.before(this._picker, this._selectors);
+    this._shot.addEventListener("pointerdown", (ev) => {
+      if (this._cropping) return;
+      this._holdTimer = setTimeout(() => {
+        const crop = this._cameraCrop();
+        const point = crop && this._pointOf(ev, crop);
+        if (!point) return;
+        const x = sibling(this._hass, this._entityId, "laser_x");
+        const y = sibling(this._hass, this._entityId, "laser_y");
+        if (x) this._hass.callService("number", "set_value", { entity_id: x, value: Math.round(point.x) });
+        if (y) this._hass.callService("number", "set_value", { entity_id: y, value: Math.round(point.y) });
+        this._suppressClick = true;
+      }, 500);
+    });
+    for (const type of ["pointerup", "pointercancel", "pointerleave"]) {
+      this._shot.addEventListener(type, () => clearTimeout(this._holdTimer));
+    }
     this._shot.addEventListener("click", (ev) => {
       ev.stopPropagation();
+      if (this._suppressClick) {
+        this._suppressClick = false;
+        return;
+      }
       if (!this._camera) return;
       // Crop on: a tap marks a corner. Off: a tap opens the camera
       if (this._cropping && this._crop()) this._cropTap(ev);
       else fire(this, "hass-more-info", { entityId: this._camera });
-    });
-    this._shot.addEventListener("dblclick", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      const crop = this._cameraCrop();
-      const point = crop && this._pointOf(ev, crop);
-      if (!point) return;
-      const x = sibling(this._hass, this._entityId, "laser_x");
-      const y = sibling(this._hass, this._entityId, "laser_y");
-      if (x) this._hass.callService("number", "set_value", { entity_id: x, value: Math.round(point.x) });
-      if (y) this._hass.callService("number", "set_value", { entity_id: y, value: Math.round(point.y) });
     });
     // After the first corner, the rectangle follows the pointer
     this._shot.addEventListener("pointermove", (ev) => {
@@ -1225,11 +1249,15 @@ class XtoolCamera extends XtoolFeature {
       this._pictureAt = undefined;
       this._showCamera();
     }
-    const buttons = this._config.show_switch === false || cameras.length < 2 ? [] : cameras.map(([entityId, label]) => ({
-      key: entityId, label: `${label} camera`, text: label, color: "primary", pressed: entityId === current,
-      icon: entityIcon(this._hass, entityId, CAMERA_ICONS[this._hass.entities?.[entityId]?.translation_key] ?? "mdi:camera"),
-      disabled: !this._usable(entityId),
-      action: () => {
+    const buttons = (Array.isArray(this._config.controls) ? this._config.controls : []).flatMap((key) => {
+      const camera = cameras.find(([entityId]) => entityId === key);
+      if (!camera) return [];
+      const [entityId, label] = camera;
+      return [{
+        key: entityId, label: `${label} camera`, text: label, color: "primary", pressed: entityId === current,
+        icon: entityIcon(this._hass, entityId, CAMERA_ICONS[this._hass.entities?.[entityId]?.translation_key] ?? "mdi:camera"),
+        disabled: !this._usable(entityId),
+        action: () => {
         // A camera shown before shows its last picture, and a new one at once
         const shownBefore = this._images.has(entityId) && entityId !== this._camera;
         this._picked = entityId;
@@ -1239,10 +1267,11 @@ class XtoolCamera extends XtoolFeature {
         this._key = undefined;
         this._render();
         if (shownBefore) this._reloadImage(entityId);
-      },
-    }));
+        },
+      }];
+    });
     const crop = this._crop();
-    if (crop) {
+    if (crop && (!Array.isArray(this._config.controls) || this._config.controls.includes("crop"))) {
       // On while choosing a crop and while one is in effect; off shows the
       // whole 200 x 200 mm again
       const usable = this._usable(current);
@@ -1256,6 +1285,7 @@ class XtoolCamera extends XtoolFeature {
     // A camera with crop presets (the P2's): the key shows the preset, and a
     // tap opens Home Assistant's own dialog for the select to choose another
     for (const [role, label, icon] of CAMERA_OVERLAYS) {
+      if (Array.isArray(this._config.controls) && !this._config.controls.includes(role)) continue;
       const entityId = cameraSetting(this._hass, this._camera, role);
       if (!entityId) continue;
       const on = isOn(this._hass.states[entityId]);
@@ -1265,6 +1295,7 @@ class XtoolCamera extends XtoolFeature {
       });
     }
     for (const [role, label, icon] of [["exposure", "Exposure", "mdi:brightness-6"]]) {
+      if (Array.isArray(this._config.controls) && !this._config.controls.includes(role)) continue;
       const entityId = cameraSetting(this._hass, this._camera, role);
       if (!entityId) continue;
       buttons.push({
@@ -1316,6 +1347,7 @@ class XtoolCamera extends XtoolFeature {
   _cameraCrop() {
     const hass = this._hass, camera = this._camera;
     if (!camera) return undefined;
+    if (this._localCrop) return this._localCrop;
     const crop = {};
     for (const role of CROP_ROLES) {
       const entityId = cameraSetting(hass, camera, role);
@@ -1407,6 +1439,7 @@ class XtoolCamera extends XtoolFeature {
 
   _setCrop(crop) {
     const camera = this._camera;
+    this._localCrop = crop;
     this._first = undefined;
     this._cropping = false;
     this._area.hidden = true;
@@ -1477,6 +1510,15 @@ class XtoolCamera extends XtoolFeature {
 
   _showCamera() {
     if (!this._hass || !this._config || !this._camera) return;
+    const cameras = camerasOf(this._hass, this._entityId);
+    this._picker.replaceChildren(...cameras.map(([entityId, label]) => {
+      const option = document.createElement("option");
+      option.value = entityId;
+      option.textContent = label;
+      option.selected = entityId === this._camera;
+      return option;
+    }));
+    this._picker.hidden = cameras.length < 2;
     this._showSelectors();
     if (!customElements.get("hui-image")) {
       // Loaded with Home Assistant's picture cards: ask the card helpers for one
@@ -1654,10 +1696,15 @@ class XtoolFillLight extends HTMLElement {
         const feature = document.createElement("hui-card-feature");
         feature.feature = { type: "light-brightness" };
         feature.context = { entity_id: light.entityId };
-        feature.addEventListener("value-changed", (ev) => {
-          const value = Number(ev.detail?.value);
-          if (value === 0) this._hass.callService("light", "turn_off", { entity_id: light.entityId });
-        });
+        const turnOffAtZero = (ev) => {
+          const value = Number(ev.detail?.value ?? ev.detail?.brightness ?? ev.detail?.brightness_pct);
+          if (value === 0) {
+            ev.stopPropagation();
+            this._hass.callService("light", "turn_off", { entity_id: light.entityId });
+          }
+        };
+        feature.addEventListener("value-changed", turnOffAtZero, true);
+        slide.addEventListener("value-changed", turnOffAtZero, true);
         slide.append(feature);
         this._slides.set(light.entityId, slide);
       }
@@ -1753,7 +1800,8 @@ class XtoolLaser extends XtoolEmbedding {
   constructor() {
     super();
     const style = document.createElement("style");
-    style.textContent = `.position { display: flex; margin-bottom: var(--feature-button-spacing, 12px); }
+    style.textContent = `.position { display: flex; gap: var(--feature-button-spacing, 12px); margin-bottom: var(--feature-button-spacing, 12px); }
+      .position .key { flex: 0 0 42px; }
       .position input { box-sizing: border-box; width: 100%; min-width: 0; height: var(--feature-height, 42px);
         border: 0; border-radius: var(--feature-border-radius, 12px); padding: 0 12px;
         color: var(--primary-text-color); background: var(--ha-card-background, rgba(127,127,127,.16)); font: inherit; text-align: center; }`;
@@ -1770,6 +1818,7 @@ class XtoolLaser extends XtoolEmbedding {
       this._setAxis("laser_x", values[0]);
       this._setAxis("laser_y", values[1]);
     });
+    this._input.addEventListener("input", (ev) => ev.stopPropagation());
     this._position.append(this._input);
     this._embeds.replaceChildren();
     this._embeds.before(this._position);
@@ -1778,24 +1827,34 @@ class XtoolLaser extends XtoolEmbedding {
   _render() {
     super._render();
     const x = sibling(this._hass, this._entityId, "laser_x"), y = sibling(this._hass, this._entityId, "laser_y");
-    if (x && y && document.activeElement !== this._input) this._input.value = `${this._hass.states[x]?.state ?? ""},${this._hass.states[y]?.state ?? ""}`;
+    if (x && y && this.shadowRoot.activeElement !== this._input) this._input.value = `${this._hass.states[x]?.state ?? ""},${this._hass.states[y]?.state ?? ""}`;
     this._position.hidden = !x && !y;
     for (const key of ["x_adjust", "y_adjust"]) {
       const button = this.shadowRoot.querySelector(`[data-key="${key}"]`);
       if (!button || button.dataset.gesture) continue;
       button.dataset.gesture = "true";
-      let start;
-      button.addEventListener("pointerdown", (ev) => { start = key === "x_adjust" ? ev.clientX : ev.clientY; button.setPointerCapture?.(ev.pointerId); });
+      let start, base;
+      button.addEventListener("pointerdown", (ev) => {
+        start = key === "x_adjust" ? ev.clientX : ev.clientY;
+        const axis = key === "x_adjust" ? "laser_x" : "laser_y";
+        base = Number(this._hass.states[sibling(this._hass, this._entityId, axis)]?.state);
+        button.setPointerCapture?.(ev.pointerId);
+      });
       button.addEventListener("pointermove", (ev) => {
         if (start === undefined) return;
         const axis = key === "x_adjust" ? "laser_x" : "laser_y";
-        const delta = key === "x_adjust" ? ev.clientX - start : ev.clientY - start;
+        const delta = (key === "x_adjust" ? ev.clientX : ev.clientY) - start;
         if (Math.abs(delta) < 3) return;
-        this._setAxis(axis, Number(this._hass.states[sibling(this._hass, this._entityId, axis)]?.state) + Math.sign(delta) * Math.max(1, Math.floor(Math.abs(delta) / 10)));
-        start = key === "x_adjust" ? ev.clientX : ev.clientY;
+        const speed = Math.max(1, Math.floor(Math.abs(delta) / 8));
+        this._setAxis(axis, base + Math.sign(delta) * speed);
       });
-      button.addEventListener("pointerup", () => { start = undefined; });
-      button.addEventListener("pointercancel", () => { start = undefined; });
+      button.addEventListener("pointerup", () => { start = base = undefined; });
+      button.addEventListener("pointercancel", () => { start = base = undefined; });
+    }
+    const xButton = this.shadowRoot.querySelector('[data-key="x_adjust"]');
+    const yButton = this.shadowRoot.querySelector('[data-key="y_adjust"]');
+    if (xButton && yButton) {
+      this._position.replaceChildren(xButton, this._input, yButton);
     }
   }
 
@@ -2281,9 +2340,9 @@ const FEATURE_FORMS = {
     const cameras = camerasOf(hass, entityId);
     const labels = cameras.map(([, label]) => label);
     const keyOf = (id) => hass?.entities?.[id]?.translation_key;
-    const main = cameras.find(([id]) => keyOf(id) === "camera_main")?.[0];
     const deep = cameras.find(([id]) => keyOf(id) === "camera_deep")?.[0];
-    const crops = main ? CROP_ROLES.filter((role) => cameraSetting(hass, main, role)) : [];
+    const cropCamera = cameras.find(([id]) => CROP_ROLES.every((role) => cameraSetting(hass, id, role)))?.[0];
+    const crops = cropCamera ? CROP_ROLES : [];
     const perspective = deep && cameraSetting(hass, deep, "perspective");
     return {
       schema: (c) => [
@@ -2299,7 +2358,7 @@ const FEATURE_FORMS = {
           helper: "As in Home Assistant's picture cards. Auto: snapshots, refreshed by Home Assistant. Live: the camera's stream.",
           selector: select(CAMERA_VIEWS),
         },
-        displayField("For the camera's buttons and the deep camera's perspective."),
+        displayField("For the camera's buttons."),
         {
           name: "show_time", label: "Show the last updated time",
           helper: "Along the bottom of the picture, in the Auto view, in the card's Time format (under Content).",
@@ -2310,18 +2369,12 @@ const FEATURE_FORMS = {
           helper: "Adds a Crop key for the main camera. Tap it, then tap two opposite corners on the picture to show only that part. The key stays on while the crop is in effect; tap it again to show the whole 200 x 200 mm area.",
           selector: { boolean: {} },
         }] : []),
-        ...(perspective ? [{
-          name: "show_perspective", label: "Deep camera perspective",
-          helper: "A key beside the camera buttons for the deep camera: it shows Uncorrected, Rotated or Straightened, and a tap steps to the next.",
-          selector: { boolean: {} },
-        }] : []),
       ],
       data: (c) => ({
-        camera: labels.includes(c.camera) ? c.camera : labels[0], ...(Array.isArray(c.controls) ? { controls: c.controls } : {}),
+        camera: labels.includes(c.camera) ? c.camera : labels[0], controls: Array.isArray(c.controls) ? c.controls : [],
         camera_view: c.camera_view === "live" ? "live" : "auto",
         display: displayOf(c, "names"), show_time: !!c.show_time,
         ...(crops.length === CROP_ROLES.length ? { crop: c.crop !== false } : {}),
-        ...(perspective ? { show_perspective: c.show_perspective !== false } : {}),
       }),
     };
   },
