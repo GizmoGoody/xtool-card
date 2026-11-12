@@ -8,13 +8,13 @@
  *                             and other parts; a fan's icon turns while it runs
  * - custom:xtool-fill-light   the fill lights' brightness, side by side: the tile card's own light brightness feature
  * - custom:xtool-safety       the safety checks, the safety key and Access control; turning a check off asks first
- * - custom:xtool-settings     the Configuration switches: buzzer reminders, the IF2 buzzer, device sleep
+ * - custom:xtool-settings     the Configuration settings: buzzer, exhaust fan, flame alarm level, the IF2 buzzer, device sleep
  * - custom:xtool-camera       a camera, shown by Home Assistant's own image element, with buttons to switch;
  *                             tap two corners on the main camera's picture to crop it; a key for the deep camera's perspective
  * - custom:xtool-if2-fan      the SafetyPro IF2 inline fan: Off, A (Auto) and a speed key that steps 1 to 4
- * - custom:xtool-laser        the laser's X and Y (Home Assistant's numeric input), Move and Home keys
- * - custom:xtool-measure      the Mode select and the height number, and a Measure key showing the last reading
- * - custom:xtool-focus        Autofocus, then - and + around the thickness to focus on, which can be typed
+ * - custom:xtool-position     the laser's position X,Y in a field, keys to slide X and Y, Move and Home
+ * - custom:xtool-measure      Measure, and the thickness or distance in a field with a key to slide it
+ * - custom:xtool-focus        Autofocus, then down and up around the thickness to focus on, which can be typed
  * Each finds its entities on the same device as the card's entity, or on
  * the devices connected to it (the cameras' devices, the IF2's).
  *
@@ -300,8 +300,9 @@ const running = (phase) => phase === "processing" || phase === "framing";
  * - kind: how it works (see KINDS): toggle (a switch, fan or lock: on and
  *   off), light (on and off, and its brightness as an input), press (a
  *   button entity), number and select (Home Assistant's own feature as an
- *   input; as a key, the state and Home Assistant's dialog to change it), or
- *   display (a state that is only shown; a tap opens it),
+ *   input; as a key, the state and Home Assistant's dialog to change it),
+ *   display (a state that is only shown; a tap opens it), or field (the
+ *   numbers of its roles, in a field to type in, with keys: see FieldGroup),
  * - name: the one word on its key, or a function of the moment (see
  *   XtoolElement._moment) for a key that follows the state. A key shows its
  *   entity's own icon (Home Assistant's state icon). Its title and its
@@ -325,7 +326,12 @@ const running = (phase) => phase === "processing" || phase === "framing";
  *   has more than one of the group, its key shows an arrow for the direction,
  * - key: its key's id, when it is not the control's id,
  * - pick(moment), picks: a key that stands for one of other controls
- *   (picks), chosen by the moment.
+ *   (picks), chosen by the moment,
+ * - roles, decimals and keys (a field): the number entities it shows, the
+ *   decimals it shows them with (the step's, unless given), and its keys,
+ *   each { key, icon, before (before the field, not after it) } with step
+ *   (a tap changes the first number by step) or scrub ("x", "y" or "xy":
+ *   sliding changes the first number, or for "y" the second).
  */
 const CONTROLS = {
   // The job
@@ -370,21 +376,30 @@ const CONTROLS = {
   cover_lock: { kind: "toggle", name: "Lock", color: "indigo" },
 
   // Moving the laser, measuring and focusing
-  laser_x: { kind: "number", name: "X" },
-  laser_y: { kind: "number", name: "Y" },
+  // Where the laser goes: X,Y, sliding left and right for X, up and down for Y
+  position: {
+    kind: "field", role: "laser_x", roles: ["laser_x", "laser_y"], option: "Position",
+    keys: [{ key: "x", scrub: "x", icon: "mdi:arrow-left-right", before: true }, { key: "y", scrub: "y", icon: "mdi:arrow-up-down" }],
+  },
   // A move works while the laser sleeps, but not while it works or is off
   move_laser: { kind: "press", name: "Move", color: "primary", busy: true },
   home_laser: { kind: "press", name: "Home", color: "primary", busy: true },
   measure_mode: { kind: "select", name: "Mode" },
-  measure_height: { kind: "number", name: "Height" },
+  // The material's thickness or the distance to it: sliding right or up raises it
+  measure_height: { kind: "field", roles: ["measure_height"], keys: [{ key: "adjust", scrub: "xy", icon: "mdi:plus-minus" }] },
+  // The key's title has the last reading
   measure: {
-    kind: "press", color: "primary", busy: true, option: "Measure",
-    name: (moment) => (lastReading(moment) ? `Measure: ${lastReading(moment)}` : "Measure"),
+    kind: "press", name: "Measure", color: "primary", busy: true, option: "Measure",
     title: (moment) => (lastReading(moment) ? `Measure. Last reading: ${lastReading(moment)}` : "Measure"),
   },
   // As in Studio: no Autofocus while the laser works, frames, focuses or is
   // off, or while Access control is on
   autofocus: { kind: "press", name: "Autofocus", color: "primary", busy: true, access: true },
+  // The thickness the laser focuses on, 0.1 mm a step, as in Studio
+  focus_height: {
+    kind: "field", roles: ["focus_height"], decimals: 1,
+    keys: [{ key: "down", step: -0.1, icon: "mdi:arrow-down", before: true }, { key: "up", step: 0.1, icon: "mdi:arrow-up" }],
+  },
 
   // Safety: the checks (turning one off asks first), and the states that can only be shown
   flame_alarm: {
@@ -791,7 +806,24 @@ const FEATURE_CSS = `
     grid-auto-rows: var(--feature-height, 42px);
   }
   .row.flow { display: flex; height: var(--feature-height, 42px); }
-  .row.flow > .key { flex: 0 0 var(--xtool-key-width); }
+  .row.flow .key { flex: 0 0 var(--xtool-key-width); }
+  /* A field and its keys move as one group, without a box of their own */
+  .group { display: contents; }
+  .field {
+    position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--feature-border-radius, 12px); overflow: hidden; cursor: text;
+    color: var(--xtool-text, var(--primary-text-color)); font-weight: var(--ha-font-weight-medium, 500);
+  }
+  .field::before { content: ""; position: absolute; inset: 0; background: var(--feature-color); opacity: .2; }
+  .field:focus-within { outline: 2px solid var(--feature-color); outline-offset: 2px; }
+  .field > * { position: relative; }
+  .field input {
+    width: 100%; min-width: 0; margin: 0; padding: 0 4px; border: 0; outline: none; background: transparent;
+    font: inherit; color: inherit; text-align: center;
+  }
+  .field.disabled { opacity: .45; cursor: default; }
+  /* A key to slide on: the page does not scroll under it */
+  .key.scrub { touch-action: none; cursor: ew-resize; }
   .key {
     min-width: 0; height: 100%; padding: 0 4px; border: 0; cursor: pointer; box-sizing: border-box;
     position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -991,9 +1023,224 @@ function selectKey(feature, control, entityId, moment) {
 }
 
 /**
+ * A field's item in a feature's row: the field control and its entities,
+ * one for each of its roles. The feature shows it as a FieldGroup.
+ */
+function fieldKey(feature, control, entityId, moment) {
+  const entities = control.roles.map((role) => moment.device.roles[role]);
+  if (entities.some((e) => !e)) return undefined;
+  return { key: control.id, field: control.id, entities };
+}
+
+/** The decimals a number shows: the control's, or as many as its step has (0.1: 1, 1: 0). */
+function decimalsOf(control, stateObj) {
+  if (control.decimals !== undefined) return control.decimals;
+  const step = String(stateObj?.attributes.step ?? 1);
+  return step.includes(".") ? step.split(".")[1].length : 0;
+}
+
+// Scrubbing: no change within this distance of the press (px), and a new
+// value every tick (ms) while the pointer is held
+const SCRUB_DEAD_ZONE = 4;
+const SCRUB_TICK = 50;
+
+/**
+ * Press, then slide: while the pointer is held the value changes, faster the
+ * farther the pointer is from where the press started (with the square of
+ * the distance), and the pointer is captured, so the slide can leave the
+ * key. pull(dx, dy) is the distance that counts (positive raises the value);
+ * change(steps) moves the value by that many steps; done() commits it. The
+ * arrow keys move it one step at a time.
+ */
+function scrub(button, { pull, change, done }) {
+  let start, at, timer;
+  const stop = (ev) => {
+    if (!start) return;
+    clearInterval(timer);
+    start = undefined;
+    if (button.hasPointerCapture?.(ev.pointerId)) button.releasePointerCapture(ev.pointerId);
+    done();
+  };
+  button.addEventListener("pointerdown", (ev) => {
+    if (button.disabled || ev.button !== 0) return;
+    ev.preventDefault();
+    start = at = { x: ev.clientX, y: ev.clientY };
+    try {
+      button.setPointerCapture(ev.pointerId);
+    } catch (err) {
+      // A pointer the browser no longer tracks: the slide still follows the moves the key gets
+    }
+    timer = setInterval(() => {
+      const distance = pull(at.x - start.x, at.y - start.y);
+      const beyond = Math.max(0, Math.abs(distance) - SCRUB_DEAD_ZONE);
+      if (beyond) change((Math.sign(distance) * beyond * beyond) / 100);
+    }, SCRUB_TICK);
+  });
+  button.addEventListener("pointermove", (ev) => {
+    if (start) at = { x: ev.clientX, y: ev.clientY };
+  });
+  button.addEventListener("pointerup", stop);
+  button.addEventListener("pointercancel", stop);
+  button.addEventListener("lostpointercapture", stop);
+  button.addEventListener("keydown", (ev) => {
+    const way = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[ev.key];
+    if (!way || button.disabled) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    change(pull(way, -way) > 0 ? 1 : -1);
+    done();
+  });
+}
+
+// What a scrub key's slide counts: X right, Y down (the work area's Y runs
+// from the back to the front, as in the camera picture), xy right or up
+const PULLS = { x: (dx) => dx, y: (dx, dy) => dy, xy: (dx, dy) => dx - dy };
+
+/**
+ * A field and its keys, which move as one group in the feature's row (it
+ * takes no box of its own): the numbers of its entities in one text field
+ * (several are typed with commas between them: X,Y), and its keys around
+ * it, each before or after the field. A step key changes the first number
+ * by its step; a scrub key changes the number of its axis by sliding (see
+ * scrub). Kept while the feature shows it, so typing and sliding go on
+ * while Home Assistant's states change.
+ */
+class FieldGroup {
+  constructor(feature, control) {
+    this._feature = feature;
+    this._control = control;
+    this.el = document.createElement("div");
+    this.el.className = "group";
+    this._field = document.createElement("label");
+    this._field.className = "field";
+    this._field.innerHTML = `<input type="text" enterkeyhint="done">`;
+    this._input = this._field.querySelector("input");
+    this._input.inputMode = control.roles.length > 1 ? "text" : "decimal";
+    this._input.addEventListener("keydown", (ev) => {
+      ev.stopPropagation();
+      if (ev.key === "Enter") this._input.blur();
+      if (ev.key === "Escape") {
+        this._input.value = this._shown;
+        this._input.blur();
+      }
+    });
+    this._input.addEventListener("change", () => this._typed());
+    this._input.addEventListener("click", (ev) => ev.stopPropagation());
+    this.el.append(this._field);
+  }
+
+  /** The numbers now, and each entity's state. */
+  get _states() {
+    return this._entities.map((entityId) => this._feature._hass.states[entityId]);
+  }
+
+  _values() {
+    return this._states.map((stateObj) => Number(stateObj?.state));
+  }
+
+  _format(values) {
+    return values.map((value, i) => (Number.isFinite(value) ? value.toFixed(decimalsOf(this._control, this._states[i])) : "")).join(",");
+  }
+
+  /** Show the item's entities and state: the field (unless it is being typed in) and the keys. */
+  update(item) {
+    this._entities = item.entities;
+    const feature = this._feature, states = this._states;
+    const usable = item.entities.every((entityId) => feature._usable(entityId));
+    const values = this._pending ?? this._values();
+    this._shown = this._format(this._values());
+    this._input.disabled = !usable;
+    this._field.classList.toggle("disabled", !usable);
+    this._input.setAttribute("aria-label", item.entities.map((entityId) => entityName(feature._hass, entityId) ?? entityId).join(", "));
+    if (this._pending || feature.shadowRoot.activeElement !== this._input) this._input.value = this._format(values);
+    // The keys, drawn again only when they change (and never while sliding)
+    const keys = (this._control.keys ?? []).map((spec) => this._keyOf(spec, values, states, usable));
+    const json = JSON.stringify(keys.map(({ action, ...k }) => k));
+    if (json === this._json || this._pending) return;
+    this._json = json;
+    for (const old of this.el.querySelectorAll(".key")) old.remove();
+    keys.forEach((k, i) => {
+      const button = feature._button(k);
+      const spec = this._control.keys[i];
+      if (spec.scrub) {
+        button.classList.add("scrub");
+        const index = spec.scrub === "y" ? 1 : 0;
+        scrub(button, {
+          pull: PULLS[spec.scrub],
+          change: (steps) => this._slide(index, steps),
+          done: () => this._release(),
+        });
+      }
+      if (spec.before) this._field.before(button);
+      else this.el.append(button);
+    });
+  }
+
+  _keyOf(spec, values, states, usable) {
+    const index = spec.scrub === "y" ? 1 : 0;
+    const stateObj = states[index], value = values[index];
+    const { min = -Infinity, max = Infinity } = stateObj?.attributes ?? {};
+    const name = entityName(this._feature._hass, this._entities[index]) ?? "";
+    if (spec.scrub) {
+      return { key: spec.key, label: `${name}: press and slide to change`, icon: spec.icon, disabled: !usable };
+    }
+    return {
+      key: spec.key, label: spec.step > 0 ? "Increase" : "Decrease", icon: spec.icon,
+      disabled: !usable || !Number.isFinite(value) || (spec.step > 0 ? value >= max : value <= min),
+      action: () => this._commit([value + spec.step]),
+    };
+  }
+
+  // A slide moves the pending number by steps of its entity's step, within its range
+  _slide(index, steps) {
+    const stateObj = this._states[index];
+    const values = this._pending ?? this._values();
+    if (!Number.isFinite(values[index])) return;
+    const { min = -Infinity, max = Infinity, step = 1 } = stateObj.attributes;
+    this._pending = values.map((value, i) => (i === index ? Math.min(max, Math.max(min, value + steps * step)) : value));
+    this._input.value = this._format(this._pending);
+  }
+
+  _release() {
+    const pending = this._pending;
+    this._pending = undefined;
+    if (pending) this._commit(pending);
+  }
+
+  // A typed number, or one for each entity with commas between them; a
+  // single number may have a decimal comma
+  _typed() {
+    const text = this._input.value.trim();
+    const parts = this._entities.length > 1 ? text.split(/\s*[,;]\s*|\s+/) : [text.replace(",", ".")];
+    const values = parts.map((part) => (part === "" ? NaN : Number(part)));
+    if (values.length !== this._entities.length || values.some((value) => !Number.isFinite(value))) {
+      this._input.value = this._shown;
+      return;
+    }
+    this._commit(values);
+  }
+
+  /** Set each number that changed, rounded to what it shows and kept within its range. */
+  _commit(values) {
+    const states = this._states, now = this._values();
+    const shown = values.map((value, i) => {
+      const stateObj = states[i];
+      if (!stateObj || !Number.isFinite(value)) return now[i];
+      const factor = 10 ** decimalsOf(this._control, stateObj);
+      const { min = -Infinity, max = Infinity } = stateObj.attributes;
+      const next = Math.min(max, Math.max(min, Math.round(value * factor) / factor));
+      if (next !== now[i]) this._feature._hass.callService("number", "set_value", { entity_id: this._entities[i], value: next });
+      return next;
+    });
+    this._input.value = this._format(shown);
+  }
+}
+
+/**
  * The kinds of control: key(feature, control, entity_id, moment) makes the
- * control's key (see XtoolFeature._button), and input is the Home Assistant
- * feature that shows it as an input (see XtoolFeature.inputs).
+ * control's key (see XtoolFeature._button), or a field's item (see
+ * FieldGroup), and input is the Home Assistant feature that shows it as an
+ * input (see XtoolFeature.inputs).
  */
 const KINDS = {
   toggle: { key: switchKey },
@@ -1002,6 +1249,7 @@ const KINDS = {
   number: { key: numberKey, input: { type: "numeric-input", style: "buttons" } },
   select: { key: selectKey, input: { type: "select-options" } },
   display: { key: switchKey },
+  field: { key: fieldKey },
 };
 
 /** A control's key, or undefined when it has none now. */
@@ -1187,6 +1435,7 @@ class XtoolFeature extends XtoolElement {
 
   _buttons() {
     const moment = this._moment();
+    if (this.constructor.hidden?.(moment)) return [];
     return this._chosen().map((id) => this._controlKey(id, moment, this.constructor.keyOptions)).filter(Boolean);
   }
 
@@ -1221,12 +1470,21 @@ class XtoolFeature extends XtoolElement {
         });
       }
     }
-    const key = JSON.stringify([buttons.map(({ action, ...b }) => b), colors, this._display()]);
+    // A feature with a field is in the number color, as Home Assistant's number features
+    const fields = buttons.some((b) => b.field);
+    if (fields) this.style.setProperty("--feature-color", NUMBER_ON);
+    else this.style.removeProperty("--feature-color");
+    this._row.classList.toggle("flow", fields);
+    // Hidden: the feature does not apply to the device as it is now
+    this.style.display = this.constructor.hidden?.(this._moment()) ? "none" : "";
+    const key = JSON.stringify([buttons.map(({ action, entities, ...b }) => (b.field ? { field: b.field } : b)), colors, this._display()]);
     if (key !== this._key) {
       this._key = key;
       this._row.setAttribute("aria-label", this.constructor.label);
-      this._row.replaceChildren(...buttons.map((b, i) => this._button(b, colors[i])));
+      this._showItems(buttons.map((b, i) => (b.field ? this._group(b.field).el : this._button(b, colors[i]))));
     }
+    this._groups ??= new Map();
+    for (const b of buttons) if (b.field) this._group(b.field).update(b);
     // The entities' icons follow their states without drawing the keys again
     for (const icon of this._row.querySelectorAll("ha-state-icon[data-entity]")) {
       icon.hass = this._hass;
@@ -1238,6 +1496,26 @@ class XtoolFeature extends XtoolElement {
         slide.firstChild.hass = this._hass;
         return slide;
       }));
+    }
+  }
+
+  /** A field's group, made once and kept while the feature shows it. */
+  _group(id) {
+    this._groups ??= new Map();
+    if (!this._groups.has(id)) this._groups.set(id, new FieldGroup(this, controlOf(id, this._device.profile)));
+    return this._groups.get(id);
+  }
+
+  /**
+   * Show these elements in the row, in order. Elements already in place stay
+   * where they are, so a field being typed in keeps its focus.
+   */
+  _showItems(items) {
+    for (const child of [...this._row.children]) if (!items.includes(child)) child.remove();
+    let next = this._row.firstElementChild;
+    for (const item of items) {
+      if (item === next) next = next.nextElementSibling;
+      else this._row.insertBefore(item, next);
     }
   }
 
@@ -1881,28 +2159,30 @@ class XtoolFillLight extends XtoolElement {
 }
 
 // ---------------------------------------------------------------------------
-// Features that show Home Assistant's own features (numeric input, select
-// options) above a row of keys: moving the laser, and measuring the material
+// Features with a field: the laser's position, and measuring the material
 // ---------------------------------------------------------------------------
 
-// Moving the laser. The two numbers only choose where; Move goes there
-class XtoolLaser extends XtoolFeature {
-  static type = "xtool-laser";
-  static label = "Laser position";
-  static pickerName = "xTool laser position";
+// Moving the laser: its position X,Y (typed, or slid with the keys beside
+// it), and Move goes there; Home homes it
+class XtoolPosition extends XtoolFeature {
+  static type = "xtool-position";
+  static label = "Position";
+  static pickerName = "xTool position";
   static display = "names";
-  static inputs = ["laser_x", "laser_y"];
-  static controls = ["move_laser", "home_laser"];
+  static controls = ["position", "move_laser", "home_laser"];
+  static form = { label: "Controls" };
 }
 
-// Measuring the material's thickness or the distance to it; the key shows the last reading
+// Measuring the material's thickness or the distance to it, and the number
+// the laser works with (typed, or slid with the key beside it). The Measure
+// key's title has the last reading
 class XtoolMeasure extends XtoolFeature {
   static type = "xtool-measure";
   static label = "Measure";
   static pickerName = "xTool measure";
   static display = "names";
-  static inputs = ["measure_mode", "measure_height"];
-  static controls = ["measure"];
+  static controls = ["measure", "measure_height"];
+  static form = { label: "Controls" };
 }
 
 // ---------------------------------------------------------------------------
@@ -2023,23 +2303,22 @@ class XtoolIf2Fan extends XtoolFeature {
 }
 
 // ---------------------------------------------------------------------------
-// Feature: focus (F2 Ultra UV), in one half-width row: Autofocus, then down
-// and up (0.1 mm a step) around the material thickness the laser is focused on,
+// Feature: focus (F2 Ultra UV), in one row: Autofocus, then down and up
+// (0.1 mm a step) around the material thickness the laser is focused on,
 // in a field: type a thickness and press Enter to focus there, as Studio's
 // manual focus does. Each change moves the head (the laser refuses while it
 // works; Home Assistant shows why). Unavailable while the laser is off, as
 // Home Assistant's features are. With the inner engraving lens there is no
-// focusing (the job sets the height, as in Studio), so the feature shows
-// nothing.
+// focusing (the job sets the height, as in Studio), so the feature is hidden.
 // ---------------------------------------------------------------------------
-const FOCUS_STEP = 0.1;
-
 class XtoolFocus extends XtoolFeature {
   static type = "xtool-focus";
   static label = "Focus";
   static pickerName = "xTool focus";
   static display = "icons";
-  static controls = ["autofocus"];
+  static controls = ["autofocus", "focus_height"];
+  // Autofocus starts an action: it shows no on or off state
+  static keyOptions = { pressed: undefined };
   // No options
   static getConfigElement = undefined;
   static editor = undefined;
@@ -2048,115 +2327,19 @@ class XtoolFocus extends XtoolFeature {
     return !!device.roles.focus_height;
   }
 
-  constructor() {
-    super();
-    const style = document.createElement("style");
-    style.textContent = `
-      .height {
-        position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 2px;
-        border-radius: var(--feature-border-radius, 12px); overflow: hidden; cursor: text;
-        color: var(--xtool-text, var(--primary-text-color)); font-weight: var(--ha-font-weight-medium, 500);
-      }
-      .height::before { content: ""; position: absolute; inset: 0; background: var(--feature-color); opacity: .2; }
-      .height:focus-within { outline: 2px solid var(--feature-color); outline-offset: 2px; }
-      .height > * { position: relative; }
-      .height input {
-        width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; outline: none; background: transparent;
-        font: inherit; color: inherit; text-align: center;
-      }
-      .height.disabled { opacity: .45; cursor: default; }`;
-    this.shadowRoot.prepend(style);
-    // The keys keep their width; the field has the rest
-    this._row.classList.add("flow");
-    this._field = document.createElement("label");
-    this._field.className = "height";
-    this._field.innerHTML = `<input type="text" inputmode="decimal" enterkeyhint="done">`;
-    this._input = this._field.querySelector("input");
-    this._input.addEventListener("keydown", (ev) => {
-      ev.stopPropagation();
-      if (ev.key === "Enter") this._input.blur();
-      if (ev.key === "Escape") {
-        this._input.value = this._shown ?? "";
-        this._input.blur();
-      }
-    });
-    this._input.addEventListener("change", () => {
-      const typed = Number(this._input.value.trim().replace(",", "."));
-      if (this._input.value.trim() !== "" && Number.isFinite(typed)) this._setHeight(Math.round(typed * 10) / 10);
-      else this._input.value = this._shown ?? "";
-    });
-    this._input.addEventListener("click", (ev) => ev.stopPropagation());
-  }
-
-  get _height() {
-    return this._device.roles.focus_height;
-  }
-
   /**
-   * Whether focusing applies: with the inner engraving lens (or none) the
-   * job sets the height from the material's size, as in Studio, which then
-   * offers no manual focus.
+   * Hidden with the inner engraving lens (or none): the job sets the height
+   * from the material's size, as in Studio, which then offers no manual focus.
    */
-  get _surfaceLens() {
-    const lens = this._device.roles.engraving_lens;
-    const state = lens ? this._hass.states[lens]?.state : undefined;
-    return !["small", "none"].includes(state);
-  }
-
-  _buttons() {
-    const hass = this._hass;
-    const height = this._height, stateObj = height ? hass.states[height] : undefined;
-    if (!height || !this._surfaceLens) return [];
-    const value = Number(stateObj?.state);
-    const usable = this._usable(height) && Number.isFinite(value);
-    const { min = 0, max = 150 } = stateObj?.attributes ?? {};
-    const step = FOCUS_STEP;
-    // Autofocus as an icon only, beside the field
-    const autofocus = this._controlKey("autofocus", this._moment(), { pressed: undefined, text: undefined });
-    return [
-      ...(autofocus ? [autofocus] : []),
-      { key: "down", label: "Decrease", icon: "mdi:arrow-down", disabled: !usable || value <= min, action: () => this._setHeight(Math.round((value - step) * 10) / 10) },
-      { key: "up", label: "Increase", icon: "mdi:arrow-up", disabled: !usable || value >= max, action: () => this._setHeight(Math.round((value + step) * 10) / 10) },
-    ];
-  }
-
-  _render() {
-    super._render();
-    if (!this._hass || !this._config || !this._context) return;
-    // In the number color, as Home Assistant's number features
-    this.style.setProperty("--feature-color", NUMBER_ON);
-    const height = this._height;
-    // The inner engraving lens: no focusing, so nothing is shown
-    this.style.display = height && !this._surfaceLens ? "none" : "";
-    if (!height || !this._surfaceLens) {
-      this._field.remove();
-      return;
-    }
-    // The field goes between down and up
-    const up = this._row.querySelector('[data-key="up"]');
-    if (this._field.nextSibling !== up) this._row.insertBefore(this._field, up);
-    const stateObj = this._hass.states[height];
-    const value = Number(stateObj?.state);
-    const usable = this._usable(height);
-    this._shown = Number.isFinite(value) ? value.toFixed(1) : "";
-    this._input.disabled = !usable;
-    this._field.classList.toggle("disabled", !usable);
-    this._input.setAttribute("aria-label", stateObj?.attributes.friendly_name ?? "Focus height");
-    // Not while it is being typed in
-    if (this.shadowRoot.activeElement !== this._input) this._input.value = this._shown;
-  }
-
-  _setHeight(value) {
-    const height = this._height, stateObj = height ? this._hass.states[height] : undefined;
-    if (!stateObj || !Number.isFinite(value) || value === Number(stateObj.state)) return;
-    const { min = 0, max = 150 } = stateObj.attributes;
-    this._hass.callService("number", "set_value", { entity_id: height, value: Math.min(max, Math.max(min, value)) });
+  static hidden({ hass, device }) {
+    const lens = device.roles.engraving_lens;
+    return !!device.roles.focus_height && ["small", "none"].includes(lens ? hass.states[lens]?.state : undefined);
   }
 }
 
 // The features, in the order Home Assistant's feature picker lists them
 const FEATURES = Object.fromEntries([
-  XtoolJob, XtoolPeripherals, XtoolFillLight, XtoolSafety, XtoolSettings, XtoolCamera, XtoolIf2Fan, XtoolFocus, XtoolLaser, XtoolMeasure,
+  XtoolJob, XtoolPeripherals, XtoolFillLight, XtoolSafety, XtoolSettings, XtoolCamera, XtoolIf2Fan, XtoolFocus, XtoolPosition, XtoolMeasure,
 ].map((feature) => [feature.type, feature]));
 const FEATURE_TAGS = Object.keys(FEATURES);
 
@@ -3301,7 +3484,7 @@ class XtoolCard extends HTMLElement {
       this._watchAdded(wrap.shadowRoot);
       const inner = wrap.shadowRoot ?? wrap;
       const ours = findDeep(inner, FEATURE_TAGS.join(", "));
-      const keys = ours ? [...(ours.shadowRoot?.querySelectorAll(".key, .shot, .slide, .height") ?? [])] : [];
+      const keys = ours ? [...(ours.shadowRoot?.querySelectorAll(".key, .shot, .slide, .field") ?? [])] : [];
       const element = [...inner.children].find((c) => c.tagName !== "STYLE");
       for (const key of keys.length ? keys : [element]) {
         // A Home Assistant feature inside one of this card's: its own control

@@ -531,15 +531,15 @@
     hass = makeHass();
     let focus = addFeature({ type: "custom:xtool-focus" }, { hass });
     await wait(50);
-    const field = () => focus.shadowRoot.querySelector(".row .height input");
-    check("focus", [...focus.shadowRoot.querySelector(".row").children].map((c) => c.dataset.key ?? c.className).join() === "autofocus,down,height,up"
-      && field().value === "36.1" && !focus.shadowRoot.querySelector(".height .unit"),
+    const field = () => focus.shadowRoot.querySelector(".row .field input");
+    check("focus", [...focus.shadowRoot.querySelectorAll(".row .key, .row .field")].map((c) => c.dataset.key ?? c.className).join() === "autofocus,down,field,up"
+      && field().value === "36.1" && !focus.shadowRoot.querySelector(".field .unit"),
       "Autofocus, down, the thickness (36.1 mm) in a field, up");
     const fiveKeys = addFeature({ type: "custom:xtool-peripherals", controls: ["power", "exhaust", "red_dot", "fill_light_front", "fill_light_back"] }, { hass });
     await wait(50);
     const widthOf = (feature, key) => keyNamed(feature, key).getBoundingClientRect().width;
     check("focus", ["autofocus", "down", "up"].every((key) => Math.abs(widthOf(focus, key) - widthOf(fiveKeys, "power")) < 0.5)
-      && focus.shadowRoot.querySelector(".height").getBoundingClientRect().width > widthOf(focus, "up"),
+      && focus.shadowRoot.querySelector(".field").getBoundingClientRect().width > widthOf(focus, "up"),
       `each button as wide as one of five Controls buttons, the field wider (${widthOf(focus, "up")}, ${widthOf(fiveKeys, "power")})`);
     check("focus", keyNamed(focus, "down").querySelector("ha-icon")?.icon === "mdi:arrow-down" && keyNamed(focus, "up").querySelector("ha-icon")?.icon === "mdi:arrow-up",
       "down and up arrows");
@@ -565,7 +565,7 @@
     check("focus", lastCall(focusHass).data.value === 150, "always 0.1 mm a step, kept within the height's range");
     const whole50 = addFeature({ type: "custom:xtool-focus" }, { hass: makeHass({ "number.f2_focus_height": "50" }) });
     await wait(50);
-    check("focus", whole50.shadowRoot.querySelector(".row .height input").value === "50.0", "always one decimal: 50.0, not 50");
+    check("focus", whole50.shadowRoot.querySelector(".row .field input").value === "50.0", "always one decimal: 50.0, not 50");
     check("focus, options", !customElements.get("xtool-focus").getConfigElement
       && !window.customCardFeatures.find((f) => f.type === "xtool-focus").configurable, "no options");
     focus = addFeature({ type: "custom:xtool-focus" }, { hass: makeHass({ "sensor.f2_engraving_lens": "small" }) });
@@ -581,10 +581,10 @@
       "no Autofocus while Access control is on; the thickness can still be set");
     const p2Focus = addFeature({ type: "custom:xtool-focus" }, { hass, entityId: "sensor.p2_status" });
     await wait(50);
-    check("focus", keysOf(p2Focus).length === 0 && !p2Focus.shadowRoot.querySelector(".height input"), "nothing for a laser without focus controls");
+    check("focus", keysOf(p2Focus).length === 0 && !p2Focus.shadowRoot.querySelector(".field input"), "nothing for a laser without focus controls");
     const offFocus = addFeature({ type: "custom:xtool-focus" }, { hass: makeHass({ "sensor.f2_status": "off", "number.f2_focus_height": "unavailable" }) });
     await wait(50);
-    check("focus, off", offFocus.style.display === "" && keyNamed(offFocus, "up")?.disabled && keyNamed(offFocus, "autofocus")?.disabled && offFocus.shadowRoot.querySelector(".height input")?.disabled,
+    check("focus, off", offFocus.style.display === "" && keyNamed(offFocus, "up")?.disabled && keyNamed(offFocus, "autofocus")?.disabled && offFocus.shadowRoot.querySelector(".field input")?.disabled,
       "kept in place, disabled, while the laser is off");
 
     // Job: the buttons chosen, in order
@@ -637,6 +637,112 @@
     await wait(50);
     check("direction", keyNamed(single, "fill_light_front") && !keyNamed(single, "fill_light_front").querySelector(".arrow"), "no arrow when the laser has one fill light");
 
+    // Position: X,Y in one field, a key to slide X before it and one to slide Y after it, Move and Home
+    const press = (key, type, x, y) => key.dispatchEvent(new PointerEvent(type, { bubbles: true, composed: true, clientX: x, clientY: y, button: 0, pointerId: 7 }));
+    const items = (feature) => [...feature.shadowRoot.querySelectorAll(".row .key, .row .field")].map((c) => c.dataset.key ?? c.className).join();
+    hass = makeHass();
+    let position = addFeature({ type: "custom:xtool-position" }, { hass, entityId: "sensor.p2_status" });
+    await wait(50);
+    const xy = () => position.shadowRoot.querySelector(".field input");
+    check("position", items(position) === "x,field,y,move_laser,home_laser" && xy().value === "100.0,50.0"
+      && !keyNamed(position, "up") && !keyNamed(position, "down") && !position.shadowRoot.querySelector("hui-card-feature"),
+      `X and Y in one field (${xy().value}), slide keys around it, then Move and Home; no + or - keys`);
+    check("position", keyNamed(position, "x").querySelector("ha-icon").icon === "mdi:arrow-left-right" && keyNamed(position, "y").querySelector("ha-icon").icon === "mdi:arrow-up-down"
+      && keyNamed(position, "move_laser").textContent === "Move" && position.style.getPropertyValue("--feature-color").includes("--state-number-active-color"),
+      "a left-right key for X, an up-down key for Y; in the number color");
+    check("position", window.customCardFeatures.find((f) => f.type === "xtool-position").name === "xTool position"
+      && !window.customCardFeatures.some((f) => f.type === "xtool-laser") && !customElements.get("xtool-laser"), "named Position, in place of Laser position");
+    xy().value = "120, 60.5";
+    xy().dispatchEvent(new Event("change"));
+    check("position, typed", JSON.stringify(hass.calls.slice(-2)) === JSON.stringify([
+      { domain: "number", service: "set_value", data: { entity_id: "number.p2_laser_x", value: 120 } },
+      { domain: "number", service: "set_value", data: { entity_id: "number.p2_laser_y", value: 60.5 } }]), "typing X,Y sets both");
+    xy().value = "120";
+    xy().dispatchEvent(new Event("change"));
+    check("position, typed", xy().value === "100.0,50.0" && hass.calls.length === 2, "one number alone is put back");
+    let sent = hass.calls.length;
+    press(keyNamed(position, "x"), "pointerdown", 100, 10);
+    press(keyNamed(position, "x"), "pointermove", 130, 10);
+    await wait(120);
+    const slow = Number(xy().value.split(",")[0]);
+    check("position, slide", slow > 100 && hass.calls.length === sent && xy().value.endsWith(",50.0"),
+      `press, then slide right: X rises in the field (${xy().value}), nothing is set yet`);
+    press(keyNamed(position, "x"), "pointermove", 220, 10);
+    await wait(120);
+    const fast = Number(xy().value.split(",")[0]);
+    check("position, slide", fast - slow > slow - 100, `farther from the press, faster (${slow}, then ${fast})`);
+    press(keyNamed(position, "x"), "pointerup", 220, 10);
+    check("position, slide", hass.calls.length === sent + 1 && lastCall(hass).data.entity_id === "number.p2_laser_x" && lastCall(hass).data.value === fast,
+      "letting go sets X");
+    sent = hass.calls.length;
+    press(keyNamed(position, "y"), "pointerdown", 10, 10);
+    press(keyNamed(position, "y"), "pointermove", 10, 60);
+    await wait(120);
+    press(keyNamed(position, "y"), "pointerup", 10, 60);
+    check("position, slide", hass.calls.length === sent + 1 && lastCall(hass).data.entity_id === "number.p2_laser_y" && lastCall(hass).data.value > 50,
+      "the up-down key slides Y: down, toward the front, raises it");
+    press(keyNamed(position, "x"), "pointerdown", 100, 10);
+    press(keyNamed(position, "x"), "pointermove", 40, 10);
+    await wait(120);
+    press(keyNamed(position, "x"), "pointerup", 40, 10);
+    check("position, slide", lastCall(hass).data.entity_id === "number.p2_laser_x" && lastCall(hass).data.value < 100, "left lowers X");
+    keyNamed(position, "x").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    check("position, slide", lastCall(hass).data.value === 99.9, "the arrow keys move it one step");
+    position = addFeature({ type: "custom:xtool-position", controls: ["home_laser", "position"] }, { hass, entityId: "sensor.p2_status" });
+    await wait(50);
+    check("position, chosen", items(position) === "home_laser,x,field,y", "only the controls chosen, in order");
+    const positionOptions = document.createElement("xtool-feature-editor");
+    positionOptions.hass = hass;
+    positionOptions.context = { entity_id: "sensor.p2_status" };
+    positionOptions.setConfig({ type: "custom:xtool-position" });
+    check("position, options", positionOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join() === "Position,Move laser,Home laser head"
+      && positionOptions.querySelector("ha-form").schema[0].selector.select.reorder, "Position, Move and Home can be chosen and ordered");
+
+    // Measure: the Measure key and the thickness or distance in a field, with a plus-minus key to slide it
+    hass = makeHass();
+    let measure = addFeature({ type: "custom:xtool-measure" }, { hass, entityId: "sensor.p2_status" });
+    await wait(50);
+    const thickness = () => measure.shadowRoot.querySelector(".field input");
+    check("measure", items(measure) === "measure,field,adjust" && thickness().value === "3.0" && keyNamed(measure, "measure").textContent === "Measure"
+      && keyNamed(measure, "measure").title === "Measure. Last reading: 3.2 mm" && !measure.shadowRoot.querySelector("hui-card-feature, select"),
+      "Measure, the field, and the plus-minus key, in one row; no Mode");
+    check("measure", keyNamed(measure, "adjust").querySelector("ha-icon").icon === "mdi:plus-minus", "the plus-minus key");
+    sent = hass.calls.length;
+    press(keyNamed(measure, "adjust"), "pointerdown", 100, 100);
+    press(keyNamed(measure, "adjust"), "pointermove", 100, 60);
+    await wait(120);
+    press(keyNamed(measure, "adjust"), "pointerup", 100, 60);
+    check("measure, slide", hass.calls.length === sent + 1 && lastCall(hass).data.entity_id === "number.p2_thickness" && lastCall(hass).data.value > 3,
+      "sliding up raises it");
+    press(keyNamed(measure, "adjust"), "pointerdown", 100, 100);
+    press(keyNamed(measure, "adjust"), "pointermove", 60, 100);
+    await wait(120);
+    press(keyNamed(measure, "adjust"), "pointerup", 60, 100);
+    check("measure, slide", lastCall(hass).data.value < 3, "sliding left lowers it");
+    keyNamed(measure, "measure").click();
+    check("measure", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "button", service: "press", data: { entity_id: "button.p2_measure" } }), "Measure measures");
+    measure = addFeature({ type: "custom:xtool-measure", controls: ["measure_height", "measure"] }, { hass, entityId: "sensor.p2_status" });
+    await wait(50);
+    check("measure, chosen", items(measure) === "field,adjust,measure", "the field (with its key) and Measure, in the order chosen");
+    const measureOptions = document.createElement("xtool-feature-editor");
+    measureOptions.hass = hass;
+    measureOptions.context = { entity_id: "sensor.p2_status" };
+    measureOptions.setConfig({ type: "custom:xtool-measure" });
+    check("measure, options", measureOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join() === "Measure,Thickness or distance",
+      "only Measure and the field can be chosen");
+
+    // A field being typed in keeps its focus and what was typed while the states change
+    position = addFeature({ type: "custom:xtool-position" }, { hass, entityId: "sensor.p2_status" });
+    await wait(50);
+    const typing = position.shadowRoot.querySelector(".field input");
+    typing.focus();
+    typing.value = "1,2";
+    position.hass = makeHass({ "number.p2_laser_x": "101", "sensor.p2_status": "processing" });
+    await wait(20);
+    check("field", position.shadowRoot.activeElement === typing && typing.value === "1,2" && keyNamed(position, "move_laser").disabled,
+      "the field keeps its focus and what is typed while the keys change");
+    typing.blur();
+
     // A laser without the parts: nothing to show
     hass = makeHass();
     row = addFeature({ type: "custom:xtool-safety" }, { hass, entityId: "sensor.p2_status" });
@@ -645,7 +751,7 @@
 
     // The features are offered only for lasers that have their parts
     const offered = Object.fromEntries(window.customCardFeatures.map((f) => [f.type, f.isSupported(makeHass(), { entity_id: "sensor.p2_status" })]));
-    check("feature picker", offered["xtool-job"] && offered["xtool-peripherals"] && !offered["xtool-fill-light"] && !offered["xtool-if2-fan"] && !offered["xtool-laser"] && !offered["xtool-measure"] && offered["xtool-camera"] && !offered["xtool-focus"],
+    check("feature picker", offered["xtool-job"] && offered["xtool-peripherals"] && !offered["xtool-fill-light"] && !offered["xtool-if2-fan"] && offered["xtool-position"] && offered["xtool-measure"] && offered["xtool-camera"] && !offered["xtool-focus"],
       `offered for the P2: ${Object.entries(offered).filter(([, v]) => v).map(([k]) => k).join(", ")}`);
   });
 </script>
