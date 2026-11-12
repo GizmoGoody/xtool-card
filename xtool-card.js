@@ -20,8 +20,9 @@
  * - custom:xtool-focus        Autofocus, then down and up around the thickness to focus on, which can be typed
  * Each finds its entities on the same device as the card's entity, or on
  * the devices connected to it (the cameras' devices, the IF2's). Every
- * feature is one row: its keys share the row's width, and it shows at most
- * MAX_ITEMS of them (see MAX_ITEMS).
+ * feature's row is one line that fills its width and never overflows: an
+ * item that does not fit at its minimum width is left out, the last chosen
+ * first (see fitRow).
  *
  * custom:xtool-card is Home Assistant's tile card, wrapped: the tile card
  * still draws the name, state, actions and features. The xTool card adds:
@@ -811,11 +812,44 @@ const DIRECTION_ICONS = {
   left: "mdi:chevron-left", right: "mdi:chevron-right", back: "mdi:chevron-up", up: "mdi:chevron-up", front: "mdi:chevron-down", down: "mdi:chevron-down",
 };
 
-// The most items (keys, fields, a light's icon or slider) a feature shows
-// in its row; the editor keeps at most this many chosen. At the narrowest
-// (KEY_MIN wide, the gaps down to 4 px) they take 268 px.
-const MAX_ITEMS = 8;
-const KEY_MIN = "30px";
+// The narrowest each kind of item in a row may be (px): a key or a light's
+// icon is never narrower than Home Assistant's standard icon needs (its
+// tile icon: 36 px around the 24 px icon); a field, a slider and a select
+// need room for their numbers and text.
+const ITEM_MIN = { key: 36, field: 72, slider: 72, select: 120 };
+
+/** An item's narrowest width (px): a field's group is its field and keys, with the gaps between them. */
+function itemMin(el, gap) {
+  if (el.classList.contains("group")) {
+    const parts = [...el.children];
+    return parts.reduce((sum, part) => sum + itemMin(part, gap), 0) + Math.max(0, parts.length - 1) * gap;
+  }
+  return Number(el.dataset.min) || ITEM_MIN.key;
+}
+
+/**
+ * Fit a row's items into its width, in order: each takes at least its
+ * minimum (data-min), and from the first that does not fit on, the items
+ * are left out (data-dropped), so the last chosen go first. The ones shown
+ * grow to fill the row (their flex). Items hidden for other reasons do not
+ * count.
+ */
+function fitRow(row) {
+  const width = row.clientWidth;
+  if (!width) return;
+  const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+  let used = 0, shown = 0, full = false;
+  for (const item of row.children) {
+    if (item.hidden) continue;
+    const need = itemMin(item, gap) + (shown ? gap : 0);
+    full ||= used + need > width + 0.5;
+    item.toggleAttribute("data-dropped", full);
+    if (!full) {
+      used += need;
+      shown += 1;
+    }
+  }
+}
 
 // The chevron under an icon: bolder than the icon font draws it
 const CHEVRON_CSS = `
@@ -826,26 +860,28 @@ const CHEVRON_CSS = `
   }
 `;
 
-// The gap between a row's items: the theme's, smaller (down to 4 px) when
-// the items would otherwise be narrower than KEY_MIN (--xtool-items: how many)
-const ROW_GAP = `clamp(4px, calc((100% - var(--xtool-items, 5) * ${KEY_MIN}) / max(var(--xtool-items, 5) - 1, 1)), var(--feature-button-spacing, 12px))`;
-
-// A row of keys of one width that fill it, as one line that never wraps,
-// each tinted in its color, the ones that are on filled; a key is never
-// narrower than its icon needs (KEY_MIN). A row with a field (.flow): each
-// key a fifth of the row, and the field the rest.
+// One line of items that fills the row (see fitRow): keys of one width, a
+// slider or select twice as wide, a light's icon as wide as a key. A row
+// with a field (.flow): each key a fifth of the row, and the field the
+// rest. Keys are tinted in their color, the ones that are on filled.
+const ROW_CSS = `
+  .row { display: flex; flex-wrap: nowrap; align-items: center; column-gap: var(--feature-button-spacing, 12px); height: var(--feature-height, 42px); }
+  .row [data-dropped] { display: none !important; }
+  .row .key { flex: 1 1 0; min-width: ${ITEM_MIN.key}px; }
+  .row .slide { flex: 2 1 0; min-width: ${ITEM_MIN.slider}px; }
+  .row .slide.select { min-width: ${ITEM_MIN.select}px; }
+  .row.flow .key { flex: 0 1 calc((100% - 4 * var(--feature-button-spacing, 12px)) / 5); }
+  .row .field { flex: 1 1 0; min-width: ${ITEM_MIN.field}px; }
+`;
 // On the xTool card, Match dims the style under each key (a scrim) and
 // Flat and Console give each key a solid backing.
 const FEATURE_CSS = `
-  :host { display: block; min-width: 0; max-width: 100%; --xtool-gap: var(--feature-button-spacing, 12px); }
-  .row { display: flex; flex-wrap: nowrap; column-gap: ${ROW_GAP}; height: var(--feature-height, 42px); }
-  .row .key { flex: 1 1 0; min-width: ${KEY_MIN}; }
-  .row.flow { column-gap: var(--xtool-gap); }
-  .row.flow .key { flex: 0 0 max(${KEY_MIN}, calc((100% - 4 * var(--xtool-gap)) / 5)); }
+  :host { display: block; min-width: 0; max-width: 100%; }
+  ${ROW_CSS}
   /* A field and its keys move as one group, without a box of their own */
   .group { display: contents; }
   .field {
-    position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center;
+    position: relative; display: flex; align-items: center; justify-content: center; height: 100%; box-sizing: border-box;
     border-radius: var(--feature-border-radius, 12px); overflow: hidden; cursor: text;
     color: var(--xtool-text, var(--primary-text-color)); font-weight: var(--ha-font-weight-medium, 500);
   }
@@ -1086,15 +1122,22 @@ function decimalsOf(control, stateObj) {
   return step.includes(".") ? step.split(".")[1].length : 0;
 }
 
+// A tap moves the pointer less than this between press and release (px)
+const TAP_SLOP = 10;
+
 // Scrubbing: no change within this distance of the press (px), and a new
-// value every tick (ms) while the pointer is held
-const SCRUB_DEAD_ZONE = 4;
+// value every tick (ms) while the pointer is held. Beyond the dead zone,
+// each tick moves (distance / SCRUB_SCALE) ^ SCRUB_POWER steps: one step a
+// tick at SCRUB_SCALE px, slowly faster farther out.
+const SCRUB_DEAD_ZONE = 6;
 const SCRUB_TICK = 50;
+const SCRUB_SCALE = 60;
+const SCRUB_POWER = 1.5;
 
 /**
  * Press, then slide: while the pointer is held the values change, faster the
- * farther the pointer is from where the press started (with the square of
- * the distance), and the pointer is captured, so the slide can leave the
+ * farther the pointer is from where the press started (see SCRUB_SCALE),
+ * and the pointer is captured, so the slide can leave the
  * element. pulls[i](dx, dy) is the distance that counts for value i
  * (positive raises it); change(i, steps) moves value i by that many steps;
  * done() commits them. On a key the slide starts at the press, and the
@@ -1114,7 +1157,7 @@ function scrub(el, { pulls, change, done, tap = false }) {
       pulls.forEach((pull, i) => {
         const distance = pull(at.x - start.x, at.y - start.y);
         const beyond = Math.max(0, Math.abs(distance) - SCRUB_DEAD_ZONE);
-        if (beyond) change(i, (Math.sign(distance) * beyond * beyond) / 100);
+        if (beyond) change(i, Math.sign(distance) * (beyond / SCRUB_SCALE) ** SCRUB_POWER);
       });
     }, SCRUB_TICK);
   };
@@ -1157,6 +1200,19 @@ function scrub(el, { pulls, change, done, tap = false }) {
   });
 }
 
+// The laser's position being slid, before it is set: { "<x entity>|<y
+// entity>": [x, y] }, and an event on TARGETS when it changes (the camera
+// draws it, see XtoolCamera._drawTarget)
+const PENDING_TARGETS = new Map();
+const TARGETS = new EventTarget();
+function announceTarget(entities, values) {
+  if (entities?.length !== 2) return;
+  const key = entities.join("|");
+  if (values) PENDING_TARGETS.set(key, values);
+  else PENDING_TARGETS.delete(key);
+  TARGETS.dispatchEvent(new Event("change"));
+}
+
 // What a slide counts: X right, Y down (the work area's Y runs from the
 // back to the front, as in the camera picture), xy right or up
 const PULLS = { x: (dx) => dx, y: (dx, dy) => dy, xy: (dx, dy) => dx - dy };
@@ -1180,6 +1236,7 @@ class FieldGroup {
     this.el.className = "group";
     this._field = document.createElement("label");
     this._field.className = "field";
+    this._field.dataset.min = ITEM_MIN.field;
     this._field.innerHTML = `<input type="text" enterkeyhint="done">`;
     this._input = this._field.querySelector("input");
     this._input.inputMode = control.roles.length > 1 ? "text" : "decimal";
@@ -1277,12 +1334,14 @@ class FieldGroup {
     const unit = Math.max(step, 10 ** -decimalsOf(this._control, stateObj));
     this._pending = values.map((value, i) => (i === index ? Math.min(max, Math.max(min, value + steps * unit)) : value));
     this._input.value = this._format(this._pending);
+    announceTarget(this._entities, this._pending);
   }
 
   _release() {
     const pending = this._pending;
     this._pending = undefined;
     if (pending) this._commit(pending);
+    announceTarget(this._entities, undefined);
   }
 
   // A typed number, or one for each entity with commas between them; a
@@ -1340,7 +1399,8 @@ function slideOf(slides, entityId, feature) {
   let slide = slides.get(id);
   if (!slide) {
     slide = document.createElement("div");
-    slide.className = "slide";
+    slide.className = feature.type === "select-options" ? "slide select" : "slide";
+    slide.dataset.min = feature.type === "select-options" ? ITEM_MIN.select : ITEM_MIN.slider;
     const el = document.createElement("hui-card-feature");
     el.feature = { ...feature };
     el.context = { entity_id: entityId };
@@ -1356,6 +1416,15 @@ const inputOf = (control) => ({ ...KINDS[control.kind].input, ...(control.input 
 // A light's color in a feature: its own color when it has one, daylight
 // otherwise; Home Assistant's color for a light that is off
 const LIGHT_OFF = "var(--state-light-inactive-color, var(--state-inactive-color, var(--disabled-color, #bdbdbd)))";
+
+// A light's two parts, each chosen on its own: "<light>_icon", "<light>_slider"
+const LIGHT_PARTS = ["icon", "slider"];
+
+/** A light part's id: { light (its control id), part }, or undefined for another id. */
+function lightPart(id) {
+  const match = /^(.+)_(icon|slider)$/.exec(id ?? "");
+  return match && CONTROLS[match[1]]?.kind === "light" ? { light: match[1], part: match[2] } : undefined;
+}
 
 /** Whether a light has a brightness. */
 const dimmable = (hass, light) => (hass?.states[light]?.attributes.supported_color_modes ?? []).some((mode) => mode !== "onoff");
@@ -1376,6 +1445,7 @@ class LightRow {
     this.el = document.createElement("div");
     this.el.className = "light";
     this._icon = document.createElement("ha-tile-icon");
+    this._icon.dataset.min = ITEM_MIN.key;
     this._icon.interactive = true;
     this._icon.actionHandlerOptions = { hasHold: false, hasDoubleClick: false };
     this._state = document.createElement("ha-state-icon");
@@ -1435,6 +1505,13 @@ const LIGHT_CSS = `
   .light { display: flex; align-items: center; gap: var(--feature-button-spacing, 12px); min-width: 0; height: var(--feature-height, 42px); }
   ha-tile-icon { flex: none; }
   ha-tile-icon .glyph ha-state-icon { --mdc-icon-size: 20px; }
+  /* In a row, the tile icon fills its share as a key does: its circle
+     (Home Assistant's tile icon size) becomes the item, with the features' corners */
+  .row > ha-tile-icon {
+    flex: 1 1 0; min-width: ${ITEM_MIN.key}px; display: block; height: 100%;
+    --tile-icon-size: 100%; --ha-tile-icon-border-radius: var(--feature-border-radius, 12px);
+  }
+  .row > ha-tile-icon:active { transform: none; }
   .light .slide { flex: 1 1 auto; }
   .slide { display: block; min-width: 0; border-radius: var(--feature-border-radius, 12px); }
   .slide[hidden] { display: none; }
@@ -1462,7 +1539,7 @@ function showSlides(box, slides) {
  *   leaves out chosen controls the device does not offer; offerAll: the
  *   editor offers every control, whatever the device has; category: the
  *   entity category it shows ("config" or "control", see categoryOf; none:
- *   any). The list keeps at most MAX_ITEMS.
+ *   any).
  * A feature whose controls depend on the device (such as each overlay
  * switch) gives them with controlIds(device) and controlFor(id, device, hass).
  */
@@ -1523,10 +1600,7 @@ class XtoolElement extends HTMLElement {
     const offered = this.offered(deviceOf(hass, entityId), hass);
     const values = offered.map((o) => o.value);
     const key = this.controlsKey;
-    // More to offer than one row holds: the editor says how many it keeps
-    const limit = offered.length > MAX_ITEMS ? `Up to ${MAX_ITEMS}.` : "";
-    const helper = [this.form.helper, limit].filter(Boolean).join(" ");
-    const limited = (list) => (Array.isArray(list) ? list.slice(0, MAX_ITEMS) : list);
+    const { helper } = this.form;
     return {
       schema: [
         ...(label ? [{
@@ -1539,11 +1613,10 @@ class XtoolElement extends HTMLElement {
         })),
       ],
       data: (c) => ({
-        ...(label ? { [key]: limited(this.keepOffered && Array.isArray(c[key]) ? c[key].filter((value) => values.includes(value)) : c[key] ?? this.defaults ?? values) } : {}),
+        ...(label ? { [key]: this.keepOffered && Array.isArray(c[key]) ? c[key].filter((value) => values.includes(value)) : c[key] ?? this.defaults ?? values } : {}),
         ...(this.display ? { display: displayOf(c, this.display) } : {}),
         ...Object.fromEntries(options.map(({ name, default: on = true }) => [name, typeof c[name] === "boolean" ? c[name] : on])),
       }),
-      save: (value) => (label && Array.isArray(value[key]) ? { ...value, [key]: limited(value[key]) } : value),
     };
   }
 
@@ -1551,6 +1624,17 @@ class XtoolElement extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     keepTaps(this);
+  }
+
+  /** Fit a row now (see fitRow), and again whenever its width changes. */
+  _fit(row) {
+    this._fitter ??= new ResizeObserver((entries) => entries.forEach((entry) => fitRow(entry.target)));
+    this._fitted ??= new WeakSet();
+    if (!this._fitted.has(row)) {
+      this._fitted.add(row);
+      this._fitter.observe(row);
+    }
+    fitRow(row);
   }
 
   setConfig(config) {
@@ -1638,8 +1722,7 @@ class XtoolFeature extends XtoolElement {
 
   _render() {
     if (!this._ready()) return;
-    // One row: at most MAX_ITEMS
-    const buttons = this._buttons().slice(0, MAX_ITEMS);
+    const buttons = this._buttons();
     const colors = buttons.map((b) => (b.color ? textOn(this, cssColor(b.color)) : ""));
     if (colors.includes(null)) {
       // Not on the page yet: the button text colors are found once it is
@@ -1656,7 +1739,6 @@ class XtoolFeature extends XtoolElement {
     if (this._chosen().some((id) => controlOf(id, this._device.profile)?.kind === "field")) this.style.setProperty("--feature-color", NUMBER_ON);
     else this.style.removeProperty("--feature-color");
     this._row.classList.toggle("flow", fields);
-    this._row.style.setProperty("--xtool-items", String(Math.max(1, buttons.length)));
     // Hidden: the feature does not apply to the device as it is now
     this.style.display = this.constructor.hidden?.(this._moment()) ? "none" : "";
     const key = JSON.stringify([buttons.map(({ action, entities, ...b }) => (b.field ? { field: b.field } : b)), colors, this._display()]);
@@ -1672,6 +1754,7 @@ class XtoolFeature extends XtoolElement {
       icon.hass = this._hass;
       icon.stateObj = this._hass.states[icon.dataset.entity];
     }
+    this._fit(this._row);
   }
 
   /** A field's group, made once and kept while the feature shows it. */
@@ -1705,6 +1788,7 @@ class XtoolFeature extends XtoolElement {
     button.type = "button";
     button.className = "key";
     button.dataset.key = b.key;
+    button.dataset.min = ITEM_MIN.key;
     button.title = b.label;
     button.setAttribute("aria-label", b.label);
     if (b.pressed !== undefined) button.setAttribute("aria-pressed", String(!!b.pressed));
@@ -1835,7 +1919,7 @@ const CAMERA_VIEWS = [["auto", "Auto"], ["live", "Live"]];
 
 // The camera's controls that are Home Assistant's own features (and the
 // close camera's light), below its keys, for the camera shown
-const CAMERA_INPUTS = ["mode", "crop_preset", "exposure", "close_light"];
+const CAMERA_INPUTS = ["mode", "crop_preset", "exposure", "close_light_icon", "close_light_slider"];
 
 class XtoolCamera extends XtoolFeature {
   static type = "xtool-camera";
@@ -1862,8 +1946,11 @@ class XtoolCamera extends XtoolFeature {
       offered.push({ value: "crop", label: "Crop by tapping" });
     }
     for (const id of ["perspective", ...CAMERA_INPUTS]) {
-      const entityId = cameras.map((camera) => camera.settings[id]).find(Boolean);
-      if (entityId) offered.push({ value: id, label: entityName(hass, entityId) ?? CONTROLS[id].name });
+      const { light, part } = lightPart(id) ?? {};
+      const entityId = cameras.map((camera) => camera.settings[light ?? id]).find(Boolean);
+      if (!entityId || (part === "slider" && !dimmable(hass, entityId))) continue;
+      const name = entityName(hass, entityId) ?? CONTROLS[light ?? id].name;
+      offered.push({ value: id, label: part ? `${name} ${part}` : name });
     }
     return offered;
   }
@@ -1932,28 +2019,56 @@ class XtoolCamera extends XtoolFeature {
         background: linear-gradient(to top, rgba(0, 0, 0, .6), rgba(0, 0, 0, 0));
       }
       .shot .time:empty { display: none; }
+      .shot { touch-action: manipulation; }
+      /* Where the laser goes: a dashed line from where it is to the target */
+      .shot .target { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+      .shot .target line, .shot .target circle { fill: none; stroke: #ff2b2b; stroke-width: 2; vector-effect: non-scaling-stroke; }
+      .shot .target .path { stroke-dasharray: 6 5; }
+      .shot .target .now { fill: #ff2b2b; }
       .row:empty { display: none; }
-      /* The camera's inputs, below its keys */
-      .inputs {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--feature-button-spacing, 12px);
-        margin-top: var(--feature-button-spacing, 12px);
-      }
-      .inputs:empty { display: none; }
+      /* The camera's inputs below its keys: as a row's items, on as many
+         lines as they need, each line filled */
+      .row.inputs { flex-wrap: wrap; height: auto; row-gap: var(--feature-button-spacing, 12px); margin-top: var(--feature-button-spacing, 12px); }
+      .row.inputs > * { height: var(--feature-height, 42px); }
       ${LIGHT_CSS}`;
     this._shot = document.createElement("button");
     this._shot.type = "button";
     this._shot.className = "shot";
-    this._shot.innerHTML = `<span class="area" hidden></span><span class="hint"></span><span class="time"></span>`;
+    this._shot.innerHTML = `<span class="area" hidden></span><svg class="target" style="display: none">
+        <line class="path"></line><circle class="now" r="3"></circle>
+        <g class="reticle"><circle r="14"></circle><circle r="4"></circle>
+          <line x1="-22" y1="0" x2="-8" y2="0"></line><line x1="8" y1="0" x2="22" y2="0"></line>
+          <line x1="0" y1="-22" x2="0" y2="-8"></line><line x1="0" y1="8" x2="0" y2="22"></line></g>
+      </svg><span class="hint"></span><span class="time"></span>`;
+    this._target = this._shot.querySelector(".target");
     this._time = this._shot.querySelector(".time");
     this._area = this._shot.querySelector(".area");
     this._hint = this._shot.querySelector(".hint");
     this._images = new Map();
+    // A tap is a pointer pressed and let go in about one place. On touch,
+    // the browser then also sends mouse events and a click (iOS among
+    // them, sometimes late or not at all): that click is the same tap, so
+    // only a click without pointer events (a keyboard) is a tap of its own
+    this._shot.addEventListener("pointerdown", (ev) => {
+      this._down = ev.button === 0 ? { x: ev.clientX, y: ev.clientY } : undefined;
+      this._tapped = undefined;
+    });
+    this._shot.addEventListener("pointerup", (ev) => {
+      const down = this._down;
+      this._down = undefined;
+      if (!down || Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > TAP_SLOP) return;
+      this._tapped = ev.timeStamp;
+      this._tap(ev);
+    });
+    this._shot.addEventListener("pointercancel", () => (this._down = undefined));
     this._shot.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      if (!this._camera) return;
-      // Crop on: a tap marks a corner. Off: a tap opens the camera
-      if (this._cropping && this._crop()) this._cropTap(ev);
-      else fire(this, "hass-more-info", { entityId: this._camera });
+      ev.preventDefault();
+      if (this._tapped !== undefined) {
+        this._tapped = undefined;
+        return;
+      }
+      this._tap(ev);
     });
     // After the first corner, the rectangle follows the pointer
     this._shot.addEventListener("pointermove", (ev) => {
@@ -1962,7 +2077,7 @@ class XtoolCamera extends XtoolFeature {
     this.shadowRoot.prepend(style);
     this._row.before(this._shot);
     this._inputsBox = document.createElement("div");
-    this._inputsBox.className = "inputs";
+    this._inputsBox.className = "row inputs";
     this._row.after(this._inputsBox);
     this._slides = new Map();
     this._lights = new Map();
@@ -1970,19 +2085,114 @@ class XtoolCamera extends XtoolFeature {
 
   _render() {
     super._render();
-    if (this._ready()) this._showInputs();
+    if (!this._ready()) return;
+    this._showInputs();
   }
 
-  /** The chosen inputs of the camera shown: Home Assistant's own features, and its light. */
+  /**
+   * A tap on the picture. While Crop is on (choosing a crop, or a crop in
+   * effect) it marks a corner, and never opens the camera; otherwise it
+   * opens the camera.
+   */
+  _tap(ev) {
+    if (!this._camera) return;
+    const crop = this._crop();
+    if (crop && (this._cropping || this._cropped(crop))) {
+      if (!this._cropping) {
+        this._cropping = true;
+        this._key = undefined;
+        this._render();
+      }
+      this._cropTap(ev);
+      return;
+    }
+    fire(this, "hass-more-info", { entityId: this._camera });
+  }
+
+  connectedCallback() {
+    this._onTarget ??= () => this._drawTarget();
+    TARGETS.addEventListener("change", this._onTarget);
+  }
+
+  disconnectedCallback() {
+    TARGETS.removeEventListener("change", this._onTarget);
+  }
+
+  /**
+   * The laser's way to a position being set (the P2's): from where the head
+   * is (the position numbers' position attribute) to the target (the
+   * position being slid, or set and waiting for Move), in mm; undefined
+   * when no position is being set.
+   */
+  _targetNow() {
+    const { laser_x: x, laser_y: y } = this._device.roles;
+    if (!x || !y) return undefined;
+    const sx = this._hass.states[x], sy = this._hass.states[y];
+    const pending = PENDING_TARGETS.get(`${x}|${y}`);
+    if (!pending && !sx?.attributes.waiting && !sy?.attributes.waiting) return undefined;
+    const to = pending ?? [Number(sx?.state), Number(sy?.state)];
+    const from = [Number(sx?.attributes.position ?? sx?.state), Number(sy?.attributes.position ?? sy?.state)];
+    return [...to, ...from].every(Number.isFinite) ? { from, to } : undefined;
+  }
+
+  /**
+   * The target on the picture, while the position is being set and the
+   * shown camera's Laser target overlay is on: a reticle at the target,
+   * joined to where the head is by a dashed red line, placed with the
+   * camera's crop (as tap to crop reads it).
+   */
+  _drawTarget() {
+    if (!this._ready() || !this._target) return;
+    const camera = this._shownCamera;
+    const overlay = camera?.overlays.find((o) => o.key === "overlay_laser_target");
+    const crop = overlay && this._hass.states[overlay.entityId]?.state === "on" ? this._cropNow() : undefined;
+    const way = crop && this._targetNow();
+    const from = way && this._placeOfMm(way.from, crop), to = way && this._placeOfMm(way.to, crop);
+    if (!from || !to) {
+      this._target.style.display = "none";
+      return;
+    }
+    const line = this._target.querySelector(".path");
+    for (const [name, value] of Object.entries({ x1: from.left, y1: from.top, x2: to.left, y2: to.top })) line.setAttribute(name, value);
+    this._target.querySelector(".now").setAttribute("cx", from.left);
+    this._target.querySelector(".now").setAttribute("cy", from.top);
+    this._target.querySelector(".reticle").setAttribute("transform", `translate(${to.left} ${to.top})`);
+    this._target.style.display = "";
+  }
+
+  /** A point on the work surface (mm) in the picture box (px), as _pointOf reads one; undefined without a picture. */
+  _placeOfMm([x, y], crop) {
+    const img = this._images.get(this._camera)?.shadowRoot?.querySelector("img");
+    if (!img?.naturalWidth || !(crop.width > 0) || !(crop.height > 0)) return undefined;
+    const box = img.getBoundingClientRect(), shot = this._shot.getBoundingClientRect();
+    const scale = Math.max(box.width / img.naturalWidth, box.height / img.naturalHeight);
+    const shownW = img.naturalWidth * scale, shownH = img.naturalHeight * scale;
+    const u = (x - crop.center_x) / crop.width + 0.5, v = (y - crop.center_y) / crop.height + 0.5;
+    const ratio = shot.width / this._shot.offsetWidth || 1;
+    return {
+      left: (box.left - shot.left + (box.width - shownW) / 2 + u * shownW) / ratio,
+      top: (box.top - shot.top + (box.height - shownH) / 2 + v * shownH) / ratio,
+    };
+  }
+
+  /**
+   * The chosen inputs of the camera shown (Home Assistant's own features),
+   * and the close camera's light (its icon and its slider, as in xTool
+   * lights), whichever camera is shown.
+   */
   _showInputs() {
     const camera = this._shownCamera;
     const chosen = this._chosen().filter((id) => CAMERA_INPUTS.includes(id));
     showSlides(this._inputsBox, !camera ? [] : chosen.map((id) => {
-      const control = controlOf(id, this._device.profile), entityId = camera.settings[control.role];
+      const { light, part } = lightPart(id) ?? {};
+      const control = controlOf(light ?? id, this._device.profile);
+      const entityId = camera.settings[control.role] ?? (light ? this._device.cameras.map((c) => c.settings[control.role]).find(Boolean) : undefined);
       if (!entityId) return undefined;
-      if (control.kind === "light") {
+      if (light) {
         if (!this._lights.has(entityId)) this._lights.set(entityId, new LightRow(this, entityId));
-        return this._lights.get(entityId).update();
+        const row = this._lights.get(entityId);
+        row.update();
+        return part === "icon" ? row.icon : row.slide.hidden ? undefined : row.slide;
       }
       const slide = slideOf(this._slides, entityId, inputOf(control));
       slide.firstChild.hass = this._hass;
@@ -1993,6 +2203,7 @@ class XtoolCamera extends XtoolFeature {
   set hass(hass) {
     super.hass = hass;
     this._showCamera();
+    this._drawTarget();
   }
 
   setConfig(config) {
@@ -2072,8 +2283,14 @@ class XtoolCamera extends XtoolFeature {
    * the crop numbers and a crop area.
    */
   _crop() {
+    if (!this._cropReset || !this._chosen().includes("crop")) return undefined;
+    return this._cropNow();
+  }
+
+  /** The shown camera's crop numbers now ({ width, height, center_x, center_y }, mm), or undefined. */
+  _cropNow() {
     const camera = this._shownCamera;
-    if (!camera || !this._cropReset || !this._chosen().includes("crop")) return undefined;
+    if (!camera) return undefined;
     const crop = {};
     for (const role of CROP_ROLES) {
       const entityId = camera.settings[role];
@@ -2283,7 +2500,12 @@ class XtoolCamera extends XtoolFeature {
     }
     if (this._watched === root) return;
     this._watched = root;
+    // While the laser is off or asleep it takes no photos: a picture that
+    // loads then is an old one Home Assistant still serves, so the time
+    // stays when the last one arrived while it could take one
     root.addEventListener("load", () => {
+      this._drawTarget();
+      if (["off", "sleeping"].includes(phaseNow(this._hass, this._entityId))) return;
       this._pictureAt = new Date();
       this._showTime();
     }, true);
@@ -2316,7 +2538,6 @@ class XtoolCamera extends XtoolFeature {
 // chosen
 // ---------------------------------------------------------------------------
 const LIGHTS = ["fill_light_left", "fill_light_right", "fill_light_front", "fill_light_back", "fill_light"];
-const LIGHT_PARTS = [["icon", "icon"], ["slider", "slider"]];
 
 class XtoolLights extends XtoolElement {
   static type = "xtool-lights";
@@ -2333,7 +2554,7 @@ class XtoolLights extends XtoolElement {
 
   /** Each light's icon and slider: "<light>_icon" and "<light>_slider". */
   static controlIds() {
-    return LIGHTS.flatMap((id) => LIGHT_PARTS.map(([part]) => `${id}_${part}`));
+    return LIGHTS.flatMap((id) => LIGHT_PARTS.map((part) => `${id}_${part}`));
   }
 
   /**
@@ -2341,11 +2562,11 @@ class XtoolLights extends XtoolElement {
    * own light is in the camera feature, not here.
    */
   static controlFor(id, device) {
-    const light = LIGHTS.find((l) => id.startsWith(`${l}_`) && LIGHT_PARTS.some(([part]) => id === `${l}_${part}`));
-    if (!light) return { control: undefined };
+    const { light, part } = lightPart(id) ?? {};
+    if (!LIGHTS.includes(light)) return { control: undefined };
     const entityId = device.roles[light];
     const cameras = device.cameras.some((camera) => Object.values(camera.settings).includes(entityId));
-    return { control: { ...controlOf(light, device.profile), part: id.slice(light.length + 1) }, entityId: cameras ? undefined : entityId };
+    return { control: { ...controlOf(light, device.profile), part }, entityId: cameras ? undefined : entityId };
   }
 
   /** Each light's icon and slider, by the light's name. */
@@ -2359,8 +2580,7 @@ class XtoolLights extends XtoolElement {
     super();
     this.shadowRoot.innerHTML = `<style>
       :host { display: block; min-width: 0; max-width: 100%; }
-      .row { display: flex; flex-wrap: nowrap; align-items: center; column-gap: ${ROW_GAP}; height: var(--feature-height, 42px); }
-      .row .slide { flex: 1 1 0; min-width: 40px; }
+      ${ROW_CSS}
       ${LIGHT_CSS}
     </style><div class="row" role="group"></div>`;
     this._box = this.shadowRoot.querySelector(".row");
@@ -2378,7 +2598,6 @@ class XtoolLights extends XtoolElement {
     this._box.setAttribute("aria-label", this.constructor.label);
     const items = this._chosen().map((id) => ({ id, ...this.constructor.controlFor(id, device) }))
       .filter(({ control, entityId }) => control && entityId)
-      .slice(0, MAX_ITEMS)
       .map(({ control, entityId }) => {
         if (!this._rows.has(entityId)) this._rows.set(entityId, new LightRow(this, entityId, directionOf(control, device)));
         const row = this._rows.get(entityId);
@@ -2387,8 +2606,8 @@ class XtoolLights extends XtoolElement {
       })
       // A light without a brightness has no slider
       .filter((el) => !el.hidden);
-    this._box.style.setProperty("--xtool-items", String(Math.max(1, items.length)));
     showSlides(this._box, items);
+    this._fit(this._box);
   }
 }
 

@@ -9,6 +9,41 @@
  * sensor.
  */
 
+// The headless browser the tests run in draws no frames, so its
+// ResizeObserver never reports. This one reports each observed element's
+// new size on a timer, as the browser does after a frame.
+window.ResizeObserver = class {
+  constructor(callback) {
+    this._callback = callback;
+    this._sizes = new Map();
+  }
+
+  observe(el) {
+    this._sizes.set(el, undefined);
+    this._timer ??= setInterval(() => {
+      const entries = [];
+      for (const [target, size] of this._sizes) {
+        const now = `${target.clientWidth}x${target.clientHeight}`;
+        if (now !== size) {
+          this._sizes.set(target, now);
+          entries.push({ target, contentRect: target.getBoundingClientRect() });
+        }
+      }
+      if (entries.length) this._callback(entries, this);
+    }, 10);
+  }
+
+  unobserve(el) {
+    this._sizes.delete(el);
+  }
+
+  disconnect() {
+    this._sizes.clear();
+    clearInterval(this._timer);
+    this._timer = undefined;
+  }
+};
+
 // The entity categories, as the entity registry has them
 const CATEGORIES = {
   "update.f2_firmware": "diagnostic", "sensor.f2_wifi_signal": "diagnostic", "sensor.f2_ip_address": "diagnostic",

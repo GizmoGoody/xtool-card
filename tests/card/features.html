@@ -358,20 +358,26 @@
     const p2Hass = makeHass();
     const p2Camera = addFeature({ type: "custom:xtool-camera", camera: "Overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
-    const inputsOf = (feature) => [...feature.shadowRoot.querySelectorAll(".inputs > .slide hui-card-feature, .inputs > .light .slide hui-card-feature")]
+    const inputsOf = (feature) => [...feature.shadowRoot.querySelectorAll(".inputs > .slide hui-card-feature")]
       .map((f) => `${f.feature.type}${f.feature.style ? `:${f.feature.style}` : ""}=${f.context.entity_id}`).join();
+    const closeIcon = (feature) => feature.shadowRoot.querySelector(".inputs > ha-tile-icon");
     check("P2 camera", keysOf(p2Camera).map((k) => k.textContent).join() === "Overview,Close,Crop",
       "keys for the overview and close cameras, and Crop, as for the F2's cameras");
-    check("P2 camera", inputsOf(p2Camera) === "select-options=select.p2_mode,select-options=select.p2_overview_crop,numeric-input:slider=number.p2_overview_exposure",
-      `below them, Home Assistant's own features: the mode, the crop preset and an exposure slider (${inputsOf(p2Camera)})`);
+    check("P2 camera", inputsOf(p2Camera) === "select-options=select.p2_mode,select-options=select.p2_overview_crop,numeric-input:slider=number.p2_overview_exposure,light-brightness=light.p2_close_light"
+      && closeIcon(p2Camera)?.querySelector("ha-state-icon")?.stateObj === p2Hass.states["light.p2_close_light"],
+      `below them, Home Assistant's own features: the mode, the crop preset, an exposure slider, and the close fill light's icon and slider (${inputsOf(p2Camera)})`);
+    const inputBoxes = [...p2Camera.shadowRoot.querySelectorAll(".inputs > *")].map((el) => el.getBoundingClientRect());
+    const inputsBox = p2Camera.shadowRoot.querySelector(".inputs").getBoundingClientRect();
+    check("P2 camera", inputBoxes.every((b) => b.width >= 35.5 && b.left >= inputsBox.left - 0.5 && b.right <= inputsBox.right + 0.5),
+      `the inputs on as many lines as they need, within the feature (${inputBoxes.map((b) => Math.round(b.width)).join(", ")})`);
     check("P2 camera", !keyNamed(p2Camera, "overlay_laser_target") && !keyNamed(p2Camera, "switch.p2_overview_target") && !keyNamed(p2Camera, "thumbnail_refresh"),
       "no overlays (they are in the overlays feature) and no thumbnail refresh");
     keyNamed(p2Camera, "camera.p2_close").click();
     await wait(60);
     check("P2 camera, close", inputsOf(p2Camera) === "select-options=select.p2_close_crop,numeric-input:slider=number.p2_close_exposure,light-brightness=light.p2_close_light"
-      && p2Camera.shadowRoot.querySelector(".inputs .light ha-tile-icon ha-state-icon")?.stateObj === p2Hass.states["light.p2_close_light"],
+      && closeIcon(p2Camera)?.querySelector("ha-state-icon")?.stateObj === p2Hass.states["light.p2_close_light"],
       `the close camera: its crop preset, exposure, and its fill light: the tile icon and the brightness slider (${inputsOf(p2Camera)})`);
-    p2Camera.shadowRoot.querySelector(".inputs .light ha-tile-icon").click();
+    closeIcon(p2Camera).click();
     check("P2 camera, close", JSON.stringify(lastCall(p2Hass)) === JSON.stringify({ domain: "light", service: "toggle", data: { entity_id: "light.p2_close_light" } }),
       "a tap on the light's icon turns it on or off");
     // Back to the overview camera: its own image shows its picture at once and fetches a new one; no second fetch beside it
@@ -392,14 +398,110 @@
     p2Options.setConfig({ type: "custom:xtool-camera" });
     const p2Form = p2Options.querySelector("ha-form");
     const p2Controls = p2Form.schema.find((f) => f.name === "controls");
-    check("P2 camera, options", p2Controls.selector.select.options.map((o) => o.label).join() === "Buttons to switch cameras,Crop by tapping,Mode,Crop preset,Exposure,Fill light"
-      && p2Controls.selector.select.reorder && p2Form.data.controls.join() === "cameras,crop,mode,crop_preset,exposure,close_light"
+    check("P2 camera, options", p2Controls.selector.select.options.map((o) => o.label).join() === "Buttons to switch cameras,Crop by tapping,Mode,Crop preset,Exposure,Fill light icon,Fill light slider"
+      && p2Controls.selector.select.reorder && p2Form.data.controls.join() === "cameras,crop,mode,crop_preset,exposure,close_light_icon,close_light_slider"
       && p2Form.schema.find((f) => f.name === "camera").selector.select.options.map((o) => o.label).join() === "Overview camera,Close camera",
       `the controls to choose and order, by their entities' names (${p2Controls.selector.select.options.map((o) => o.label).join(", ")})`);
     const onlyMode = addFeature({ type: "custom:xtool-camera", controls: ["exposure", "mode"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", keysOf(onlyMode).length === 0
       && inputsOf(onlyMode) === "numeric-input:slider=number.p2_overview_exposure,select-options=select.p2_mode", "only the controls chosen, in the order chosen");
+    const onlyIcon = addFeature({ type: "custom:xtool-camera", controls: ["close_light_icon"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    await wait(60);
+    check("P2 camera, options", closeIcon(onlyIcon) && inputsOf(onlyIcon) === "", "the close fill light's icon alone, without its slider");
+
+    // Taps on the picture, as a phone sends them: pointer events, then touch and mouse events and a click
+    const tapSequence = (target, x, y, kind) => {
+      const at = { bubbles: true, composed: true, cancelable: true, clientX: x, clientY: y, button: 0 };
+      const touch = () => new Touch({ identifier: 1, target, clientX: x, clientY: y });
+      if (kind === "touch") {
+        target.dispatchEvent(new PointerEvent("pointerdown", { ...at, pointerId: 3, pointerType: "touch" }));
+        target.dispatchEvent(new TouchEvent("touchstart", { ...at, touches: [touch()], changedTouches: [touch()] }));
+        target.dispatchEvent(new PointerEvent("pointerup", { ...at, pointerId: 3, pointerType: "touch" }));
+        target.dispatchEvent(new TouchEvent("touchend", { ...at, touches: [], changedTouches: [touch()] }));
+        target.dispatchEvent(new MouseEvent("mousedown", at));
+        target.dispatchEvent(new MouseEvent("mouseup", at));
+        target.dispatchEvent(new MouseEvent("click", at));
+      } else {
+        target.dispatchEvent(new PointerEvent("pointerdown", { ...at, pointerId: 1, pointerType: "mouse" }));
+        target.dispatchEvent(new MouseEvent("mousedown", at));
+        target.dispatchEvent(new PointerEvent("pointerup", { ...at, pointerId: 1, pointerType: "mouse" }));
+        target.dispatchEvent(new MouseEvent("mouseup", at));
+        target.dispatchEvent(new MouseEvent("click", at));
+      }
+    };
+    for (const kind of ["touch", "mouse"]) {
+      const tapHass = makeHass();
+      const tapper = addFeature({ type: "custom:xtool-camera", camera: "Overview" }, { hass: tapHass, entityId: "sensor.p2_status" });
+      await wait(80);
+      const shot = tapper.shadowRoot.querySelector(".shot");
+      let infos = 0;
+      tapper.addEventListener("hass-more-info", () => (infos += 1));
+      // The picture shown now (a crop set brings a new one)
+      const tapAt = (u, v) => {
+        const img = [...shot.querySelectorAll("hui-image")].filter((i) => !i.hidden).at(-1).shadowRoot.querySelector("img");
+        const box = img.getBoundingClientRect();
+        tapSequence(img, box.left + u * box.width, box.top + v * box.height, kind);
+      };
+      tapAt(0.5, 0.5);
+      check(`tap, ${kind}`, infos === 1, `Crop off: one tap opens the camera once (${infos})`);
+      keyNamed(tapper, "crop").click();
+      const before = tapHass.calls.length;
+      tapAt(0.25, 0.2);
+      check(`tap, ${kind}`, infos === 1 && tapHass.calls.length === before && tapper.shadowRoot.querySelector(".area:not([hidden])"),
+        "Crop on: a tap marks one corner, and does not open the camera");
+      tapAt(0.75, 0.8);
+      check(`tap, ${kind}`, infos === 1 && JSON.stringify(lastCall(tapHass).data) === JSON.stringify({
+        crop_width: 305, crop_height: 183, crop_center_x: 305, crop_center_y: 153, entity_id: "camera.p2_overview" }),
+        `the second tap sets the crop (${JSON.stringify(lastCall(tapHass).data)})`);
+      // A crop in effect (as a crop preset sets): Crop shows on, and a tap starts a new crop
+      const cropped = makeHass({ "number.p2_overview_crop_width": "305" });
+      tapper.hass = cropped;
+      await wait(150);
+      check(`tap, ${kind}`, keyNamed(tapper, "crop").getAttribute("aria-pressed") === "true", "a crop in effect: Crop shows on");
+      tapAt(0.25, 0.2);
+      tapAt(0.75, 0.8);
+      check(`tap, ${kind}`, infos === 1 && lastCall(cropped)?.service === "camera" && lastCall(cropped).data.crop_width === 153,
+        `a crop in effect: two taps set a new crop within it, the camera does not open (${JSON.stringify(lastCall(cropped)?.data)})`);
+      const slid = { ...at0(shot) };
+      shot.dispatchEvent(new PointerEvent("pointerdown", { ...slid, pointerId: 4, pointerType: "touch" }));
+      shot.dispatchEvent(new PointerEvent("pointerup", { ...slid, clientX: slid.clientX + 40, pointerId: 4, pointerType: "touch" }));
+      shot.dispatchEvent(new MouseEvent("click", slid));
+      check(`tap, ${kind}`, infos === 1 && lastCall(cropped).data.crop_width === 153, "a swipe is not a tap");
+    }
+
+    function at0(el) {
+      const box = el.getBoundingClientRect();
+      return { bubbles: true, composed: true, cancelable: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, button: 0 };
+    }
+
+    // The target: while the position is slid, and the Laser target overlay is on
+    const targetHass = makeHass({ "switch.p2_overview_target": "on" });
+    const targetCamera = addFeature({ type: "custom:xtool-camera", camera: "Overview" }, { hass: targetHass, entityId: "sensor.p2_status" });
+    const targetPosition = addFeature({ type: "custom:xtool-position" }, { hass: targetHass, entityId: "sensor.p2_status" });
+    await wait(80);
+    const target = targetCamera.shadowRoot.querySelector(".shot svg.target");
+    check("target", target.style.display === "none", "nothing while no position is being set");
+    const targetField = targetPosition.shadowRoot.querySelector(".field input");
+    const slide = (type, x, y) => targetField.dispatchEvent(new PointerEvent(type, { bubbles: true, composed: true, cancelable: true, clientX: x, clientY: y, button: 0, pointerId: 9 }));
+    slide("pointerdown", 100, 10);
+    slide("pointermove", 260, 10);
+    await wait(150);
+    const line = target.querySelector(".path");
+    const targetImg = targetCamera.shadowRoot.querySelector(".shot hui-image:not([hidden])").shadowRoot.querySelector("img").getBoundingClientRect();
+    const targetShot = targetCamera.shadowRoot.querySelector(".shot").getBoundingClientRect();
+    const x1 = Number(line.getAttribute("x1")), x2 = Number(line.getAttribute("x2")), y1 = Number(line.getAttribute("y1")), y2 = Number(line.getAttribute("y2"));
+    const fromX = targetImg.left - targetShot.left + (100 / 610) * targetImg.width;
+    check("target", target.style.display === "" && Math.abs(x1 - fromX) < 1.5 && x2 > x1 && Math.abs(y2 - y1) < 0.5
+      && target.querySelector(".reticle").getAttribute("transform") === `translate(${x2} ${y2})`,
+      `while X is slid: a dashed line from where the head is to a reticle at the target (${Math.round(x1)} to ${Math.round(x2)}, head at ${Math.round(fromX)})`);
+    slide("pointerup", 260, 10);
+    check("target", target.style.display === "none", "gone when let go, and the head is not waiting");
+    targetCamera.hass = makeHass({ "switch.p2_overview_target": "on", "number.p2_laser_x": { state: "300", attributes: { waiting: true, position: 100 } } });
+    check("target", target.style.display === "" && Number(target.querySelector(".path").getAttribute("x2")) > Number(target.querySelector(".path").getAttribute("x1")),
+      "a position set and waiting for Move: still drawn");
+    targetCamera.hass = makeHass({ "number.p2_laser_x": { state: "300", attributes: { waiting: true, position: 100 } } });
+    check("target", target.style.display === "none", "not while the Laser target overlay is off");
 
     // P2 crop: tap two corners on the overview picture; the work area measured from its back left corner
     const p2Crop = addFeature({ type: "custom:xtool-camera", camera: "Overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
@@ -466,6 +568,11 @@
     const element = stamped.shadowRoot.querySelector(".time hui-timestamp-display");
     check("camera, time", !!element && element.ts instanceof Date && element.format === undefined && element.hass === hass
       && stamped.shadowRoot.querySelector(".time").textContent === "Updated ", "Home Assistant's timestamp display, in its default format outside the xTool card");
+    const offTime = addFeature({ type: "custom:xtool-camera", show_time: true }, { hass: makeHass({ "sensor.f2_status": "off" }) });
+    await wait(60);
+    imageLoad(offTime);
+    check("camera, time", !offTime.shadowRoot.querySelector(".time hui-timestamp-display"),
+      "while the laser is off, a picture Home Assistant reloads is not a new one: no time");
     const liveTime = addFeature({ type: "custom:xtool-camera", camera_view: "live", show_time: true }, { hass });
     await wait(60);
     imageLoad(liveTime);
@@ -562,7 +669,7 @@
     await wait(60);
     const perspectiveKey = keyNamed(cropped, "perspective");
     check("camera, perspective", keysOf(cropped).map((k) => k.dataset.key).join() === "camera.f2_main,camera.f2_deep,perspective"
-      && cropped.shadowRoot.querySelectorAll(".row").length === 1 && perspectiveKey.textContent === "straightened"
+      && cropped.shadowRoot.querySelectorAll(".row:not(:empty)").length === 1 && perspectiveKey.textContent === "straightened"
       && !perspectiveKey.hasAttribute("aria-pressed") && perspectiveKey.title === "Perspective: straightened. Tap for uncorrected",
       "the deep camera's perspective is one key in the camera row, showing the one chosen");
     const deepBefore = cropped.shadowRoot.querySelector(".shot hui-image:not([hidden])");
@@ -776,14 +883,19 @@
     narrow.parentElement.style.width = "220px";
     await wait(50);
     const fills = (feature) => {
-      const boxes = keysOf(feature).map((k) => k.getBoundingClientRect()), line = feature.shadowRoot.querySelector(".row").getBoundingClientRect();
+      const boxes = keysOf(feature).filter((k) => k.offsetWidth).map((k) => k.getBoundingClientRect()), line = feature.shadowRoot.querySelector(".row").getBoundingClientRect();
       return new Set(boxes.map((b) => Math.round(b.width))).size === 1 && new Set(boxes.map((b) => Math.round(b.top))).size === 1
         && Math.abs(boxes[0].left - line.left) < 1 && Math.abs(boxes.at(-1).right - line.right) < 1;
     };
     check("keys", fills(jobKeys) && fills(allControls), `the keys share the row's width, as in 0.1.0-alpha.1 (${keysOf(jobKeys).length} and ${keysOf(allControls).length} keys)`);
-    const narrowKeys = keysOf(narrow).map((k) => k.getBoundingClientRect());
-    check("keys", fills(narrow) && narrowKeys.every((b) => b.width >= 29.5),
-      `in a narrow feature: one row, never narrower than the icon, within the feature (${narrowKeys.map((b) => Math.round(b.width)).join(", ")})`);
+    const shownKeys = (feature) => keysOf(feature).filter((k) => k.offsetWidth);
+    const narrowKeys = shownKeys(narrow).map((k) => k.getBoundingClientRect());
+    check("keys", fills(narrow) && narrowKeys.every((b) => b.width >= 35.5) && shownKeys(narrow).length < keysOf(allControls).length
+      && keysOf(narrow).slice(0, narrowKeys.length).every((k) => k.offsetWidth),
+      `in a narrow feature: one row, never narrower than Home Assistant's tile icon, the last chosen left out (${narrowKeys.map((b) => Math.round(b.width)).join(", ")})`);
+    narrow.parentElement.style.width = "400px";
+    await wait(50);
+    check("keys", fills(narrow) && shownKeys(narrow).length === keysOf(allControls).length, "wider again: every key is back, filling the row");
     check("keys", keysOf(allControls).every((k) => getComputedStyle(k.querySelector("ha-state-icon, ha-icon")).getPropertyValue("--mdc-icon-size").trim() === "22px"),
       "the icon keeps its size");
     // Twelve overlays: more than one row holds
@@ -795,7 +907,9 @@
     }
     const manyOverlays = addFeature({ type: "custom:xtool-overlay" }, { hass: manyHass, entityId: "sensor.p2_status" });
     await wait(50);
-    check("keys", keysOf(manyOverlays).length === 8 && fills(manyOverlays), `at most eight in a row (${keysOf(manyOverlays).length})`);
+    const manyShown = keysOf(manyOverlays).filter((k) => k.offsetWidth);
+    check("keys", manyShown.length < 12 && manyShown.length > 4 && fills(manyOverlays) && manyShown.every((k, i) => k === keysOf(manyOverlays)[i]),
+      `as many as fit, the first chosen, filling the row (${manyShown.length} of 12)`);
     const limitOptions = document.createElement("xtool-feature-editor");
     limitOptions.hass = manyHass;
     limitOptions.context = { entity_id: "sensor.p2_status" };
@@ -804,10 +918,10 @@
     limitOptions.addEventListener("config-changed", (ev) => (keptLimit = ev.detail.config.controls));
     const limitForm = limitOptions.querySelector("ha-form");
     const allLimit = limitForm.schema[0].selector.select.options.map((o) => o.value);
-    check("keys", allLimit.length > 8 && limitForm.data.controls.length === 8 && limitForm.schema[0].helper === "Up to 8.",
-      `the editor offers every overlay, chooses eight at first, and says it keeps at most eight (${allLimit.length} offered)`);
-    limitForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...limitForm.data, controls: allLimit } } }));
-    check("keys", keptLimit?.length === 8, "choosing more keeps the first eight");
+    check("keys", allLimit.length === 12 && limitForm.data.controls.length === 12,
+      `the editor offers and chooses every overlay (${allLimit.length} offered)`);
+    limitForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...limitForm.data, controls: allLimit.slice().reverse() } } }));
+    check("keys", keptLimit?.length === 12, "and keeps all chosen");
 
     // Several of one kind: a chevron under the icon for where each sits
     const frontKey = keyNamed(allControls, "fill_light_front"), backKey = keyNamed(allControls, "fill_light_back");
@@ -853,30 +967,30 @@
     await wait(120);
     check("position, drag", !tapDown.defaultPrevented && hass.calls.length === sent && xy().value === "100,50", "a tap without a drag is left to the field, to type in");
     press(xy(), "pointerdown", 100, 10);
-    press(xy(), "pointermove", 130, 10);
+    press(xy(), "pointermove", 160, 10);
     await wait(120);
     const slow = Number(xy().value.split(",")[0]);
     check("position, drag", slow > 100 && hass.calls.length === sent && xy().value.endsWith(",50"),
       `press on the field and drag right: X rises in the field (${xy().value}), nothing is set yet`);
-    press(xy(), "pointermove", 220, 10);
+    press(xy(), "pointermove", 300, 10);
     await wait(120);
     const fast = Number(xy().value.split(",")[0]);
     check("position, drag", fast - slow > slow - 100, `farther from the press, faster (${slow}, then ${fast})`);
-    press(xy(), "pointerup", 220, 10);
+    press(xy(), "pointerup", 300, 10);
     check("position, drag", hass.calls.length === sent + 1 && lastCall(hass).data.entity_id === "number.p2_laser_x" && lastCall(hass).data.value === fast
       && Number.isInteger(fast), "letting go sets X, in whole millimeters");
     sent = hass.calls.length;
     press(xy(), "pointerdown", 10, 10);
-    press(xy(), "pointermove", 10, 60);
+    press(xy(), "pointermove", 10, 90);
     await wait(120);
-    press(xy(), "pointerup", 10, 60);
+    press(xy(), "pointerup", 10, 90);
     check("position, drag", hass.calls.length === sent + 1 && lastCall(hass).data.entity_id === "number.p2_laser_y" && lastCall(hass).data.value > 50,
       "dragging down slides Y: down, toward the front, raises it");
     sent = hass.calls.length;
     press(xy(), "pointerdown", 100, 100);
-    press(xy(), "pointermove", 40, 40);
+    press(xy(), "pointermove", 20, 20);
     await wait(120);
-    press(xy(), "pointerup", 40, 40);
+    press(xy(), "pointerup", 20, 20);
     check("position, drag", hass.calls.length === sent + 2 && hass.calls.at(-2).data.value < 100 && lastCall(hass).data.value < 50,
       "dragging up and left lowers X and Y together");
     position = addFeature({ type: "custom:xtool-position", controls: ["home_laser", "position"] }, { hass, entityId: "sensor.p2_status" });

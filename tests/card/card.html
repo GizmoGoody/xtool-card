@@ -180,9 +180,9 @@
     check("reflections", (gloss(styles.champagne).match(/linear-gradient/g) ?? []).length >= 3, "the window has a sheen and reflections");
     check("reflections", gloss(styles.champagne) === gloss(styles.samePattern), "the default pattern is 4242: the same reflections");
     check("reflections", gloss(styles.otherPattern) !== gloss(styles.champagne), "another pattern gives other reflections");
-    const keys = deep(styles.flat, ".key").length;
+    const keys = deep(styles.flat, ".key").filter((key) => key.offsetWidth).length;
     check("champagne, flat", keys > 0 && styles.flat.shadowRoot.querySelectorAll(".area.flat").length === keys,
-      `a flat patch behind each button (${keys})`);
+      `a flat patch behind each button shown (${keys})`);
     check("champagne, flat", styles.flat.shadowRoot.querySelector("hui-tile-card").classList.contains("solid"), "the buttons get a solid backing");
     check("graphite, console", deep(styles.console, "xtool-job, xtool-peripherals").every((el) => el.hasAttribute("xtool-console")),
       "the buttons are keys");
@@ -332,9 +332,8 @@
     const channels = [...haInside.shadowRoot.querySelectorAll(".area.console")];
     check("console, Home Assistant features inside", channels.length === 5,
       `one channel each: the light's icon and slider, and each of the IF2 fan's three buttons (${channels.length})`);
-    check("console, Home Assistant features inside", channels.filter((a) => Math.abs(parseFloat(a.style.height) - 48) <= 1).length === 4
-      && channels.some((a) => parseFloat(a.style.borderRadius) * 2 >= parseFloat(a.style.height) - 1),
-      `fitted to the 42 px controls, and round around the light's icon (${channels.map((a) => a.style.height).join(", ")})`);
+    check("console, Home Assistant features inside", channels.every((a) => Math.abs(parseFloat(a.style.height) - 48) <= 1),
+      `fitted to the 42 px controls, the light's icon as tall as its row (${channels.map((a) => a.style.height).join(", ")})`);
 
     // State content
     const info = content.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector("ha-tile-info").textContent;
