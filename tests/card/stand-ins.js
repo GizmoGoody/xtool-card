@@ -10,7 +10,13 @@
  */
 
 // The entity categories, as the entity registry has them
-const CATEGORIES = { "update.f2_firmware": "diagnostic", "sensor.f2_wifi_signal": "diagnostic", "sensor.f2_ip_address": "diagnostic" };
+const CATEGORIES = {
+  "update.f2_firmware": "diagnostic", "sensor.f2_wifi_signal": "diagnostic", "sensor.f2_ip_address": "diagnostic",
+  // The settings, as the integration classes them
+  "switch.f2_flame": "config", "switch.f2_gap": "config", "switch.f2_moved": "config", "switch.f2_access_control": "config",
+  "switch.f2_beep": "config", "switch.f2_sleep": "config", "switch.if2_buzzer": "config",
+  "switch.p2_buzzer": "config", "switch.p2_exhaust_setting": "config", "select.p2_flame_level": "config",
+};
 
 // The entities' own names, by translation key, as the integration's translations give them
 const NAMES = {

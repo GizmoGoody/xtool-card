@@ -271,8 +271,19 @@
     check("settings", keysOf(row).map((k) => k.dataset.key).join() === "buzzer,if2_buzzer,device_sleep", "buzzer reminders, the IF2 buzzer, device sleep");
     const p2Settings = addFeature({ type: "custom:xtool-settings", display: "names" }, { hass, entityId: "sensor.p2_status" });
     await wait(50);
-    check("settings, P2", keysOf(p2Settings).map((k) => k.dataset.key).join() === "buzzer,exhaust_setting,flame_alarm_level"
-      && keysOf(p2Settings).map((k) => k.textContent).join() === "Buzzer,Exhaust,high", "the P2's buzzer, exhaust fan and flame alarm level");
+    check("settings, P2", keysOf(p2Settings).map((k) => k.dataset.key).join() === "exhaust_setting,buzzer,flame_alarm_level"
+      && keysOf(p2Settings).map((k) => k.textContent).join() === "Exhaust,Buzzer,high", "the P2's settings: exhaust fan, buzzer and flame alarm level");
+    const p2Parts = addFeature({ type: "custom:xtool-peripherals" }, { hass, entityId: "sensor.p2_status" });
+    await wait(50);
+    check("settings, P2", !keyNamed(p2Parts, "exhaust_setting") && !keyNamed(p2Parts, "buzzer") && keyNamed(p2Parts, "red_dot")
+      && !keyNamed(row, "power") && !keyNamed(row, "exhaust"),
+      "the integration's config entities are in Configuration, every other one in Controls");
+    const configExhaust = makeHass();
+    configExhaust.entities["switch.f2_exhaust"].entity_category = "config";
+    const movedSettings = addFeature({ type: "custom:xtool-settings" }, { hass: configExhaust });
+    const movedControls = addFeature({ type: "custom:xtool-peripherals" }, { hass: configExhaust });
+    await wait(50);
+    check("settings", keyNamed(movedSettings, "exhaust") && !keyNamed(movedControls, "exhaust"), "one rule for every entity: a config entity moves to Configuration");
     keyNamed(p2Settings, "flame_alarm_level").click();
     check("settings, P2", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "select", service: "select_option", data: { entity_id: "select.p2_flame_level", option: "low" } })
       && keyNamed(p2Settings, "flame_alarm_level").title === "Flame alarm: high. Tap for low", "a tap steps the flame alarm to the next level");
@@ -280,7 +291,7 @@
     settingsOptions.hass = hass;
     settingsOptions.context = { entity_id: "sensor.p2_status" };
     settingsOptions.setConfig({ type: "custom:xtool-settings" });
-    check("settings, P2", settingsOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join() === "Buzzer,Exhaust fan,Flame alarm",
+    check("settings, P2", settingsOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join() === "Exhaust fan,Buzzer,Flame alarm",
       "the editor offers each by its entity's name");
     keyNamed(row, "device_sleep").click();
     await wait(20);
@@ -328,7 +339,7 @@
     camera.addEventListener("hass-more-info", (ev) => (opened = ev.detail.entityId));
     camera.shadowRoot.querySelector(".shot").click();
     check("camera", opened === "camera.f2_deep", "a tap opens the camera");
-    const live = addFeature({ type: "custom:xtool-camera", camera: "Deep", camera_view: "live", controls: ["crop", "perspective"] }, { hass });
+    const live = addFeature({ type: "custom:xtool-camera", camera: "Deep", camera_view: "live", show_switch: false }, { hass });
     await wait(80);
     check("camera, live", live.shadowRoot.querySelector("hui-image").cameraView === "live" && live.shadowRoot.querySelector("hui-image").cameraImage === "camera.f2_deep"
       && topKeys(live).map((k) => k.dataset.key).join() === "perspective", "the chosen camera, live, without camera buttons (its perspective stays)");
@@ -359,15 +370,15 @@
     p2Options.context = { entity_id: "sensor.p2_status" };
     p2Options.setConfig({ type: "custom:xtool-camera" });
     const p2Form = p2Options.querySelector("ha-form");
-    const p2Controls = p2Form.schema.find((f) => f.name === "controls");
-    check("P2 camera, options", p2Controls.selector.select.options.map((o) => o.label).join() === "Camera buttons,Crop,Mode,Crop preset,Exposure,Fill light"
-      && p2Controls.selector.select.reorder && p2Form.data.controls.join() === "cameras,crop,mode,crop_preset,exposure,close_light"
+    const p2Toggles = p2Form.schema.filter((f) => f.selector.boolean && f.name !== "show_time");
+    check("P2 camera, options", p2Toggles.map((f) => `${f.name}:${f.label}`).join() === "show_switch:Buttons to switch cameras,crop:Crop by tapping,show_mode:Mode,show_crop_preset:Crop preset,show_exposure:Exposure,show_light:Fill light"
+      && p2Toggles.every((f) => p2Form.data[f.name] === true) && !p2Form.schema.some((f) => f.name === "controls")
       && p2Form.schema.find((f) => f.name === "camera").selector.select.options.map((o) => o.label).join() === "Overview camera,Close camera",
-      `the controls to choose and order, by their entities' names (${p2Controls.selector.select.options.map((o) => o.label).join(", ")})`);
-    const onlyMode = addFeature({ type: "custom:xtool-camera", controls: ["exposure", "mode"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+      `an on and off option for each control the cameras have, named as its entity, on by default (${p2Toggles.map((f) => f.label).join(", ")})`);
+    const onlyMode = addFeature({ type: "custom:xtool-camera", show_switch: false, crop: false, show_crop_preset: false, show_light: false }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", keysOf(onlyMode).length === 0
-      && inputsOf(onlyMode) === "numeric-input:slider=number.p2_overview_exposure,select-options=select.p2_mode", "only the controls chosen, in the order chosen");
+      && inputsOf(onlyMode) === "select-options=select.p2_mode,numeric-input:slider=number.p2_overview_exposure", "the options turned off are not shown");
 
     // P2 crop: tap two corners on the overview picture; the work area measured from its back left corner
     const p2Crop = addFeature({ type: "custom:xtool-camera", camera: "Overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
@@ -400,7 +411,7 @@
       "each camera's overlay switches, by name");
     check("overlays", keyNamed(overlays, "switch.p2_overview_target").getAttribute("aria-pressed") === "false"
       && keyNamed(overlays, "switch.p2_overview_slats").getAttribute("aria-pressed") === "true"
-      && keyNamed(overlays, "switch.p2_overview_target").title === "Laser target (Overview)", "on and off shown; the title has the camera");
+      && keyNamed(overlays, "switch.p2_overview_target").title === "Laser target (Overview camera)", "on and off shown; the title has the camera");
     keyNamed(overlays, "switch.p2_overview_target").click();
     check("overlays", JSON.stringify(lastCall(p2Hass)) === JSON.stringify({ domain: "switch", service: "turn_on", data: { entity_id: "switch.p2_overview_target" } }),
       "a tap turns the overlay on");
@@ -412,7 +423,7 @@
     overlayOptions.context = { entity_id: "sensor.p2_status" };
     overlayOptions.setConfig({ type: "custom:xtool-overlay" });
     check("overlays, options", overlayOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join()
-      === "Laser target (Overview),Slat lines (Overview),Close camera (studio) (Close),Close camera (custom) (Close)"
+      === "Laser target (Overview camera),Slat lines (Overview camera),Close camera (studio) (Close camera),Close camera (custom) (Close camera)"
       && overlayOptions.querySelector("ha-form").schema[0].selector.select.reorder, "chosen and ordered in the editor, each with its camera");
     check("overlays", window.customCardFeatures.find((f) => f.type === "xtool-overlay")?.name === "xTool overlays"
       && window.customCardFeatures.find((f) => f.type === "xtool-overlay").isSupported(p2Hass, { entity_id: "sensor.p2_status" })
@@ -519,7 +530,7 @@
     check("camera, crop", keyNamed(whole, "crop").getAttribute("aria-pressed") === "true", "a whole-photo side (0) is a crop in effect");
     keyNamed(whole, "crop").click();
     check("camera, crop", lastCall(wholeHass)?.data.crop_width === 200, "turning it off shows the 200 x 200 mm area");
-    const noTap = addFeature({ type: "custom:xtool-camera", controls: ["cameras", "perspective"] }, { hass });
+    const noTap = addFeature({ type: "custom:xtool-camera", crop: false }, { hass });
     await wait(80);
     let noTapOpened;
     noTap.addEventListener("hass-more-info", (ev) => (noTapOpened = ev.detail.entityId));
@@ -555,11 +566,10 @@
       && keysOf(iconCamera).every((k) => k.querySelector("ha-state-icon") && !k.querySelector("span")), "Show: Icons, for the camera buttons and the perspective (its entity's icon)");
     cameraOptions.setConfig({ type: "custom:xtool-camera" });
     const cameraNames = cameraOptions.querySelector("ha-form").schema.map((s) => s.name);
-    const f2Controls = cameraOptions.querySelector("ha-form").schema.find((s) => s.name === "controls");
-    check("camera, options", cameraNames.join() === "camera,camera_view,controls,display,show_time"
-      && f2Controls.selector.select.options.map((o) => o.value).join() === "cameras,crop,perspective"
-      && cameraOptions.querySelector("ha-form").data.controls.join() === "cameras,crop,perspective",
-      `the camera buttons, Crop and the perspective, all by default (${cameraNames.join(", ")})`);
+    const cameraData = cameraOptions.querySelector("ha-form").data;
+    check("camera, options", cameraNames.join() === "camera,camera_view,show_switch,display,show_time,crop,show_perspective"
+      && cameraData.show_switch && cameraData.crop && cameraData.show_perspective,
+      `as in 0.1.0-alpha.1: the camera buttons, Crop and the perspective, all on by default (${cameraNames.join(", ")})`);
 
     // IF2 2.0 fan: Off, A (Auto) and one speed key that steps 1 to 4
     hass = makeHass();
@@ -588,9 +598,10 @@
       "while off, the speed key starts the speed it shows (1 at first)");
     fan = addFeature({ type: "custom:xtool-if2-fan", display: "icons" }, { hass: makeHass({ "fan.if2_fan": { attributes: { preset_mode: "Auto" } } }) });
     await wait(60);
-    check("IF2 fan", keyNamed(fan, "auto").getAttribute("aria-pressed") === "true" && keysOf(fan).every((k) => k.querySelector("ha-icon") && !k.querySelector("span"))
-      && keyNamed(fan, "speed").querySelector("ha-icon").icon === "mdi:fan-speed-1",
-      "in Auto: A pressed; Show: Icons, only icons, the speed's own (1)");
+    check("IF2 fan", keyNamed(fan, "auto").getAttribute("aria-pressed") === "true" && keysOf(fan).every((k) => k.querySelector("ha-icon"))
+      && !keyNamed(fan, "off").querySelector("span") && keyNamed(fan, "speed").querySelector("ha-icon").icon === "mdi:fan"
+      && keyNamed(fan, "speed").querySelector("span")?.textContent === "1",
+      "in Auto: A pressed; Show: Icons, with the speed's number beside its fan icon");
     const fanOptions = document.createElement("xtool-feature-editor");
     fanOptions.hass = hass;
     fanOptions.context = { entity_id: "sensor.f2_status" };
@@ -707,8 +718,8 @@
     jobOptions.setConfig({ type: "custom:xtool-job" });
     const jobForm = jobOptions.querySelector("ha-form");
     check("job, options", jobForm.data.controls.join() === "start_pause,cancel"
-      && jobForm.schema[0].selector.select.options.map((o) => o.label).join() === "Start / Pause,Start,Pause,Cancel" && jobForm.schema[0].selector.select.reorder,
-      "Buttons: Start / Pause and Cancel by default, from Start / Pause, Start, Pause and Cancel, in order");
+      && jobForm.schema[0].selector.select.options.map((o) => o.label).join() === "Start / Pause,Resume job,Pause job,Cancel job" && jobForm.schema[0].selector.select.reorder,
+      "Buttons: Start / Pause and Cancel by default, from Start / Pause and the job's buttons by their entities' names, in order");
 
     // Keys: one width for every feature, never narrower than the icon, wrapping instead of overflowing
     hass = makeHass();
@@ -800,7 +811,7 @@
     positionOptions.hass = hass;
     positionOptions.context = { entity_id: "sensor.p2_status" };
     positionOptions.setConfig({ type: "custom:xtool-position" });
-    check("position, options", positionOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join() === "Position,Move laser,Home laser head"
+    check("position, options", positionOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join() === "Laser position X, Laser position Y,Move laser,Home laser head"
       && positionOptions.querySelector("ha-form").schema[0].selector.select.reorder, "Position, Move and Home can be chosen and ordered");
 
     // Measure: the Measure key and the thickness or distance in a field, with a plus-minus key to slide it
@@ -809,7 +820,7 @@
     await wait(50);
     const thickness = () => measure.shadowRoot.querySelector(".field input");
     check("measure", items(measure) === "measure,field,adjust" && thickness().value === "3.0" && keyNamed(measure, "measure").textContent === "Measure"
-      && keyNamed(measure, "measure").title === "Measure. Last reading: 3.2 mm" && !measure.shadowRoot.querySelector("hui-card-feature, select"),
+      && keyNamed(measure, "measure").title === "Measure thickness or distance. Last reading: 3.2 mm" && !measure.shadowRoot.querySelector("hui-card-feature, select"),
       "Measure, the field, and the plus-minus key, in one row; no Mode");
     check("measure", keyNamed(measure, "adjust").querySelector("ha-icon").icon === "mdi:plus-minus", "the plus-minus key");
     sent = hass.calls.length;
@@ -833,7 +844,7 @@
     measureOptions.hass = hass;
     measureOptions.context = { entity_id: "sensor.p2_status" };
     measureOptions.setConfig({ type: "custom:xtool-measure" });
-    check("measure, options", measureOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join() === "Measure,Thickness or distance",
+    check("measure, options", measureOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join() === "Measure thickness or distance,Thickness or distance",
       "only Measure and the field can be chosen");
 
     // A field being typed in keeps its focus and what was typed while the states change

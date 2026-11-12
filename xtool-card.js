@@ -284,7 +284,7 @@ const OVERLAY_ORDER = [
 
 /** An overlay's control: its switch, named by its entity and its camera. */
 function overlayControl(entityId, camera, hass) {
-  const name = `${entityName(hass, entityId) ?? entityId} (${camera.label})`;
+  const name = `${entityName(hass, entityId) ?? entityId} (${entityName(hass, camera.entityId) ?? camera.label})`;
   return { id: entityId, kind: "toggle", color: "primary", option: name, title: name };
 }
 
@@ -313,8 +313,9 @@ const running = (phase) => phase === "processing" || phase === "framing";
  * - name: the one word on its key, or a function of the moment (see
  *   XtoolElement._moment) for a key that follows the state. A key shows its
  *   entity's own icon (Home Assistant's state icon). Its title and its
- *   choice in the editor are its entity's name, unless title and option
- *   give others,
+ *   choice in the editor are its entity's name in the integration; option
+ *   names a choice that has no entity of its own, and detail(moment) adds
+ *   to the title,
  * - color: its key's color,
  * - input: what changes in Home Assistant's feature that shows it as an
  *   input (see KINDS), such as a slider for a number,
@@ -349,18 +350,17 @@ const CONTROLS = {
     pick: ({ phase }) => (running(phase) ? "pause" : "start"),
   },
   start: {
-    kind: "press", role: "resume", key: "resume", option: "Start", color: "green",
+    kind: "press", role: "resume", key: "resume", color: "green",
     name: ({ phase }) => (phase === "paused" ? "Resume" : "Start"),
-    title: ({ phase }) => (phase === "paused" ? "Resume the job" : "Start the job"),
     // With Access control on, Studio offers no start from the machine
     allowed: ({ phase, controlled }) => !running(phase) && !["off", "sleeping", "firmware"].includes(phase) && (!controlled || phase === "paused"),
   },
   pause: {
-    kind: "press", name: "Pause", option: "Pause", title: "Pause the job", color: "amber", access: true,
+    kind: "press", name: "Pause", color: "amber", access: true,
     allowed: ({ phase }) => phase === "processing",
   },
   cancel: {
-    kind: "press", name: "Cancel", option: "Cancel", title: "Cancel the job", color: "red",
+    kind: "press", name: "Cancel", color: "red",
     allowed: ({ phase }) => running(phase) || phase === "paused",
     confirm: { title: "Cancel the job?", text: "The job stops and cannot be resumed.", confirm_text: "Cancel the job" },
     confirmOption: "confirm_cancel",
@@ -387,7 +387,7 @@ const CONTROLS = {
   // Moving the laser, measuring and focusing
   // Where the laser goes: X,Y, sliding left and right for X, up and down for Y
   position: {
-    kind: "field", role: "laser_x", roles: ["laser_x", "laser_y"], option: "Position",
+    kind: "field", role: "laser_x", roles: ["laser_x", "laser_y"],
     keys: [{ key: "x", scrub: "x", icon: "mdi:arrow-left-right", before: true }, { key: "y", scrub: "y", icon: "mdi:arrow-up-down" }],
   },
   // A move works while the laser sleeps, but not while it works or is off
@@ -397,8 +397,8 @@ const CONTROLS = {
   measure_height: { kind: "field", roles: ["measure_height"], keys: [{ key: "adjust", scrub: "xy", icon: "mdi:plus-minus" }] },
   // The key's title has the last reading
   measure: {
-    kind: "press", name: "Measure", color: "primary", busy: true, option: "Measure",
-    title: (moment) => (lastReading(moment) ? `Measure. Last reading: ${lastReading(moment)}` : "Measure"),
+    kind: "press", name: "Measure", color: "primary", busy: true,
+    detail: (moment) => (lastReading(moment) ? `Last reading: ${lastReading(moment)}` : undefined),
   },
   // As in Studio: no Autofocus while the laser works, frames, focuses or is
   // off, or while Access control is on
@@ -906,6 +906,13 @@ function controlOf(id, profile) {
 /** A control's value: as given, or worked out for the moment. */
 const valueOf = (value, moment) => (typeof value === "function" ? value(moment) : value);
 
+/**
+ * Where an entity belongs: "config" for a setting (the integration gives it
+ * the config entity category; Configuration shows it), "control" for
+ * everything else (Controls shows it).
+ */
+const categoryOf = (hass, entityId) => (hass?.entities?.[entityId]?.entity_category === "config" ? "config" : "control");
+
 /** Whether the device has what a control acts on (for a key that stands for others, any of them). */
 function present(control, device) {
   if (!control) return false;
@@ -933,10 +940,11 @@ function directionOf(control, device) {
  */
 function keyBase(control, entityId, moment) {
   const name = valueOf(control.name, moment) ?? entityName(moment.hass, entityId);
+  const title = control.title ?? entityName(moment.hass, entityId) ?? name;
+  const detail = valueOf(control.detail, moment);
   return {
     key: control.key ?? control.id, entity: entityId, text: name, color: control.color,
-    label: valueOf(control.title, moment) ?? entityName(moment.hass, entityId) ?? name,
-    direction: directionOf(control, moment.device),
+    label: detail ? `${title}. ${detail}` : title, direction: directionOf(control, moment.device),
   };
 }
 
@@ -1036,6 +1044,9 @@ function selectKey(feature, control, entityId, moment) {
     action: () => Promise.resolve(feature._hass.callService("select", "select_option", { entity_id: entityId, option: next })),
   };
 }
+
+/** A field's name: its entities' names in the integration. */
+const fieldName = (hass, control, device) => control.roles.map((role) => entityName(hass, device.roles[role])).filter(Boolean).join(", ") || undefined;
 
 /**
  * A field's item in a feature's row: the field control and its entities,
@@ -1235,19 +1246,20 @@ class FieldGroup {
     this._commit(values);
   }
 
-  /** Set each number that changed, rounded to what it shows and kept within its range. */
+  /**
+   * Set each number that changed, rounded to what it shows and kept within
+   * its range. The field shows the new numbers once Home Assistant has them.
+   */
   _commit(values) {
     const states = this._states, now = this._values();
-    const shown = values.map((value, i) => {
+    values.forEach((value, i) => {
       const stateObj = states[i];
-      if (!stateObj || !Number.isFinite(value)) return now[i];
+      if (!stateObj || !Number.isFinite(value)) return;
       const factor = 10 ** decimalsOf(this._control, stateObj);
       const { min = -Infinity, max = Infinity } = stateObj.attributes;
       const next = Math.min(max, Math.max(min, Math.round(value * factor) / factor));
       if (next !== now[i]) this._feature._hass.callService("number", "set_value", { entity_id: this._entities[i], value: next });
-      return next;
     });
-    this._input.value = this._format(shown);
   }
 }
 
@@ -1374,7 +1386,11 @@ function showSlides(box, slides) {
  *   no list), and options, its on and off options ({ name, label, helper,
  *   default }, on unless the default is false); keepOffered: the editor
  *   leaves out chosen controls the device does not offer; offerAll: the
- *   editor offers every control, whatever the device has.
+ *   editor offers every control, whatever the device has; category: the
+ *   entity category it shows ("config" or "control", see categoryOf; none:
+ *   any); toggles: instead of the list, one on and off option for each
+ *   control ({ control id: option name }, on unless false; form.helpers
+ *   gives their helpers by control id).
  * A feature whose controls depend on the device (such as each overlay
  * switch) gives them with controlIds(device) and controlFor(id, device, hass).
  */
@@ -1396,10 +1412,16 @@ class XtoolElement extends HTMLElement {
     return this.controls;
   }
 
-  /** A control the feature shows, and the entity it acts on (none for a key that stands for others). */
-  static controlFor(id, device) {
+  /**
+   * A control the feature shows, and the entity it acts on (none for a key
+   * that stands for others, or for an entity of another category than the
+   * feature's: see category).
+   */
+  static controlFor(id, device, hass) {
     const control = controlOf(id, device.profile);
-    return { control, entityId: control && device.roles[control.role] };
+    const entityId = control && device.roles[control.role];
+    if (entityId && this.category && categoryOf(hass, entityId) !== this.category) return { control, entityId: undefined };
+    return { control, entityId };
   }
 
   /**
@@ -1408,26 +1430,33 @@ class XtoolElement extends HTMLElement {
    */
   static offered(device, hass) {
     return this.controlIds(device).map((id) => ({ id, ...this.controlFor(id, device, hass) }))
-      .filter(({ control, entityId }) => control && (this.offerAll || entityId || present(control, device)))
-      .map(({ id, control, entityId }) => ({ value: id, label: control.option ?? entityName(hass, entityId) ?? control.name }));
+      .filter(({ control, entityId }) => control && (this.offerAll || entityId || (control.picks && present(control, device))))
+      .map(({ id, control, entityId }) => ({
+        value: id,
+        label: control.option ?? (control.roles ? fieldName(hass, control, device) : entityName(hass, entityId)) ?? control.name,
+      }));
   }
 
   /** Whether Home Assistant's feature picker offers the feature for this device: it has one of its controls. */
   static supports(device, hass) {
     return this.offered(device, hass).length > 0 && (!this.offerAll || this.controlIds(device).some((id) => {
       const { control, entityId } = this.controlFor(id, device, hass);
-      return entityId || present(control, device);
+      return entityId || (control.picks && present(control, device));
     }));
   }
 
   /** The feature's editor form: { schema, data, save }, from its controls, display and options. */
   static editor(hass, entityId) {
-    const { label, helper, options = [] } = this.form;
+    const { label, helper, options = [], helpers = {} } = this.form;
     const offered = this.offered(deviceOf(hass, entityId), hass);
     const values = offered.map((o) => o.value);
     const key = this.controlsKey;
+    const toggles = this.toggles ? offered.map((o) => ({ ...o, name: this.toggles[o.value] })) : [];
     return {
       schema: [
+        ...toggles.map(({ value, name, label: toggleLabel }) => ({
+          name, label: toggleLabel, ...(helpers[value] ? { helper: helpers[value] } : {}), selector: { boolean: {} },
+        })),
         ...(label ? [{
           name: key, label, ...(helper ? { helper } : {}),
           selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: offered } },
@@ -1438,6 +1467,7 @@ class XtoolElement extends HTMLElement {
         })),
       ],
       data: (c) => ({
+        ...Object.fromEntries(toggles.map(({ name }) => [name, c[name] !== false])),
         ...(label ? { [key]: this.keepOffered && Array.isArray(c[key]) ? c[key].filter((value) => values.includes(value)) : c[key] ?? this.defaults ?? values } : {}),
         ...(this.display ? { display: displayOf(c, this.display) } : {}),
         ...Object.fromEntries(options.map(({ name, default: on = true }) => [name, typeof c[name] === "boolean" ? c[name] : on])),
@@ -1489,8 +1519,13 @@ class XtoolElement extends HTMLElement {
     return { hass, device: deviceOf(hass, id), phase: phaseNow(hass, id), controlled: accessControlOn(hass, id), config: this._config };
   }
 
-  /** The ids of the controls chosen, in order: the option's list, or the defaults. */
+  /**
+   * The ids of the controls chosen, in order: the option's list, or the
+   * defaults; with toggles, the ones whose option is not off.
+   */
   _chosen() {
+    const { toggles } = this.constructor;
+    if (toggles) return this.constructor.controlIds(this._device).filter((id) => !toggles[id] || this._config[toggles[id]] !== false);
     const chosen = this._config[this.constructor.controlsKey];
     return Array.isArray(chosen) ? chosen : this.constructor.defaults ?? this.constructor.controlIds(this._device);
   }
@@ -1506,7 +1541,8 @@ class XtoolElement extends HTMLElement {
  * keys of its own lists them in _buttons(): { key, label, entity (whose
  * icon it shows) or icon, text, color, pressed, disabled, action, fill
  * (filled in its color though not on), spin (seconds per turn of the
- * icon), direction (see directionOf) }. static keyOptions changes every
+ * icon), direction (see directionOf), alwaysText (its text shows with Show:
+ * Icons too, as the IF2's speed number does) }. static keyOptions changes every
  * key the feature makes from a control.
  */
 class XtoolFeature extends XtoolElement {
@@ -1547,9 +1583,9 @@ class XtoolFeature extends XtoolElement {
         });
       }
     }
-    // A feature with a field is in the number color, as Home Assistant's number features
+    // A feature with a field (shown or not) is in the number color, as Home Assistant's number features
     const fields = buttons.some((b) => b.field);
-    if (fields) this.style.setProperty("--feature-color", NUMBER_ON);
+    if (this._chosen().some((id) => controlOf(id, this._device.profile)?.kind === "field")) this.style.setProperty("--feature-color", NUMBER_ON);
     else this.style.removeProperty("--feature-color");
     this._row.classList.toggle("flow", fields);
     // Hidden: the feature does not apply to the device as it is now
@@ -1627,7 +1663,7 @@ class XtoolFeature extends XtoolElement {
       text.textContent = b.text;
     }
     const showIcon = icon && (display !== "names" || !text);
-    const showText = text && (display !== "icons" || !showIcon);
+    const showText = text && (display !== "icons" || !showIcon || b.alwaysText);
     // The arrow goes under the icon, or under the name without one
     const first = showIcon ? icon : showText ? text : undefined;
     if (first && b.direction) {
@@ -1671,10 +1707,19 @@ class XtoolJob extends XtoolFeature {
   static keyOptions = { pressed: undefined };
   static form = {
     label: "Buttons",
-    helper: "Start / Pause is one button: Pause while the job runs, Start (or Resume) otherwise.",
+    helper: "In order. Start / Pause is one button: Pause while the job runs, Start (or Resume) otherwise.",
     options: [{ name: "confirm_cancel", label: "Ask before cancelling a job" }],
   };
 }
+
+// The laser's parts and settings, on and off: Controls shows the ones the
+// integration does not class as settings, Configuration the settings (its
+// config entity category)
+const PARTS = [
+  "power", "exhaust", "fill_light_front", "fill_light_back", "fill_light", "exhaust_setting", "fill_light_left", "fill_light_right",
+  "red_dot", "red_dot_close", "red_dot_quick", "cooling_fan", "cover_lock", "autofocus",
+  "buzzer", "flame_alarm_level", "if2_buzzer", "device_sleep",
+];
 
 // Peripherals: power, the fans, the fill lights, the red dots and the cover
 // lock, on and off, and Autofocus
@@ -1682,10 +1727,8 @@ class XtoolPeripherals extends XtoolFeature {
   static type = "xtool-peripherals";
   static label = "Controls";
   static pickerName = "xTool controls";
-  static controls = [
-    "power", "exhaust", "fill_light_front", "fill_light_back", "fill_light", "fill_light_left", "fill_light_right",
-    "red_dot", "red_dot_close", "red_dot_quick", "cooling_fan", "cover_lock", "autofocus",
-  ];
+  static controls = PARTS;
+  static category = "control";
   static form = {
     label: "Controls",
     options: [{ name: "animate_fan", label: "Animate fan" }],
@@ -1697,7 +1740,8 @@ class XtoolSettings extends XtoolFeature {
   static type = "xtool-settings";
   static label = "Configuration";
   static pickerName = "xTool configuration";
-  static controls = ["buzzer", "exhaust_setting", "flame_alarm_level", "if2_buzzer", "device_sleep"];
+  static controls = PARTS;
+  static category = "config";
   static form = { label: "Configuration" };
 }
 
@@ -1731,9 +1775,15 @@ class XtoolCamera extends XtoolFeature {
   static display = "names";
   // The keys to switch cameras, Crop and the deep camera's perspective, then the inputs
   static controls = ["cameras", "crop", "perspective", ...CAMERA_INPUTS];
+  static toggles = {
+    cameras: "show_switch", crop: "crop", perspective: "show_perspective",
+    mode: "show_mode", crop_preset: "show_crop_preset", exposure: "show_exposure", close_light: "show_light",
+  };
   static form = {
-    label: "Controls",
-    helper: "Crop: tap it, then two opposite corners on the picture to show only that part. Tap it again to show it all.",
+    helpers: {
+      crop: "Adds a Crop key for the main camera. Tap it, then tap two opposite corners on the picture to show only that part. The key stays on while the crop is in effect; tap it again to show the whole 200 x 200 mm area.",
+      perspective: "A key beside the camera buttons for the deep camera: it shows Uncorrected, Rotated or Straightened, and a tap steps to the next.",
+    },
   };
 
   static supports(device) {
@@ -1744,9 +1794,9 @@ class XtoolCamera extends XtoolFeature {
   static offered(device, hass) {
     const { cameras, profile } = device;
     const offered = [];
-    if (cameras.length > 1) offered.push({ value: "cameras", label: "Camera buttons" });
+    if (cameras.length > 1) offered.push({ value: "cameras", label: "Buttons to switch cameras" });
     if (cameras.some((camera) => profile.cropReset[camera.key] && CROP_ROLES.every((role) => camera.settings[role]))) {
-      offered.push({ value: "crop", label: "Crop" });
+      offered.push({ value: "crop", label: "Crop by tapping" });
     }
     for (const id of ["perspective", ...CAMERA_INPUTS]) {
       const entityId = cameras.map((camera) => camera.settings[id]).find(Boolean);
@@ -1759,6 +1809,7 @@ class XtoolCamera extends XtoolFeature {
     const { cameras } = deviceOf(hass, entityId);
     const labels = cameras.map((camera) => camera.label);
     const base = super.editor(hass, entityId);
+    const field = (name) => base.schema.filter((f) => f.name === name);
     return {
       schema: [
         {
@@ -1770,12 +1821,14 @@ class XtoolCamera extends XtoolFeature {
           helper: "As in Home Assistant's picture cards. Auto: snapshots, refreshed by Home Assistant. Live: the camera's stream.",
           selector: select(CAMERA_VIEWS),
         },
-        ...base.schema,
+        ...field("show_switch"),
+        displayField("For the camera's buttons and the deep camera's perspective."),
         {
           name: "show_time", label: "Show the last updated time",
           helper: "Along the bottom of the picture, in the Auto view, in the card's Time format (under Content).",
           selector: { boolean: {} },
         },
+        ...base.schema.filter((f) => !["show_switch", "display"].includes(f.name)),
       ],
       data: (c) => ({
         camera: labels.includes(c.camera) ? c.camera : labels[0], camera_view: c.camera_view === "live" ? "live" : "auto",
@@ -2294,8 +2347,7 @@ const NUMBER_ON = "var(--state-number-active-color, var(--state-active-color, va
 // The IF2 2.0's keys: Off, Auto and the speed. They are this feature's own:
 // they set the fan entity's modes, not an entity each
 const IF2_KEYS = [["off", "Off"], ["auto", "Auto"], ["speed", "Speed"]];
-// The icons for Off, Auto and each speed (Material Design Icons has numbered fans up to 3)
-const IF2_ICONS = { off: "mdi:fan-off", auto: "mdi:fan-auto", 1: "mdi:fan-speed-1", 2: "mdi:fan-speed-2", 3: "mdi:fan-speed-3", 4: "mdi:fan-chevron-up" };
+const IF2_ICONS = { off: "mdi:fan-off", auto: "mdi:fan-auto", speed: "mdi:fan", 1: "mdi:fan-speed-1", 2: "mdi:fan-speed-2", 3: "mdi:fan-speed-3" };
 
 class XtoolIf2Fan extends XtoolFeature {
   static type = "xtool-if2-fan";
@@ -2316,7 +2368,7 @@ class XtoolIf2Fan extends XtoolFeature {
       schema: (c) => [
         ...(fan ? [{
           name: "controls", label: "Keys",
-          helper: "A tap on the speed key steps to the next speed.",
+          helper: "In order. The speed key shows the speed, and a tap steps to the next.",
           selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: IF2_KEYS.map(([value, label]) => ({ value, label })) } },
         }] : []),
         displayField(),
@@ -2373,7 +2425,7 @@ class XtoolIf2Fan extends XtoolFeature {
       }
       buttons.push({
         key: "speed", label: value === "speed" ? `Speed ${speed}. Tap for ${nextSpeed}` : `Speed ${speed}`,
-        text: String(speed), icon: IF2_ICONS[speed] ?? "mdi:fan", color: "primary", pressed: value === "speed", disabled,
+        text: String(speed), alwaysText: true, icon: IF2_ICONS.speed, color: "primary", pressed: value === "speed", disabled,
         action: () => {
           this._speed = nextSpeed;
           hass.callService("fan", "set_percentage", { entity_id: fan, percentage: Math.min(100, nextSpeed * step) });
@@ -3052,7 +3104,7 @@ class XtoolCard extends HTMLElement {
     const status = Object.values(hass?.entities ?? {}).find((e) => e.platform === DOMAIN && e.translation_key === "status");
     const entity = status?.entity_id ?? "";
     const features = [{ type: "custom:xtool-job" }];
-    if (entity && XtoolPeripherals.supports(deviceOf(hass, entity))) features.push({ type: "custom:xtool-peripherals" });
+    if (entity && XtoolPeripherals.supports(deviceOf(hass, entity), hass)) features.push({ type: "custom:xtool-peripherals" });
     return {
       entity,
       style: entity ? deviceOf(hass, entity).profile.style : "none",
