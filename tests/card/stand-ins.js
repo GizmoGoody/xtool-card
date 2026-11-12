@@ -23,6 +23,9 @@ const NAMES = {
   camera_closeup: "Close camera", crop_preset: "Crop preset", exposure: "Exposure", thumbnail_refresh: "Thumbnail refresh interval",
   overlay_laser_target: "Laser target", overlay_slat_lines: "Slat lines", overlay_close_camera_studio: "Close camera (studio)",
   overlay_close_camera_custom: "Close camera (custom)", exhaust_fan_setting: "Exhaust fan", flame_alarm_level: "Flame alarm",
+  laser_position_x: "Laser position X", laser_position_y: "Laser position Y", move_laser: "Move laser", home_laser_head: "Home laser head",
+  measure_thickness_or_distance: "Measure thickness or distance", measured_thickness_or_distance: "Measured thickness or distance",
+  thickness_or_distance: "Thickness or distance", processing_mode: "Mode",
 };
 
 // [entity_id, translation_key, state, attributes]
@@ -81,10 +84,17 @@ const P2 = [
   ["switch.p2_buzzer", "buzzer", "on"],
   ["switch.p2_exhaust_setting", "exhaust_fan_setting", "on"],
   ["select.p2_flame_level", "flame_alarm_level", "high", { options: ["low", "high"] }],
+  ["number.p2_laser_x", "laser_position_x", "100", { min: 0, max: 610, step: 0.1, unit_of_measurement: "mm", mode: "box" }],
+  ["number.p2_laser_y", "laser_position_y", "50", { min: 0, max: 305, step: 0.1, unit_of_measurement: "mm", mode: "box" }],
+  ["button.p2_move", "move_laser", "unknown"],
+  ["button.p2_home", "home_laser_head", "unknown"],
+  ["button.p2_measure", "measure_thickness_or_distance", "unknown"],
+  ["sensor.p2_measured", "measured_thickness_or_distance", "3.2", { unit_of_measurement: "mm" }],
 ];
 const P2_OVERVIEW_CAMERA = [
   ["camera.p2_overview", "camera_overview", "idle", { entity_picture: "/api/camera_proxy/camera.p2_overview?token=c" }],
   ["select.p2_overview_crop", "crop_preset", "Sync to Mode", { options: ["Sync to Mode", "Custom"] }],
+  ["number.p2_thickness", "thickness_or_distance", "3", { min: 0, max: 50, step: 0.1, unit_of_measurement: "mm", mode: "box" }],
   ["number.p2_overview_exposure", "exposure", "128", { min: 0, max: 255, step: 1 }],
   ["number.p2_overview_thumbnail", "thumbnail_refresh", "300", { min: 5, max: 600, step: 1, unit_of_measurement: "s" }],
   ["switch.p2_overview_target", "overlay_laser_target", "off"],
