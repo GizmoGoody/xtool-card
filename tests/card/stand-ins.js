@@ -191,7 +191,8 @@ customElements.define("hui-timestamp-display", class extends HTMLElement {});
 // hui-image: Home Assistant's image element (its picture cards load it); a
 // page can leave it out (window.noHuiImage) to check that the card loads it
 // As Home Assistant's, it fetches its picture only while it is on screen
-// (not hidden), and loads counts the pictures it fetched.
+// (not hidden), and again each time it comes back on screen; loads counts
+// the pictures it fetched.
 const PIXEL = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 window.defineHuiImage = () => customElements.define("hui-image", class extends HTMLElement {
   constructor() {
@@ -211,9 +212,11 @@ window.defineHuiImage = () => customElements.define("hui-image", class extends H
   // virtual time, where those are late, so this checks the layout instead
   connectedCallback() {
     const look = () => {
-      if (!this.isConnected || this.loads) return;
-      if (this.checkVisibility()) this._img.src = PIXEL;
-      else this._look = setTimeout(look, 10);
+      if (!this.isConnected) return;
+      const visible = this.checkVisibility();
+      if (visible && !this._visible) this._img.src = `${PIXEL}#${this.loads + 1}`;
+      this._visible = visible;
+      this._look = setTimeout(look, 10);
     };
     look();
   }
@@ -275,10 +278,28 @@ window.defineNumberButtons = () => customElements.get("ha-control-number-buttons
 // ha-input: Home Assistant's input (its number entity row loads it)
 window.defineInput = () => customElements.get("ha-input") || customElements.define("ha-input", class extends HTMLElement {});
 
-// hui-light-brightness-card-feature: Home Assistant's light brightness feature
+// hui-light-brightness-card-feature: Home Assistant's light brightness
+// feature. As Home Assistant's, its slider (min 1) sends value-changed,
+// which the feature keeps to itself and sets the brightness with;
+// slide(value) is a slide to that value
 customElements.define("hui-light-brightness-card-feature", class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" }).innerHTML = '<div class="slider" style="height:42px"></div>';
+    this._slider = this.shadowRoot.firstElementChild;
+    this._slider.min = 1;
+    this._slider.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      this.hass.callService("light", "turn_on", { entity_id: this.context.entity_id, brightness_pct: ev.detail.value });
+    });
+  }
+
   connectedCallback() {
     this.style.cssText = "display:block;height:42px";
+  }
+
+  slide(value) {
+    this._slider.dispatchEvent(new CustomEvent("value-changed", { bubbles: true, composed: true, detail: { value } }));
   }
 });
 

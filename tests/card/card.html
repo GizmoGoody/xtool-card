@@ -82,6 +82,9 @@
   const offAtLoad = addCard("off at load", { collapsible: true, ...jobFeatures }, { hass: f2("off"), height: 220 });
   const offStyled = addCard("off, graphite", { style: "graphite", ...jobFeatures }, { hass: f2("off"), height: 220 });
   const noLight = addCard("no status light", { status_light: false }, { hass: f2("idle"), height: 80 });
+  // Collapsed, with the P2's controls beside the title
+  const collapsedControls = addCard("collapsed, controls inline", { entity: "sensor.p2_status", collapsible: true, expanded: false, features_position: "inline",
+    features: [{ type: "custom:xtool-peripherals" }, { type: "custom:xtool-job" }] }, { hass: p2("idle"), height: 120 });
 
   // A feature beside the title (features position: inline), and two columns of features
   const inlineCard = addCard("inline job, champagne", { style: "champagne", features_style: "console", features_position: "inline",
@@ -90,7 +93,7 @@
 
   // Home Assistant's own features inside the card's, in Console: one channel each, fitted to the control
   const haInside = addCard("console, Home Assistant features inside", { style: "champagne", features_style: "console",
-    features: [{ type: "custom:xtool-light", controls: ["fill_light_front"] }, { type: "custom:xtool-if2-fan" }] }, { hass: f2("idle"), height: 200 });
+    features: [{ type: "custom:xtool-lights", controls: ["fill_light_front_icon", "fill_light_front_slider"] }, { type: "custom:xtool-if2-fan" }] }, { hass: f2("idle"), height: 200 });
 
   // State content attributes
   const content = addCard("state content", { state_content: ["state", "elapsed", "exhaust", "red_dot"] }, { hass: f2("processing") });
@@ -219,6 +222,54 @@
     await wait(50);
     check("tap shows or hides the features", inner(collapsible).config.features.length === 2, "another tap shows them again");
     check("hidden at load", inner(closedAtLoad).config.features.length === 0, "Expanded at load: off");
+
+    // Collapsed: only the title row, its feature's keys in one line
+    const inlineRow = deep(collapsedControls, "xtool-peripherals")[0]?.shadowRoot.querySelector(".row");
+    const inlineKeys = [...(inlineRow?.querySelectorAll(".key") ?? [])].map((k) => k.getBoundingClientRect());
+    check("collapsed, controls inline", inner(collapsedControls).config.features.length === 1 && inlineKeys.length > 4
+      && new Set(inlineKeys.map((b) => Math.round(b.top))).size === 1 && inlineKeys.at(-1).right <= inlineRow.getBoundingClientRect().right + 1,
+      `the feature beside the title keeps its ${inlineKeys.length} keys in one line, so the card is one row tall`);
+
+    // The editor's preview: expanded when the editor opens, then only a tap changes it
+    try { localStorage.setItem("xtool-card:sensor.f2_status", "0"); } catch (err) { /* no storage */ }
+    document.createElement("xtool-card-editor");
+    const previewConfig = { type: "custom:xtool-card", entity: "sensor.f2_status", collapsible: true, expanded: false, ...jobFeatures };
+    const preview = document.createElement("xtool-card");
+    preview.setConfig(previewConfig);
+    preview.hass = f2("off");
+    preview.preview = true;
+    document.getElementById("cards").append(preview);
+    await wait(50);
+    check("editor preview", inner(preview).config.features.length === 2, "expanded when the editor opens, though collapsed at load, off and remembered collapsed");
+    preview.setConfig({ ...previewConfig, features: [...jobFeatures.features, { type: "custom:xtool-safety" }] });
+    preview.hass = f2("idle");
+    preview.hass = f2("off");
+    await wait(50);
+    check("editor preview", inner(preview).config.features.length === 3, "adding a feature, or the laser turning off, leaves it expanded");
+    inner(preview).shadowRoot.querySelector("ha-card").dispatchEvent(new CustomEvent("ll-custom", { bubbles: true, composed: true, detail: inner(preview).config.tap_action }));
+    await wait(50);
+    preview.setConfig({ ...previewConfig, style: "graphite" });
+    await wait(50);
+    check("editor preview", inner(preview).config.features.length === 0 && localStorage.getItem("xtool-card:sensor.f2_status") === "0",
+      "a tap collapses it, and another change keeps it collapsed; the dashboard's remembered state is not touched");
+    const rebuilt = document.createElement("xtool-card");
+    rebuilt.setConfig({ ...previewConfig, style: "graphite" });
+    rebuilt.hass = f2("idle");
+    rebuilt.preview = true;
+    document.getElementById("cards").append(rebuilt);
+    await wait(50);
+    check("editor preview", inner(rebuilt).config.features.length === 0, "a preview card made anew for a change keeps what was shown");
+    document.createElement("xtool-card-editor");
+    const reopened = document.createElement("xtool-card");
+    reopened.setConfig(previewConfig);
+    reopened.hass = f2("idle");
+    reopened.preview = true;
+    document.getElementById("cards").append(reopened);
+    await wait(50);
+    check("editor preview", inner(reopened).config.features.length === 2, "the editor opened again starts expanded");
+    preview.remove();
+    rebuilt.remove();
+    reopened.remove();
 
     // Collapse when off: closes as the machine turns off, opens as it turns on
     autoCollapse.hass = p2("unavailable");
