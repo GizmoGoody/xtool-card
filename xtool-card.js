@@ -62,7 +62,7 @@
  * inputs), and add it to FEATURES.
  */
 
-const VERSION = "0.1.0-alpha.1";
+const VERSION = "0.1.0-alpha.2";
 const DOMAIN = "xtool";
 const CARD_TYPE = "xtool-card";
 const EDITOR_TYPE = "xtool-card-editor";
