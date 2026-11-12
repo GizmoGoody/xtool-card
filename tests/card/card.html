@@ -184,7 +184,7 @@
     check("graphite, console", deep(styles.console, "xtool-job, xtool-peripherals").every((el) => el.hasAttribute("xtool-console")),
       "the buttons are keys");
     check("graphite, console", deep(styles.console, "ha-control-switch").every((el) => el.hasAttribute("xtool-slide")), "the toggle is a slide");
-    check("graphite, console", getComputedStyle(styles.console.shadowRoot.getElementById("stripe")).display === "block", "the silver line is drawn");
+    check("graphite, console", !styles.console.shadowRoot.getElementById("stripe"), "no line below the title row");
     check("no style", !frame(styles.plain).classList.contains("styled"), "no style: the theme's card");
 
     // Collapsing
@@ -314,5 +314,20 @@
     check("status light", tileOf(closedAtLoad).getAttribute("xtool-light") === "solid" && tileOf(closedAtLoad).style.getPropertyValue("--xtool-light") === "#ffffff",
       "the P2 ring light: white while idle");
     check("status light", !tileOf(noLight).hasAttribute("xtool-light"), "none when turned off");
+
+    // The corners: the same expanded as collapsed
+    const roundCard = (expanded) => {
+      const card = addCard(expanded ? "round, expanded" : "round, collapsed", { collapsible: true, expanded, ...jobFeatures }, { height: expanded ? 200 : 56 });
+      card.parentElement.style.setProperty("--ha-card-border-radius", "60px");
+      return card;
+    };
+    const roundOpen = roundCard(true), roundClosed = roundCard(false);
+    const plainOpen = addCard("theme corners, expanded", { collapsible: true, expanded: true, ...jobFeatures }, { height: 200 });
+    await wait(150);
+    const cornerOf = (card) => getComputedStyle(card.shadowRoot.querySelector(".frame")).borderTopLeftRadius;
+    const tileCorner = (card) => getComputedStyle(tileOf(card).shadowRoot.querySelector("ha-card")).borderTopLeftRadius;
+    check("corners", cornerOf(roundOpen) === cornerOf(roundClosed) && tileCorner(roundOpen) === cornerOf(roundOpen) && Math.abs(parseFloat(cornerOf(roundOpen)) - 28) <= 1,
+      `a theme's corners rounder than the collapsed card allows are kept as the collapsed card shows them (${cornerOf(roundOpen)}, ${tileCorner(roundOpen)}, ${cornerOf(roundClosed)})`);
+    check("corners", cornerOf(plainOpen) === "12px", "the theme's corners otherwise");
   });
 </script>
