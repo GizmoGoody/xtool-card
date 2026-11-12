@@ -13,7 +13,7 @@ The card requires the [xTool Laser integration](https://github.com/GizmoGoody/ha
 
 This card is in **Alpha** and is being developed alongside the xTool Laser integration. It is not yet a stable, broadly validated release.
 
-The current release is **0.1.0-alpha.2**. Alpha releases use SemVer prerelease
+The current release is **0.1.0-alpha.3**. Alpha releases use SemVer prerelease
 versions; later Alpha releases increment the final prerelease number.
 
 - **Developed with:**
