@@ -6,11 +6,14 @@
  * - custom:xtool-job          Start or Resume, Pause and Cancel, following the job
  * - custom:xtool-peripherals  power, the exhaust fan, fill lights (on or off), red dot
  *                             and other parts; a fan's icon turns while it runs
- * - custom:xtool-fill-light   the fill lights' brightness, side by side: the tile card's own light brightness feature
+ * - custom:xtool-light        each light chosen as a light's tile card shows it: its icon (a tap turns it on or off)
+ *                             and the tile card's own light brightness feature
  * - custom:xtool-safety       the safety checks, the safety key and Access control; turning a check off asks first
  * - custom:xtool-settings     the Configuration settings: buzzer, exhaust fan, flame alarm level, the IF2 buzzer, device sleep
  * - custom:xtool-camera       a camera, shown by Home Assistant's own image element, with buttons to switch;
- *                             tap two corners on the main camera's picture to crop it; a key for the deep camera's perspective
+ *                             tap two corners on the picture to crop it; the deep camera's perspective; the
+ *                             P2's mode, crop preset, exposure and close light (Home Assistant's own features)
+ * - custom:xtool-overlay      a key for each overlay switch chosen, of the cameras' pictures
  * - custom:xtool-if2-fan      the SafetyPro IF2 inline fan: Off, A (Auto) and a speed key that steps 1 to 4
  * - custom:xtool-position     the laser's position X,Y in a field, keys to slide X and Y, Move and Home
  * - custom:xtool-measure      Measure, and the thickness or distance in a field with a key to slide it
@@ -45,7 +48,7 @@
  * - Device model: deviceOf(hass, entityId), built once for each version of
  *   Home Assistant's entity and device registries: the laser's device and
  *   its child devices, an entity for each role, the cameras with their
- *   settings and overlays, the lights and the model's profile.
+ *   settings and overlays, and the model's profile.
  * - Model profiles: MODELS, one entry for each kind of machine (its status
  *   light, laser, galvo or gantry, style, crop area and names).
  * - Feature base: KINDS (how each kind of control becomes a key or an
@@ -223,7 +226,6 @@ const ROLES = {
   move_laser: roleSpec(["move_laser"], ["button"]),
   home_laser: roleSpec(["home_laser_head"], ["button"]),
   measure: roleSpec(["measure_thickness_or_distance"], ["button"]),
-  measure_mode: roleSpec(["processing_mode"], ["select"]),
   measure_height: roleSpec(["thickness_or_distance"], ["number"]),
   measured: roleSpec(["measured_thickness_or_distance"], ["sensor"]),
   focus_height: roleSpec(["focus_height"], ["number"]),
@@ -253,16 +255,18 @@ const ROLES = {
   crop_center_x: roleSpec(["crop_center_x", "camera_main_crop_center_x"], ["number"], "camera"),
   crop_center_y: roleSpec(["crop_center_y", "camera_main_crop_center_y"], ["number"], "camera"),
   perspective: roleSpec(["perspective", "camera_deep_perspective"], ["select"], "camera"),
-  // The P2's crop presets, one select for each camera
+  // The P2's: each camera's crop preset and exposure, the overview
+  // camera's processing mode, and the close camera's fill light
   crop_preset: roleSpec(["crop_preset"], ["select"], "camera"),
   exposure: roleSpec(["exposure"], ["number"], "camera"),
-  thumbnail_refresh: roleSpec(["thumbnail_refresh", "camera_thumbnail_refresh"], ["number"], "camera"),
+  mode: roleSpec(["processing_mode"], ["select"], "camera"),
+  close_light: roleSpec(["fill_light"], ["light"], "camera"),
 };
 const CROP_ROLES = ["crop_width", "crop_height", "crop_center_x", "crop_center_y"];
 
 // The cameras, by translation key, in the order the camera feature offers them
 const CAMERAS = [
-  ["camera_main", "Main"], ["camera_deep", "Deep"], ["camera_overview", "Overview"], ["camera_closeup", "Close-up"],
+  ["camera_main", "Main"], ["camera_deep", "Deep"], ["camera_overview", "Overview"], ["camera_closeup", "Close"],
   ["camera_far", "Far"], ["camera_near", "Near"], ["camera_side", "Side"], ["camera_fire_record", "Fire record"],
 ];
 
@@ -278,8 +282,11 @@ const OVERLAY_ORDER = [
   "overlay_red_dot_close", "overlay_red_dot_quick",
 ];
 
-/** An overlay's control: a switch, named by its entity. */
-const overlayControl = (key) => ({ id: key, role: key, kind: "toggle", color: "primary" });
+/** An overlay's control: its switch, named by its entity and its camera. */
+function overlayControl(entityId, camera, hass) {
+  const name = `${entityName(hass, entityId) ?? entityId} (${camera.label})`;
+  return { id: entityId, kind: "toggle", color: "primary", option: name, title: name };
+}
 
 // ---------------------------------------------------------------------------
 // Registry: the controls
@@ -309,6 +316,8 @@ const running = (phase) => phase === "processing" || phase === "framing";
  *   choice in the editor are its entity's name, unless title and option
  *   give others,
  * - color: its key's color,
+ * - input: what changes in Home Assistant's feature that shows it as an
+ *   input (see KINDS), such as a slider for a number,
  * - confirm: what Home Assistant's confirmation dialog asks first. For a
  *   switch: { off, on, while }, the text for turning it off or on, asked only
  *   in the phases in while (always without it). For a button: the dialog's
@@ -384,7 +393,6 @@ const CONTROLS = {
   // A move works while the laser sleeps, but not while it works or is off
   move_laser: { kind: "press", name: "Move", color: "primary", busy: true },
   home_laser: { kind: "press", name: "Home", color: "primary", busy: true },
-  measure_mode: { kind: "select", name: "Mode" },
   // The material's thickness or the distance to it: sliding right or up raises it
   measure_height: { kind: "field", roles: ["measure_height"], keys: [{ key: "adjust", scrub: "xy", icon: "mdi:plus-minus" }] },
   // The key's title has the last reading
@@ -442,8 +450,11 @@ const CONTROLS = {
   // The deep camera's perspective: as the camera sees it (skewed), turned
   // square to the work area, and straightened flat; a tap steps to the next
   perspective: { kind: "select", cycle: true, name: "Perspective", color: "primary" },
-  exposure: { kind: "number", name: "Exposure", color: "primary" },
-  thumbnail_refresh: { kind: "number", name: "Refresh", color: "primary" },
+  exposure: { kind: "number", name: "Exposure", color: "primary", input: { style: "slider" } },
+  // The P2's processing mode, which its crop presets follow
+  mode: { kind: "select", name: "Mode", color: "primary" },
+  // The close camera's fill light
+  close_light: { kind: "light", name: "Light", color: DAYLIGHT },
 };
 
 /** The safety checks that are switches (a badge shows when one is off). */
@@ -528,10 +539,8 @@ function buildDevice(hass, id) {
     const camera = all.find((e) => e.translation_key === key && domainOf(e.entity_id) === "camera");
     return camera && cameraModel(hass, camera.entity_id, key, label);
   }).filter(Boolean);
-  const lights = Object.keys(CONTROLS).filter((control) => CONTROLS[control].kind === "light" && roles[control])
-    .map((control) => ({ role: control, entityId: roles[control] }));
   return {
-    id, device: hass.devices?.[id], entities: deviceEntities(hass, id), children, roles, cameras, lights,
+    id, device: hass.devices?.[id], entities: deviceEntities(hass, id), children, roles, cameras,
     profile: profileOf(hass.devices?.[id]?.model),
   };
 }
@@ -549,7 +558,6 @@ const deviceCache = new WeakMap();
  * - entities: the xTool entities on the device itself,
  * - roles: { role: entity_id } for each role in ROLES it has (not the camera roles),
  * - cameras: [{ entityId, key, label, device, settings, overlays }], in CAMERAS order,
- * - lights: [{ role, entityId }], the lights among the controls,
  * - profile: the model's profile (see MODELS).
  * For an entity without a device, a model with none of them.
  */
@@ -557,7 +565,7 @@ function deviceOf(hass, entityId) {
   const entities = hass?.entities;
   const id = entities?.[entityId]?.device_id;
   if (!id) {
-    noDevice ??= Object.freeze({ id: undefined, entities: [], children: [], roles: {}, cameras: [], lights: [], profile: profileOf("") });
+    noDevice ??= Object.freeze({ id: undefined, entities: [], children: [], roles: {}, cameras: [], profile: profileOf("") });
     return noDevice;
   }
   const devices = hass.devices ?? NO_DEVICES;
@@ -630,8 +638,15 @@ const WHITE = "#ffffff", BLUE = "#2196f3", GREEN = "#4caf50", PURPLE = "#9c27b0"
 // shows its logo light only in pictures: the same light (guide 3036).
 const ULTRA_LIGHT = { idle: [WHITE, "solid"], processing: [WHITE, "slow"], setup: [WHITE, "fast"], firmware: [WHITE, "fast"], sleeping: null };
 
-// The crop area a main camera's Crop key returns to: its calibrated area, centered (mm)
-const F2_CROP = { width: 200, height: 200, center_x: 0, center_y: 0 };
+// The crop area each camera's Crop key returns to, by camera (mm): the F2
+// Ultra's main camera, its calibrated area, centered; the P2's overview
+// camera, its work area, measured from the back left corner; the P2's close
+// camera, its view, centered
+const F2_CROP = { camera_main: { width: 200, height: 200, center_x: 0, center_y: 0 } };
+const P2_CROP = {
+  camera_overview: { width: 610, height: 305, center_x: 305, center_y: 152.5 },
+  camera_closeup: { width: 140, height: 100, center_x: 0, center_y: 0 },
+};
 
 /**
  * What a model's profile holds:
@@ -641,10 +656,11 @@ const F2_CROP = { width: 200, height: 200, center_x: 0, center_y: 0 };
  *   picture), false for a machine that moves a gantry (a raster),
  * - style: the xTool style a new card gets ("champagne", "graphite" or "none"),
  * - light: its status light table (none: no ring),
- * - cropReset: the area a camera's Crop key returns to,
+ * - cropReset: the area each camera's Crop key returns to, by camera key
+ *   (a camera without one has no Crop key),
  * - names: names of controls on this model, by control id.
  */
-const DEFAULT_PROFILE = { name: "", galvo: false, style: "none", light: undefined, cropReset: F2_CROP, names: {} };
+const DEFAULT_PROFILE = { name: "", galvo: false, style: "none", light: undefined, cropReset: {}, names: {} };
 
 // The models, most specific first: the first whose pattern matches the
 // device's model name gives its profile
@@ -660,8 +676,7 @@ const MODELS = [
       setup: [YELLOW, "solid"], error: [RED, "solid"], fire: [RED, "solid"], overheat: [RED, "solid"], sleeping: [WHITE, "slow"],
     },
   },
-  // P2 and P2S: the ring light (guide 222). The laser has more fill lights
-  // than its close camera's: that one is the close view's.
+  // P2 and P2S: the ring light (guide 222)
   {
     name: "P2", match: /\bP2S?\b/i, laser: "co2", style: "graphite",
     light: {
@@ -669,7 +684,7 @@ const MODELS = [
       focusing: [BLUE, "breathe"], finished: [GREEN, "solid"], sleeping: [GREEN, "breathe"], firmware: [PURPLE, "solid"],
       setup: [YELLOW, "solid"], error: [RED, "solid"], fire: [RED, "solid"],
     },
-    names: { fill_light: "Fill light (close view)" },
+    cropReset: P2_CROP,
   },
   // P3: the ring light (guide 2004)
   {
@@ -1271,6 +1286,75 @@ function slideOf(slides, entityId, feature) {
   return slide;
 }
 
+/** The Home Assistant feature that shows a control as an input: its kind's, with the control's changes. */
+const inputOf = (control) => ({ ...KINDS[control.kind].input, ...(control.input ?? {}) });
+
+// A light's color in a feature: its own color when it has one, daylight
+// otherwise; Home Assistant's color for a light that is off
+const LIGHT_OFF = "var(--state-light-inactive-color, var(--state-inactive-color, var(--disabled-color, #bdbdbd)))";
+
+/** Whether a light has a brightness. */
+const dimmable = (hass, light) => (hass?.states[light]?.attributes.supported_color_modes ?? []).some((mode) => mode !== "onoff");
+
+/**
+ * A light as a light's tile card shows it: Home Assistant's tile icon with
+ * the light's own icon, where a tap turns the light on or off, and Home
+ * Assistant's light brightness feature beside it (for a light with a
+ * brightness). The feature's off_at_minimum option turns the light off
+ * when its slider is set to the minimum (1 %).
+ */
+class LightRow {
+  constructor(feature, entityId) {
+    this._feature = feature;
+    this._entityId = entityId;
+    this.el = document.createElement("div");
+    this.el.className = "light";
+    this._icon = document.createElement("ha-tile-icon");
+    this._icon.interactive = true;
+    this._icon.actionHandlerOptions = { hasHold: false, hasDoubleClick: false };
+    this._state = document.createElement("ha-state-icon");
+    this._state.slot = "icon";
+    this._icon.append(this._state);
+    // Home Assistant's action handler on the tile icon sends an action event for a tap
+    this._icon.addEventListener("action", (ev) => {
+      ev.stopPropagation();
+      if (ev.detail?.action === "tap") performAction(feature, "light.toggle", entityId);
+    });
+    this._slide = slideOf(new Map(), entityId, KINDS.light.input);
+    this._slide.addEventListener("value-changed", (ev) => {
+      const slider = ev.composedPath()[0];
+      if (feature._config?.off_at_minimum === true && ev.detail?.value <= Number(slider?.min ?? 1)) {
+        feature._hass.callService("light", "turn_off", { entity_id: entityId });
+      }
+    });
+    this.el.append(this._icon, this._slide);
+  }
+
+  update() {
+    const hass = this._feature._hass, stateObj = hass.states[this._entityId];
+    const rgb = stateObj?.attributes.rgb_color;
+    const color = stateObj?.state === "on" ? (Array.isArray(rgb) ? `rgb(${rgb.join(", ")})` : DAYLIGHT) : LIGHT_OFF;
+    this._icon.style.setProperty("--tile-icon-color", color);
+    this._icon.accessibleLabel = entityName(hass, this._entityId);
+    this._state.hass = hass;
+    this._state.stateObj = stateObj;
+    this._slide.hidden = !dimmable(hass, this._entityId);
+    this._slide.style.setProperty("--feature-color", color);
+    this._slide.firstChild.color = color;
+    this._slide.firstChild.hass = hass;
+    return this.el;
+  }
+}
+
+// A light: its tile icon, and its slider beside it
+const LIGHT_CSS = `
+  .light { display: flex; align-items: center; gap: var(--feature-button-spacing, 12px); min-width: 0; height: var(--feature-height, 42px); }
+  .light ha-tile-icon { flex: none; }
+  .light .slide { flex: 1 1 auto; }
+  .slide { display: block; min-width: 0; border-radius: var(--feature-border-radius, 12px); }
+  .slide[hidden] { display: none; }
+`;
+
 /** Show these slides in a box, replacing what it shows only when they differ. */
 function showSlides(box, slides) {
   if (slides.length !== box.children.length || slides.some((slide, i) => box.children[i] !== slide)) box.replaceChildren(...slides);
@@ -1287,10 +1371,12 @@ function showSlides(box, slides) {
  *   the device has, unless given); controlsKey: the option that lists the
  *   ones chosen (controls),
  * - form: its editor's { label, helper } for the list of controls (none:
- *   no list), and options, its on and off options ({ name, label, helper },
- *   on unless set to false); keepOffered: the editor leaves out chosen
- *   controls the device does not offer; offerAll: the editor offers every
- *   control, whatever the device has.
+ *   no list), and options, its on and off options ({ name, label, helper,
+ *   default }, on unless the default is false); keepOffered: the editor
+ *   leaves out chosen controls the device does not offer; offerAll: the
+ *   editor offers every control, whatever the device has.
+ * A feature whose controls depend on the device (such as each overlay
+ * switch) gives them with controlIds(device) and controlFor(id, device, hass).
  */
 class XtoolElement extends HTMLElement {
   static controls = [];
@@ -1305,18 +1391,33 @@ class XtoolElement extends HTMLElement {
     return document.createElement("xtool-feature-editor");
   }
 
+  /** The ids of the controls the feature can show for a device, in their default order. */
+  static controlIds() {
+    return this.controls;
+  }
+
+  /** A control the feature shows, and the entity it acts on (none for a key that stands for others). */
+  static controlFor(id, device) {
+    const control = controlOf(id, device.profile);
+    return { control, entityId: control && device.roles[control.role] };
+  }
+
   /**
    * The controls the feature offers for a device, in order: [{ value, label }]
    * for the editor, each named as its entity is (or by its option).
    */
   static offered(device, hass) {
-    return this.controls.map((id) => controlOf(id, device.profile)).filter((control) => this.offerAll || present(control, device))
-      .map((control) => ({ value: control.id, label: control.option ?? entityName(hass, device.roles[control.role]) ?? control.name }));
+    return this.controlIds(device).map((id) => ({ id, ...this.controlFor(id, device, hass) }))
+      .filter(({ control, entityId }) => control && (this.offerAll || entityId || present(control, device)))
+      .map(({ id, control, entityId }) => ({ value: id, label: control.option ?? entityName(hass, entityId) ?? control.name }));
   }
 
   /** Whether Home Assistant's feature picker offers the feature for this device: it has one of its controls. */
-  static supports(device) {
-    return this.controls.some((id) => present(controlOf(id, device.profile), device));
+  static supports(device, hass) {
+    return this.offered(device, hass).length > 0 && (!this.offerAll || this.controlIds(device).some((id) => {
+      const { control, entityId } = this.controlFor(id, device, hass);
+      return entityId || present(control, device);
+    }));
   }
 
   /** The feature's editor form: { schema, data, save }, from its controls, display and options. */
@@ -1339,7 +1440,7 @@ class XtoolElement extends HTMLElement {
       data: (c) => ({
         ...(label ? { [key]: this.keepOffered && Array.isArray(c[key]) ? c[key].filter((value) => values.includes(value)) : c[key] ?? this.defaults ?? values } : {}),
         ...(this.display ? { display: displayOf(c, this.display) } : {}),
-        ...Object.fromEntries(options.map(({ name }) => [name, c[name] !== false])),
+        ...Object.fromEntries(options.map(({ name, default: on = true }) => [name, typeof c[name] === "boolean" ? c[name] : on])),
       }),
     };
   }
@@ -1391,7 +1492,7 @@ class XtoolElement extends HTMLElement {
   /** The ids of the controls chosen, in order: the option's list, or the defaults. */
   _chosen() {
     const chosen = this._config[this.constructor.controlsKey];
-    return Array.isArray(chosen) ? chosen : this.constructor.defaults ?? this.constructor.controls;
+    return Array.isArray(chosen) ? chosen : this.constructor.defaults ?? this.constructor.controlIds(this._device);
   }
 
   _usable(entityId) {
@@ -1401,10 +1502,7 @@ class XtoolElement extends HTMLElement {
 }
 
 /**
- * A row of keys, and Home Assistant's own features above it for the
- * feature's inputs (static inputs: the ids of number, select and light
- * controls, each shown by hui-card-feature, the element the tile card shows
- * every feature with). The keys are the chosen controls'; a feature with
+ * A row of keys: the chosen controls' (a field's group among them); a feature with
  * keys of its own lists them in _buttons(): { key, label, entity (whose
  * icon it shows) or icon, text, color, pressed, disabled, action, fill
  * (filled in its color though not on), spin (seconds per turn of the
@@ -1413,24 +1511,11 @@ class XtoolElement extends HTMLElement {
  */
 class XtoolFeature extends XtoolElement {
   static display = "icons";
-  static inputs = [];
 
   constructor() {
     super();
     this.shadowRoot.innerHTML = `<style>${FEATURE_CSS}</style><div class="row" role="group"></div>`;
     this._row = this.shadowRoot.querySelector(".row");
-    if (this.constructor.inputs.length) {
-      const style = document.createElement("style");
-      style.textContent = `
-      .embeds { display: flex; gap: var(--feature-button-spacing, 12px); margin-bottom: var(--feature-button-spacing, 12px); }
-      .embeds:empty { display: none; }
-      .slide { display: block; flex: 1 1 0; min-width: 0; border-radius: var(--feature-border-radius, 12px); }`;
-      this.shadowRoot.prepend(style);
-      this._embeds = document.createElement("div");
-      this._embeds.className = "embeds";
-      this._slides = new Map();
-      this._row.before(this._embeds);
-    }
   }
 
   _buttons() {
@@ -1441,19 +1526,11 @@ class XtoolFeature extends XtoolElement {
 
   /** The key for one of the feature's controls, or undefined when the device does not have it. */
   _controlKey(id, moment, options) {
-    if (!this.constructor.controls.includes(id)) return undefined;
-    const control = controlOf(id, moment.device.profile);
+    if (!this.constructor.controlIds(moment.device).includes(id)) return undefined;
+    const { control, entityId } = this.constructor.controlFor(id, moment.device, moment.hass);
     if (control.pick) return this._controlKey(control.pick(moment), moment, options);
-    const entityId = moment.device.roles[control.role];
     const key = entityId ? keyOf(this, control, entityId, moment) : undefined;
     return key && { ...key, ...options };
-  }
-
-  /** The inputs the device has: [{ entityId, feature }]. */
-  _inputs() {
-    const device = this._device;
-    return this.constructor.inputs.map((id) => ({ entityId: device.roles[id], feature: KINDS[CONTROLS[id].kind].input }))
-      .filter((input) => input.entityId);
   }
 
   _render() {
@@ -1489,13 +1566,6 @@ class XtoolFeature extends XtoolElement {
     for (const icon of this._row.querySelectorAll("ha-state-icon[data-entity]")) {
       icon.hass = this._hass;
       icon.stateObj = this._hass.states[icon.dataset.entity];
-    }
-    if (this._embeds) {
-      showSlides(this._embeds, this._inputs().map(({ entityId, feature }) => {
-        const slide = slideOf(this._slides, entityId, feature);
-        slide.firstChild.hass = this._hass;
-        return slide;
-      }));
     }
   }
 
@@ -1650,30 +1720,47 @@ class XtoolSafety extends XtoolFeature {
 // ---------------------------------------------------------------------------
 const CAMERA_VIEWS = [["auto", "Auto"], ["live", "Live"]];
 
-// The camera settings shown as keys, after the crop and the overlays
-const CAMERA_SETTING_KEYS = ["exposure", "thumbnail_refresh"];
+// The camera's controls that are Home Assistant's own features (and the
+// close camera's light), below its keys, for the camera shown
+const CAMERA_INPUTS = ["mode", "crop_preset", "exposure", "close_light"];
 
 class XtoolCamera extends XtoolFeature {
   static type = "xtool-camera";
   static label = "Camera";
   static pickerName = "xTool camera";
   static display = "names";
+  // The keys to switch cameras, Crop and the deep camera's perspective, then the inputs
+  static controls = ["cameras", "crop", "perspective", ...CAMERA_INPUTS];
+  static form = {
+    label: "Controls",
+    helper: "Crop: tap it, then two opposite corners on the picture to show only that part. Tap it again to show it all.",
+  };
 
   static supports(device) {
     return device.cameras.length > 0;
   }
 
+  /** What the device's cameras offer, in order, each setting named as its first camera's entity. */
+  static offered(device, hass) {
+    const { cameras, profile } = device;
+    const offered = [];
+    if (cameras.length > 1) offered.push({ value: "cameras", label: "Camera buttons" });
+    if (cameras.some((camera) => profile.cropReset[camera.key] && CROP_ROLES.every((role) => camera.settings[role]))) {
+      offered.push({ value: "crop", label: "Crop" });
+    }
+    for (const id of ["perspective", ...CAMERA_INPUTS]) {
+      const entityId = cameras.map((camera) => camera.settings[id]).find(Boolean);
+      if (entityId) offered.push({ value: id, label: entityName(hass, entityId) ?? CONTROLS[id].name });
+    }
+    return offered;
+  }
+
   static editor(hass, entityId) {
-    const { cameras, profile } = deviceOf(hass, entityId);
+    const { cameras } = deviceOf(hass, entityId);
     const labels = cameras.map((camera) => camera.label);
-    const main = cameras.find((camera) => camera.key === "camera_main");
-    const deep = cameras.find((camera) => camera.key === "camera_deep");
-    const crops = main ? CROP_ROLES.filter((role) => main.settings[role]) : [];
-    const perspective = deep?.settings.perspective;
-    const presets = cameras.some((camera) => camera.settings.crop_preset);
-    const area = `${profile.cropReset.width} x ${profile.cropReset.height} mm`;
+    const base = super.editor(hass, entityId);
     return {
-      schema: () => [
+      schema: [
         {
           name: "camera", label: "Camera",
           selector: { select: { mode: "dropdown", options: cameras.map((camera) => ({ value: camera.label, label: entityName(hass, camera.entityId) ?? camera.label })) } },
@@ -1683,33 +1770,16 @@ class XtoolCamera extends XtoolFeature {
           helper: "As in Home Assistant's picture cards. Auto: snapshots, refreshed by Home Assistant. Live: the camera's stream.",
           selector: select(CAMERA_VIEWS),
         },
-        { name: "show_switch", label: "Buttons to switch cameras", selector: { boolean: {} } },
-        displayField(),
+        ...base.schema,
         {
           name: "show_time", label: "Show the last updated time",
           helper: "Along the bottom of the picture, in the Auto view, in the card's Time format (under Content).",
           selector: { boolean: {} },
         },
-        ...(crops.length === CROP_ROLES.length ? [{
-          name: "crop", label: "Crop by tapping",
-          helper: `Tap Crop, then two opposite corners on the picture to show only that part. Tap Crop again to show the whole ${area} area.`,
-          selector: { boolean: {} },
-        }] : []),
-        ...(presets ? [{
-          name: "show_crop_preset", label: "Crop preset",
-          selector: { boolean: {} },
-        }] : []),
-        ...(perspective ? [{
-          name: "show_perspective", label: "Deep camera perspective",
-          selector: { boolean: {} },
-        }] : []),
       ],
       data: (c) => ({
         camera: labels.includes(c.camera) ? c.camera : labels[0], camera_view: c.camera_view === "live" ? "live" : "auto",
-        show_switch: c.show_switch !== false, display: displayOf(c, "names"), show_time: !!c.show_time,
-        ...(crops.length === CROP_ROLES.length ? { crop: c.crop !== false } : {}),
-        ...(presets ? { show_crop_preset: c.show_crop_preset !== false } : {}),
-        ...(perspective ? { show_perspective: c.show_perspective !== false } : {}),
+        ...base.data(c), show_time: !!c.show_time,
       }),
     };
   }
@@ -1747,7 +1817,14 @@ class XtoolCamera extends XtoolFeature {
         background: linear-gradient(to top, rgba(0, 0, 0, .6), rgba(0, 0, 0, 0));
       }
       .shot .time:empty { display: none; }
-      .row:empty { display: none; }`;
+      .row:empty { display: none; }
+      /* The camera's inputs, below its keys */
+      .inputs {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--feature-button-spacing, 12px);
+        margin-top: var(--feature-button-spacing, 12px);
+      }
+      .inputs:empty { display: none; }
+      ${LIGHT_CSS}`;
     this._shot = document.createElement("button");
     this._shot.type = "button";
     this._shot.className = "shot";
@@ -1769,6 +1846,33 @@ class XtoolCamera extends XtoolFeature {
     });
     this.shadowRoot.prepend(style);
     this._row.before(this._shot);
+    this._inputsBox = document.createElement("div");
+    this._inputsBox.className = "inputs";
+    this._row.after(this._inputsBox);
+    this._slides = new Map();
+    this._lights = new Map();
+  }
+
+  _render() {
+    super._render();
+    if (this._ready()) this._showInputs();
+  }
+
+  /** The chosen inputs of the camera shown: Home Assistant's own features, and its light. */
+  _showInputs() {
+    const camera = this._shownCamera;
+    const chosen = this._chosen().filter((id) => CAMERA_INPUTS.includes(id));
+    showSlides(this._inputsBox, !camera ? [] : chosen.map((id) => {
+      const control = controlOf(id, this._device.profile), entityId = camera.settings[control.role];
+      if (!entityId) return undefined;
+      if (control.kind === "light") {
+        if (!this._lights.has(entityId)) this._lights.set(entityId, new LightRow(this, entityId));
+        return this._lights.get(entityId).update();
+      }
+      const slide = slideOf(this._slides, entityId, inputOf(control));
+      slide.firstChild.hass = this._hass;
+      return slide;
+    }).filter(Boolean));
   }
 
   set hass(hass) {
@@ -1799,65 +1903,60 @@ class XtoolCamera extends XtoolFeature {
       this._pictureAt = undefined;
       this._showCamera();
     }
-    const buttons = this._config.show_switch === false || cameras.length < 2 ? [] : cameras.map(({ entityId, label }) => ({
-      key: entityId, entity: entityId, label: entityName(moment.hass, entityId) ?? `${label} camera`, text: label, color: "primary",
-      pressed: entityId === current,
-      disabled: !this._usable(entityId),
-      action: () => {
-        // A camera shown before shows its last picture, and a new one at once
-        const shownBefore = this._images.has(entityId) && entityId !== this._camera;
-        this._picked = entityId;
-        this._first = undefined;
-        this._cropping = false;
-        this._area.hidden = true;
-        this._key = undefined;
-        this._render();
-        if (shownBefore) this._reloadImage(entityId);
-      },
-    }));
-    const crop = this._crop();
-    if (crop) {
-      // On while choosing a crop and while one is in effect; off shows the
-      // whole calibrated area again
-      const usable = this._usable(current);
-      const cropped = this._cropped(crop);
-      buttons.push({
-        key: "crop", label: cropped ? "Crop: on. Tap to show it all" : this._cropping ? "Crop: tap the picture" : "Crop by tapping",
-        text: "Crop", icon: "mdi:crop", color: "primary",
-        pressed: usable && (!!this._cropping || cropped), disabled: !usable, action: () => this._toggleCropping(crop),
-      });
-    }
     const camera = this._shownCamera;
-    const settingKey = (id) => {
-      const entityId = camera?.settings[id];
-      return entityId ? keyOf(this, controlOf(id, moment.device.profile), entityId, moment) : undefined;
+    const keys = {
+      // A key for each camera: a camera shown before shows its last picture, and a new one at once
+      cameras: () => (cameras.length < 2 ? [] : cameras.map(({ entityId, label }) => ({
+        key: entityId, entity: entityId, label: entityName(moment.hass, entityId) ?? `${label} camera`, text: label, color: "primary",
+        pressed: entityId === current, disabled: !this._usable(entityId),
+        action: () => {
+          const shownBefore = this._images.has(entityId) && entityId !== this._camera;
+          this._picked = entityId;
+          this._first = undefined;
+          this._cropping = false;
+          this._area.hidden = true;
+          this._key = undefined;
+          this._render();
+          if (shownBefore) this._reloadImage(entityId);
+        },
+      }))),
+      // On while choosing a crop and while one is in effect; off shows the whole area again
+      crop: () => {
+        const crop = this._crop();
+        if (!crop) return [];
+        const usable = this._usable(current), cropped = this._cropped(crop);
+        return [{
+          key: "crop", label: cropped ? "Crop: on. Tap to show it all" : this._cropping ? "Crop: tap the picture" : "Crop by tapping",
+          text: "Crop", icon: "mdi:crop", color: "primary",
+          pressed: usable && (!!this._cropping || cropped), disabled: !usable, action: () => this._toggleCropping(crop),
+        }];
+      },
+      // The deep camera's perspective; the integration takes the new photo
+      // before the action ends: show it then
+      perspective: () => {
+        const entityId = camera?.settings.perspective;
+        const key = entityId && keyOf(this, controlOf("perspective", moment.device.profile), entityId, moment);
+        if (!key) return [];
+        const shownCamera = this._camera;
+        return [{ ...key, action: () => key.action().then(() => this._reloadImage(shownCamera), () => {}) }];
+      },
     };
-    // The deep camera's perspective; the integration takes the new photo
-    // before the action ends: show it then
-    const perspective = camera?.key === "camera_deep" && this._config.show_perspective !== false ? settingKey("perspective") : undefined;
-    if (perspective) {
-      const shownCamera = this._camera;
-      const step = perspective.action;
-      buttons.push({ ...perspective, action: () => step().then(() => this._reloadImage(shownCamera), () => {}) });
-    }
-    const preset = this._config.show_crop_preset !== false ? settingKey("crop_preset") : undefined;
-    if (preset) buttons.push(preset);
-    for (const overlay of camera?.overlays ?? []) buttons.push(keyOf(this, overlayControl(overlay.key), overlay.entityId, moment));
-    for (const id of CAMERA_SETTING_KEYS) {
-      const key = settingKey(id);
-      if (key) buttons.push(key);
-    }
-    return buttons;
+    return this._chosen().flatMap((id) => keys[id]?.() ?? []);
+  }
+
+  /** The area the shown camera's Crop key returns to (see MODELS: cropReset), or undefined. */
+  get _cropReset() {
+    return this._device.profile.cropReset[this._shownCamera?.key];
   }
 
   /**
-   * The main camera's crop now ({ width, height, center_x, center_y }, mm),
-   * when a tap on its picture crops it: the main camera is shown, it has
-   * the crop numbers and Crop by tapping is on.
+   * The shown camera's crop now ({ width, height, center_x, center_y }, mm),
+   * when a tap on its picture crops it: Crop is chosen, and the camera has
+   * the crop numbers and a crop area.
    */
   _crop() {
     const camera = this._shownCamera;
-    if (!camera || this._config.crop === false || camera.key !== "camera_main") return undefined;
+    if (!camera || !this._cropReset || !this._chosen().includes("crop")) return undefined;
     const crop = {};
     for (const role of CROP_ROLES) {
       const entityId = camera.settings[role];
@@ -1867,9 +1966,9 @@ class XtoolCamera extends XtoolFeature {
     return crop;
   }
 
-  /** Whether a crop is in effect: not the whole calibrated area, centered (the profile's cropReset). */
+  /** Whether a crop is in effect: not the camera's whole crop area. */
   _cropped(crop) {
-    return Object.entries(this._device.profile.cropReset).some(([side, value]) => crop[side] !== value);
+    return Object.entries(this._cropReset).some(([side, value]) => crop[side] !== value);
   }
 
   /** A point's place in the picture box (px). */
@@ -1929,7 +2028,7 @@ class XtoolCamera extends XtoolFeature {
     if (this._cropping || this._cropped(crop)) {
       const cropped = this._cropped(crop);
       this._stopCropping();
-      if (cropped) this._setCrop(this._device.profile.cropReset);
+      if (cropped) this._setCrop(this._cropReset);
       return;
     }
     this._cropping = true;
@@ -2089,72 +2188,70 @@ class XtoolCamera extends XtoolFeature {
 }
 
 // ---------------------------------------------------------------------------
-// Feature: the fill lights' brightness, side by side. Each is Home Assistant's own light
-// brightness feature, shown for each fill light chosen through
-// hui-card-feature, the element the tile card shows every feature with
-// (features render only inside a tile card, which loads it). Turning the
-// lights on and off is in the peripherals feature.
+// Feature: the lights, each as a light's tile card shows it (see LightRow),
+// side by side, in the order chosen
 // ---------------------------------------------------------------------------
-
-/** Whether a light has a brightness. */
-const dimmable = (hass, light) => (hass?.states[light]?.attributes.supported_color_modes ?? []).some((mode) => mode !== "onoff");
-
-// The feature color: a light's own color when it has one, daylight
-// otherwise; Home Assistant's color for a light that is off
-const LIGHT_OFF = "var(--state-light-inactive-color, var(--state-inactive-color, var(--disabled-color, #bdbdbd)))";
-
-class XtoolFillLight extends XtoolElement {
-  static type = "xtool-fill-light";
-  static label = "Fill light brightness";
-  static pickerName = "xTool fill light brightness";
+class XtoolLight extends XtoolElement {
+  static type = "xtool-light";
+  static label = "Light";
+  static pickerName = "xTool light";
   static controls = ["fill_light_left", "fill_light_right", "fill_light_front", "fill_light_back", "fill_light"];
-  // The lights chosen are in the lights option
-  static controlsKey = "lights";
   static keepOffered = true;
-  static form = { label: "Fill lights" };
+  static form = {
+    label: "Lights",
+    options: [{
+      name: "off_at_minimum", label: "Turn off at the minimum", default: false,
+      helper: "Setting a light's slider to its minimum (1 %) turns the light off.",
+    }],
+  };
 
   constructor() {
     super();
     this.shadowRoot.innerHTML = `<style>
-      :host { display: block; }
-      .lights { display: flex; gap: var(--feature-button-spacing, 12px); }
-      .slide { display: block; flex: 1 1 0; min-width: 0; border-radius: var(--feature-border-radius, 12px); }
-    </style><div class="lights"></div>`;
+      :host { display: block; min-width: 0; }
+      .lights { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--feature-button-spacing, 12px); }
+      ${LIGHT_CSS}
+    </style><div class="lights" role="group"></div>`;
     this._box = this.shadowRoot.querySelector(".lights");
-    this._slides = new Map();
+    this._rows = new Map();
   }
 
-  // A new feature shows every fill light, side by side
+  // A new feature shows every light
   static getStubConfig(hass, context) {
-    return { type: `custom:${this.type}`, lights: this.offered(deviceOf(hass, context?.entity_id), hass).map((o) => o.value) };
-  }
-
-  /** The fill lights that have a brightness. */
-  static offered(device, hass) {
-    return super.offered(device, hass).filter(({ value }) => dimmable(hass, device.roles[value]));
-  }
-
-  static supports(device, hass) {
-    return this.offered(device, hass).length > 0;
+    return { type: `custom:${this.type}`, controls: this.offered(deviceOf(hass, context?.entity_id), hass).map((o) => o.value) };
   }
 
   _render() {
     if (!this._ready()) return;
-    const device = this._device;
-    const offered = this.constructor.offered(device, this._hass).map((o) => o.value);
-    // One slide for each light, each in its light's color
-    showSlides(this._box, this._chosen().filter((id) => offered.includes(id)).map((id) => {
-      const entityId = device.roles[id];
-      const slide = slideOf(this._slides, entityId, KINDS.light.input);
-      const feature = slide.firstChild;
-      const stateObj = this._hass.states[entityId];
-      const rgb = stateObj?.attributes.rgb_color;
-      const color = stateObj?.state === "on" ? (Array.isArray(rgb) ? `rgb(${rgb.join(", ")})` : DAYLIGHT) : LIGHT_OFF;
-      slide.style.setProperty("--feature-color", color);
-      feature.color = color;
-      feature.hass = this._hass;
-      return slide;
+    const { roles } = this._device;
+    this._box.setAttribute("aria-label", this.constructor.label);
+    showSlides(this._box, this._chosen().filter((id) => this.constructor.controls.includes(id) && roles[id]).map((id) => {
+      const entityId = roles[id];
+      if (!this._rows.has(entityId)) this._rows.set(entityId, new LightRow(this, entityId));
+      return this._rows.get(entityId).update();
     }));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Feature: the overlays drawn on the cameras' pictures, a key for each
+// overlay switch chosen, in order
+// ---------------------------------------------------------------------------
+class XtoolOverlay extends XtoolFeature {
+  static type = "xtool-overlay";
+  static label = "Overlays";
+  static pickerName = "xTool overlays";
+  static display = "names";
+  static form = { label: "Overlays" };
+
+  /** Each camera's overlay switches, by entity_id, camera by camera. */
+  static controlIds(device) {
+    return device.cameras.flatMap((camera) => camera.overlays.map((overlay) => overlay.entityId));
+  }
+
+  static controlFor(id, device, hass) {
+    const camera = device.cameras.find((c) => c.overlays.some((overlay) => overlay.entityId === id));
+    return { control: camera && overlayControl(id, camera, hass), entityId: camera && id };
   }
 }
 
@@ -2339,7 +2436,8 @@ class XtoolFocus extends XtoolFeature {
 
 // The features, in the order Home Assistant's feature picker lists them
 const FEATURES = Object.fromEntries([
-  XtoolJob, XtoolPeripherals, XtoolFillLight, XtoolSafety, XtoolSettings, XtoolCamera, XtoolIf2Fan, XtoolFocus, XtoolPosition, XtoolMeasure,
+  XtoolJob, XtoolPeripherals, XtoolLight, XtoolSafety, XtoolSettings, XtoolCamera, XtoolOverlay, XtoolIf2Fan, XtoolFocus, XtoolPosition,
+  XtoolMeasure,
 ].map((feature) => [feature.type, feature]));
 const FEATURE_TAGS = Object.keys(FEATURES);
 
@@ -3484,14 +3582,15 @@ class XtoolCard extends HTMLElement {
       this._watchAdded(wrap.shadowRoot);
       const inner = wrap.shadowRoot ?? wrap;
       const ours = findDeep(inner, FEATURE_TAGS.join(", "));
-      const keys = ours ? [...(ours.shadowRoot?.querySelectorAll(".key, .shot, .slide, .field") ?? [])] : [];
+      const keys = ours ? [...(ours.shadowRoot?.querySelectorAll(".key, .shot, .slide:not([hidden]), .field, ha-tile-icon") ?? [])] : [];
       const element = [...inner.children].find((c) => c.tagName !== "STYLE");
       for (const key of keys.length ? keys : [element]) {
         // A Home Assistant feature inside one of this card's: its own control
         const el = key?.classList?.contains("slide") ? haControlOf(key) : key;
         const b = el && this._box(el);
         if (!b) continue;
-        areas.push({ ...b, radius: featureRadius(el, b.h) });
+        // A tile icon is round; every other control has the features' corners
+        areas.push({ ...b, radius: el.localName === "ha-tile-icon" ? b.h / 2 : featureRadius(el, b.h) });
       }
     }
     this._watchAdded(root);

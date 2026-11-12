@@ -26,6 +26,8 @@ const NAMES = {
   laser_position_x: "Laser position X", laser_position_y: "Laser position Y", move_laser: "Move laser", home_laser_head: "Home laser head",
   measure_thickness_or_distance: "Measure thickness or distance", measured_thickness_or_distance: "Measured thickness or distance",
   thickness_or_distance: "Thickness or distance", processing_mode: "Mode",
+  fill_light: "Fill light", fill_light_2: "Fill light (right)", fill_light_3: "Fill light (left)",
+  crop_width: "Crop width", crop_height: "Crop height", crop_center_x: "Crop center X", crop_center_y: "Crop center Y",
 };
 
 // [entity_id, translation_key, state, attributes]
@@ -90,11 +92,18 @@ const P2 = [
   ["button.p2_home", "home_laser_head", "unknown"],
   ["button.p2_measure", "measure_thickness_or_distance", "unknown"],
   ["sensor.p2_measured", "measured_thickness_or_distance", "3.2", { unit_of_measurement: "mm" }],
+  ["light.p2_fill_right", "fill_light_2", "on", { supported_color_modes: ["brightness"], brightness: 200 }],
+  ["light.p2_fill_left", "fill_light_3", "off", { supported_color_modes: ["brightness"] }],
 ];
 const P2_OVERVIEW_CAMERA = [
   ["camera.p2_overview", "camera_overview", "idle", { entity_picture: "/api/camera_proxy/camera.p2_overview?token=c" }],
   ["select.p2_overview_crop", "crop_preset", "Sync to Mode", { options: ["Sync to Mode", "Custom"] }],
   ["number.p2_thickness", "thickness_or_distance", "3", { min: 0, max: 50, step: 0.1, unit_of_measurement: "mm", mode: "box" }],
+  ["select.p2_mode", "processing_mode", "process_on_slats", { options: ["process_on_slats", "honeycomb_panel", "slats_removed"] }],
+  ["number.p2_overview_crop_width", "crop_width", "610", { min: 0, max: 915, step: 1, unit_of_measurement: "mm" }],
+  ["number.p2_overview_crop_height", "crop_height", "305", { min: 0, max: 460, step: 1, unit_of_measurement: "mm" }],
+  ["number.p2_overview_crop_center_x", "crop_center_x", "305", { min: 0, max: 610, step: 0.5, unit_of_measurement: "mm" }],
+  ["number.p2_overview_crop_center_y", "crop_center_y", "152.5", { min: 0, max: 305, step: 0.5, unit_of_measurement: "mm" }],
   ["number.p2_overview_exposure", "exposure", "128", { min: 0, max: 255, step: 1 }],
   ["number.p2_overview_thumbnail", "thumbnail_refresh", "300", { min: 5, max: 600, step: 1, unit_of_measurement: "s" }],
   ["switch.p2_overview_target", "overlay_laser_target", "off"],
@@ -103,6 +112,11 @@ const P2_OVERVIEW_CAMERA = [
 const P2_CLOSE_CAMERA = [
   ["camera.p2_close", "camera_closeup", "idle", { entity_picture: "/api/camera_proxy/camera.p2_close?token=d" }],
   ["select.p2_close_crop", "crop_preset", "Custom", { options: ["Sync to Mode", "Custom"] }],
+  ["number.p2_close_crop_width", "crop_width", "140", { min: 0, max: 140, step: 1, unit_of_measurement: "mm" }],
+  ["number.p2_close_crop_height", "crop_height", "100", { min: 0, max: 100, step: 1, unit_of_measurement: "mm" }],
+  ["number.p2_close_crop_center_x", "crop_center_x", "0", { min: -70, max: 70, step: 0.5, unit_of_measurement: "mm" }],
+  ["number.p2_close_crop_center_y", "crop_center_y", "0", { min: -50, max: 50, step: 0.5, unit_of_measurement: "mm" }],
+  ["light.p2_close_light", "fill_light", "on", { supported_color_modes: ["brightness"], brightness: 90 }],
   ["number.p2_close_exposure", "exposure", "128", { min: 0, max: 255, step: 1 }],
   ["number.p2_close_thumbnail", "thumbnail_refresh", "300", { min: 5, max: 600, step: 1, unit_of_measurement: "s" }],
   ["switch.p2_close_studio", "overlay_close_camera_studio", "off"],
@@ -276,6 +290,21 @@ customElements.define("ha-state-icon", class extends HTMLElement {
 
   get stateObj() {
     return this._stateObj;
+  }
+});
+
+// ha-tile-icon: Home Assistant's tile icon (the tile card loads it), with
+// its icon in the icon slot. Interactive, a tap sends an action event, as
+// Home Assistant's action handler does
+customElements.define("ha-tile-icon", class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" }).innerHTML = `<style>
+      :host { display: block; width: 36px; height: 36px; border-radius: 50%; }
+    </style><slot></slot><slot name="icon"></slot>`;
+    this.addEventListener("click", () => {
+      if (this.interactive) this.dispatchEvent(new CustomEvent("action", { bubbles: true, composed: true, detail: { action: "tap" } }));
+    });
   }
 });
 

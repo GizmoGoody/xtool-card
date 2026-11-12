@@ -90,7 +90,7 @@
 
   // Home Assistant's own features inside the card's, in Console: one channel each, fitted to the control
   const haInside = addCard("console, Home Assistant features inside", { style: "champagne", features_style: "console",
-    features: [{ type: "custom:xtool-fill-light", lights: ["fill_light_front"] }, { type: "custom:xtool-if2-fan" }] }, { hass: f2("idle"), height: 200 });
+    features: [{ type: "custom:xtool-light", controls: ["fill_light_front"] }, { type: "custom:xtool-if2-fan" }] }, { hass: f2("idle"), height: 200 });
 
   // State content attributes
   const content = addCard("state content", { state_content: ["state", "elapsed", "exhaust", "red_dot"] }, { hass: f2("processing") });
@@ -279,9 +279,11 @@
 
     // One channel for each Home Assistant control inside the card's features
     const channels = [...haInside.shadowRoot.querySelectorAll(".area.console")];
-    check("console, Home Assistant features inside", channels.length === 4, `one channel each: the fill light, and each of the IF2 fan's three buttons (${channels.length})`);
-    check("console, Home Assistant features inside", channels.every((a) => Math.abs(parseFloat(a.style.height) - 48) <= 1),
-      `fitted to the 42 px control (${channels.map((a) => a.style.height).join(", ")})`);
+    check("console, Home Assistant features inside", channels.length === 5,
+      `one channel each: the light's icon and slider, and each of the IF2 fan's three buttons (${channels.length})`);
+    check("console, Home Assistant features inside", channels.filter((a) => Math.abs(parseFloat(a.style.height) - 48) <= 1).length === 4
+      && channels.some((a) => parseFloat(a.style.borderRadius) * 2 >= parseFloat(a.style.height) - 1),
+      `fitted to the 42 px controls, and round around the light's icon (${channels.map((a) => a.style.height).join(", ")})`);
 
     // State content
     const info = content.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector("ha-tile-info").textContent;
