@@ -226,7 +226,7 @@
     hass = makeHass();
     row = addFeature({ type: "custom:xtool-settings" }, { hass });
     await wait(50);
-    check("settings", ["buzzer", "if2_buzzer", "device_sleep", "flame_alarm"].every((key) => keyNamed(row, key)), "configuration entities include exhaust and flame alarm");
+    check("settings", keysOf(row).map((k) => k.dataset.key).join() === "buzzer,if2_buzzer,device_sleep", "buzzer reminders, the IF2 buzzer, device sleep");
     keyNamed(row, "device_sleep").click();
     await wait(20);
     check("settings", !asking() && lastCall(hass).domain === "switch", "a setting turns on and off with a tap, without asking");
@@ -247,7 +247,7 @@
 
     // Camera: Home Assistant's own image element, with buttons to switch cameras
     hass = makeHass();
-    const camera = addFeature({ type: "custom:xtool-camera", controls: ["camera.f2_main", "camera.f2_deep", "crop"] }, { hass });
+    const camera = addFeature({ type: "custom:xtool-camera" }, { hass });
     await wait(80);
     const image = camera.shadowRoot.querySelector(".shot hui-image");
     check("camera", image?.cameraImage === "camera.f2_main" && image.entity === "camera.f2_main" && image.cameraView === "auto" && image.hass === hass,
@@ -260,8 +260,8 @@
     const shown = () => [...camera.shadowRoot.querySelectorAll(".shot hui-image:not(.next)")].filter((i) => !i.hidden);
     check("camera", shown().length === 1 && shown()[0].cameraImage === "camera.f2_deep" && image.hidden && image.isConnected,
       "switching shows the deep camera's image; the main camera's stays, hidden, with its picture");
-    check("camera", topKeys(camera).map((k) => k.textContent).join() === "Main,Deep" && camera.shadowRoot.querySelector(".selectors [data-entity='select.f2_deep_perspective']"),
-      "for the deep camera: no Crop or Reset, and its perspective is a picker");
+    check("camera", topKeys(camera).map((k) => k.textContent).join() === "Main,Deep,straightened",
+      "for the deep camera: no Crop or Reset, and its perspective in the same row");
     keyNamed(camera, "camera.f2_main").click();
     check("camera", shown()[0] === image, "and switching back shows its last picture again at once");
     await wait(150);
@@ -273,17 +273,17 @@
     camera.addEventListener("hass-more-info", (ev) => (opened = ev.detail.entityId));
     camera.shadowRoot.querySelector(".shot").click();
     check("camera", opened === "camera.f2_deep", "a tap opens the camera");
-    const live = addFeature({ type: "custom:xtool-camera", camera: "Deep", camera_view: "live" }, { hass });
+    const live = addFeature({ type: "custom:xtool-camera", camera: "Deep", camera_view: "live", show_switch: false }, { hass });
     await wait(80);
     check("camera, live", live.shadowRoot.querySelector("hui-image").cameraView === "live" && live.shadowRoot.querySelector("hui-image").cameraImage === "camera.f2_deep"
-      && topKeys(live).length === 0 && live.shadowRoot.querySelector(".selectors [data-entity='select.f2_deep_perspective']"), "the chosen camera, live, with perspective as a picker");
+      && topKeys(live).map((k) => k.dataset.key).join() === "perspective", "the chosen camera, live, without camera buttons (its perspective stays)");
 
     const p2Hass = makeHass();
-    const p2Camera = addFeature({ type: "custom:xtool-camera", camera: "Overview", controls: ["camera.p2_overview", "camera.p2_close", "overlay_laser_target", "overlay_slat_lines", "exposure"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const p2Camera = addFeature({ type: "custom:xtool-camera", camera: "Overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera", topKeys(p2Camera).map((k) => k.dataset.key).join() ===
-      "camera.p2_overview,camera.p2_close,overlay_laser_target,overlay_slat_lines,exposure",
-      "overview camera, overlays and exposure");
+      "camera.p2_overview,camera.p2_close,crop_preset,overlay_laser_target,overlay_slat_lines,exposure,thumbnail_refresh",
+      "overview camera, crop preset, overlays, exposure and thumbnail refresh");
     check("P2 camera", keyNamed(p2Camera, "overlay_laser_target").getAttribute("aria-pressed") === "false"
       && keyNamed(p2Camera, "overlay_slat_lines").getAttribute("aria-pressed") === "true",
       "overlay switches show their current states");
@@ -328,7 +328,7 @@
 
     // Crop: the Crop button makes a tap mark the top-left corner, then the bottom-right corner
     hass = makeHass();
-    const cropped = addFeature({ type: "custom:xtool-camera", controls: ["camera.f2_main", "camera.f2_deep", "crop"] }, { hass });
+    const cropped = addFeature({ type: "custom:xtool-camera" }, { hass });
     await wait(80);
     check("camera, crop", !cropped.shadowRoot.querySelector(".controls, hui-card-feature"), "no crop number controls");
     const shot = cropped.shadowRoot.querySelector(".shot");
@@ -339,8 +339,7 @@
     };
     let cropOpened;
     cropped.addEventListener("hass-more-info", (ev) => (cropOpened = ev.detail.entityId));
-    const iconsOf = addFeature({ type: "custom:xtool-camera", display: "icons",
-      controls: ["camera.f2_main", "camera.f2_deep", "crop"] }, { hass });
+    const iconsOf = addFeature({ type: "custom:xtool-camera", display: "icons" }, { hass });
     await wait(60);
     const iconOf = (key) => keyNamed(iconsOf, key)?.querySelector("ha-icon")?.icon;
     check("camera, crop", keysOf(cropped).map((k) => k.dataset.key).join() === "camera.f2_main,camera.f2_deep,crop" && !keyNamed(cropped, "open")
@@ -386,19 +385,19 @@
     keyNamed(cropped, "crop").click();
     check("camera, crop", JSON.stringify(lastCall(croppedHass).data) === JSON.stringify({ crop_width: 200, crop_height: 200, crop_center_x: 0, crop_center_y: 0, entity_id: "camera.f2_main" }),
       "turning Crop off shows it all: 200 x 200 mm, centered");
-    const choosing = addFeature({ type: "custom:xtool-camera", controls: ["crop"] }, { hass: makeHass() });
+    const choosing = addFeature({ type: "custom:xtool-camera" }, { hass: makeHass() });
     await wait(80);
     keyNamed(choosing, "crop").click();
     keyNamed(choosing, "crop").click();
     check("camera, crop", choosing._hass.calls.length === 0 && keyNamed(choosing, "crop").getAttribute("aria-pressed") === "false"
       && choosing.shadowRoot.querySelector(".hint").textContent === "", "turning Crop off before any crop only stops choosing");
     const wholeHass = makeHass({ "number.f2_main_crop_width": "0" });
-    const whole = addFeature({ type: "custom:xtool-camera", controls: ["crop"] }, { hass: wholeHass });
+    const whole = addFeature({ type: "custom:xtool-camera" }, { hass: wholeHass });
     await wait(80);
     check("camera, crop", keyNamed(whole, "crop").getAttribute("aria-pressed") === "true", "a whole-photo side (0) is a crop in effect");
     keyNamed(whole, "crop").click();
     check("camera, crop", lastCall(wholeHass)?.data.crop_width === 200, "turning it off shows the 200 x 200 mm area");
-    const noTap = addFeature({ type: "custom:xtool-camera", crop: false, controls: ["camera.f2_main", "camera.f2_deep"] }, { hass });
+    const noTap = addFeature({ type: "custom:xtool-camera", crop: false }, { hass });
     await wait(80);
     let noTapOpened;
     noTap.addEventListener("hass-more-info", (ev) => (noTapOpened = ev.detail.entityId));
@@ -407,8 +406,19 @@
       "Crop by tapping off: a tap opens the camera, without Crop");
     keyNamed(cropped, "camera.f2_deep").click();
     await wait(60);
-    check("camera, perspective", cropped.shadowRoot.querySelector(".selectors [data-entity='select.f2_deep_perspective']"),
-      "the deep camera's perspective is a picker");
+    const perspectiveKey = keyNamed(cropped, "perspective");
+    check("camera, perspective", keysOf(cropped).map((k) => k.dataset.key).join() === "camera.f2_main,camera.f2_deep,perspective"
+      && cropped.shadowRoot.querySelectorAll(".row").length === 1 && perspectiveKey.textContent === "straightened"
+      && !perspectiveKey.hasAttribute("aria-pressed") && perspectiveKey.title === "Perspective: straightened. Tap for uncorrected",
+      "the deep camera's perspective is one key in the camera row, showing the one chosen");
+    const deepBefore = cropped.shadowRoot.querySelector(".shot hui-image:not([hidden])");
+    perspectiveKey.click();
+    await wait(150);
+    const deepAfter = cropped.shadowRoot.querySelector(".shot hui-image:not([hidden])");
+    check("camera, perspective", deepAfter !== deepBefore && !deepBefore.isConnected && deepAfter.loads === 1 && deepAfter.cameraImage === "camera.f2_deep",
+      "after a perspective change the new photo shows at once");
+    check("camera, perspective", JSON.stringify(lastCall(croppedHass)) === JSON.stringify({ domain: "select", service: "select_option", data: { entity_id: "select.f2_deep_perspective", option: "uncorrected" } }),
+      "a tap steps to the next (after the last, the first)");
     const mainBefore = cropped._images.get("camera.f2_main");
     keyNamed(cropped, "camera.f2_main").click();
     check("camera, switch", cropped.shadowRoot.querySelector(".shot hui-image:not([hidden]):not(.next)") === mainBefore,
@@ -419,12 +429,12 @@
       "and then a new photo");
     const iconCamera = addFeature({ type: "custom:xtool-camera", camera: "Deep", display: "icons" }, { hass });
     await wait(60);
-    check("camera, show", keysOf(iconCamera).length === 0 && iconCamera.shadowRoot.querySelector(".picker"),
-      "a fresh Camera feature has no action buttons and has a camera picker");
+    check("camera, show", keysOf(iconCamera).length === 3 && keyNamed(iconCamera, "perspective").querySelector("ha-icon").icon === "mdi:perspective-less"
+      && keysOf(iconCamera).every((k) => k.querySelector("ha-icon") && !k.querySelector("span")), "Show: Icons, for the camera buttons and the perspective");
     cameraOptions.setConfig({ type: "custom:xtool-camera" });
     const cropNames = cameraOptions.querySelector("ha-form").schema.map((s) => s.name);
-    check("camera, options", cropNames.includes("crop") && !cropNames.includes("show_perspective")
-      && !cropNames.some((n) => n.startsWith("crop_") || n === "show_crop"), `Crop by tapping is configurable; selector entities are pickers (${cropNames.join(", ")})`);
+    check("camera, options", cropNames.includes("crop") && cropNames.includes("show_perspective") && !cropNames.some((n) => n.startsWith("crop_") || n === "show_crop")
+      && cameraOptions.querySelector("ha-form").data.crop === true, `Crop by tapping (on by default) and the perspective (${cropNames.join(", ")})`);
 
     // IF2 2.0 fan: Off, A (Auto) and one speed key that steps 1 to 4
     hass = makeHass();

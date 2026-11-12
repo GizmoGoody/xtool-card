@@ -70,6 +70,7 @@ const P2_OVERVIEW_CAMERA = [
   ["camera.p2_overview", "camera_overview", "idle", { entity_picture: "/api/camera_proxy/camera.p2_overview?token=c" }],
   ["select.p2_overview_crop", "crop_preset", "Sync to Mode", { options: ["Sync to Mode", "Custom"] }],
   ["number.p2_overview_exposure", "exposure", "128", { min: 0, max: 255, step: 1 }],
+  ["number.p2_overview_thumbnail", "thumbnail_refresh", "300", { min: 5, max: 600, step: 1, unit_of_measurement: "s" }],
   ["switch.p2_overview_target", "overlay_laser_target", "off"],
   ["switch.p2_overview_slats", "overlay_slat_lines", "on"],
 ];
@@ -77,6 +78,7 @@ const P2_CLOSE_CAMERA = [
   ["camera.p2_close", "camera_closeup", "idle", { entity_picture: "/api/camera_proxy/camera.p2_close?token=d" }],
   ["select.p2_close_crop", "crop_preset", "Custom", { options: ["Sync to Mode", "Custom"] }],
   ["number.p2_close_exposure", "exposure", "128", { min: 0, max: 255, step: 1 }],
+  ["number.p2_close_thumbnail", "thumbnail_refresh", "300", { min: 5, max: 600, step: 1, unit_of_measurement: "s" }],
   ["switch.p2_close_studio", "overlay_close_camera_studio", "off"],
   ["switch.p2_close_custom", "overlay_close_camera_custom", "on"],
 ];
