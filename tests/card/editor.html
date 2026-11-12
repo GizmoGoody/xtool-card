@@ -58,7 +58,7 @@
     check("editor", form.data.badges.join() === "alarm,connection,safety_key,lid,safety_off", "the default badges are shown");
     const badgeField = form.schema.find((s) => s.name === "badges");
     check("editor", badgeField.selector.select.reorder === true && badgeField.selector.select.multiple === true, "the badges can be put in order");
-    check("editor", badgeField.label.includes("priority order") && badgeField.helper.includes("priority order"), "and are labeled as in priority order");
+    check("editor", badgeField.label.includes("priority order") && badgeField.helper === "The first one that applies shows on the picture.", "and are labeled as in priority order");
     form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "champagne", badges: ["lid", "alarm", "safety_key"] } } }));
     check("editor", fired.badges.join() === "lid,alarm,safety_key", "the order chosen is the order saved");
 

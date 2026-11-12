@@ -60,7 +60,11 @@
     await wait(50);
     check("peripherals", keysOf(row).map((k) => k.dataset.key).join() === "power,exhaust,fill_light_front,fill_light_back,red_dot,autofocus",
       "every control the F2 Ultra UV has, in order, Autofocus last");
-    check("peripherals", keyNamed(row, "power").querySelector("ha-icon") && !keyNamed(row, "power").querySelector("span"), "icons by default");
+    check("peripherals", keyNamed(row, "power").querySelector("ha-state-icon")?.stateObj === hass.states["switch.f2_power"]
+      && keyNamed(row, "power").querySelector("ha-state-icon").hass === hass && !keyNamed(row, "power").querySelector("span"),
+      "icons by default: the entity's own icon, Home Assistant's state icon");
+    check("peripherals", keyNamed(row, "exhaust").title === "Exhaust fan" && keyNamed(row, "red_dot").title === "Red dot", "titled with the entity's name");
+    check("peripherals", !row.shadowRoot.querySelector(".key ha-icon:not(.arrow)"), "no icons of the card's own for the entities");
     keyNamed(row, "autofocus").click();
     check("peripherals", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "button", service: "press", data: { entity_id: "button.f2_autofocus" } }),
       "Autofocus is pressed, not toggled");
@@ -77,8 +81,8 @@
     hass = makeHass({ "sensor.f2_status": "processing" });
     row = addFeature({ type: "custom:xtool-peripherals", controls: ["red_dot", "power", "autofocus"], display: "both" }, { hass });
     await wait(50);
-    check("peripherals, chosen", keysOf(row).map((k) => k.dataset.key).join() === "red_dot,power,autofocus" && keyNamed(row, "red_dot").textContent === "Red dot"
-      && keyNamed(row, "red_dot").querySelector("ha-icon"), "the chosen controls, in the chosen order; Show: Icons and names");
+    check("peripherals, chosen", keysOf(row).map((k) => k.dataset.key).join() === "red_dot,power,autofocus" && keyNamed(row, "red_dot").textContent === "Dot"
+      && keyNamed(row, "red_dot").querySelector("ha-state-icon"), "the chosen controls, in the chosen order; Show: Icons and names");
     check("peripherals, chosen", keyNamed(row, "autofocus").disabled, "no Autofocus while a job runs");
     keyNamed(row, "power").click();
     await wait(20);
@@ -86,7 +90,10 @@
     asking().answer(false);
     row = addFeature({ type: "custom:xtool-peripherals", controls: ["red_dot"], display: "names" }, { hass });
     await wait(50);
-    check("show", keyNamed(row, "red_dot").textContent === "Red dot" && !keyNamed(row, "red_dot").querySelector("ha-icon"), "Show: Names, without icons");
+    check("show", keyNamed(row, "red_dot").textContent === "Dot" && !keyNamed(row, "red_dot").querySelector("ha-state-icon, ha-icon"), "Show: Names, one word, without icons");
+    row = addFeature({ type: "custom:xtool-peripherals", controls: ["exhaust", "power"], display: "names" }, { hass });
+    await wait(50);
+    check("show", keysOf(row).map((k) => k.textContent).join() === "Exhaust,Power", "each name one word (Exhaust, not Exhaust fan)");
 
     // The fill lights stay buttons in the peripherals feature: on or off only
     hass = makeHass();
@@ -150,14 +157,14 @@
     // Animate fan: the exhaust's icon turns while it runs
     row = addFeature({ type: "custom:xtool-peripherals" }, { hass: makeHass() });
     await wait(50);
-    check("animate fan", keyNamed(row, "exhaust").querySelector("ha-icon").classList.contains("spin"), "the running exhaust fan turns");
-    check("animate fan", !keyNamed(row, "red_dot").querySelector("ha-icon").classList.contains("spin"), "other icons do not");
+    check("animate fan", keyNamed(row, "exhaust").querySelector("ha-state-icon").classList.contains("spin"), "the running exhaust fan turns");
+    check("animate fan", !keyNamed(row, "red_dot").querySelector("ha-state-icon").classList.contains("spin"), "other icons do not");
     row = addFeature({ type: "custom:xtool-peripherals", animate_fan: false }, { hass: makeHass() });
     await wait(50);
-    check("animate fan", !keyNamed(row, "exhaust").querySelector("ha-icon").classList.contains("spin"), "it can be turned off");
+    check("animate fan", !keyNamed(row, "exhaust").querySelector("ha-state-icon").classList.contains("spin"), "it can be turned off");
     row = addFeature({ type: "custom:xtool-peripherals" }, { hass: makeHass({ "switch.f2_exhaust": "off" }) });
     await wait(50);
-    check("animate fan", !keyNamed(row, "exhaust").querySelector("ha-icon").classList.contains("spin"), "a fan that is off is still");
+    check("animate fan", !keyNamed(row, "exhaust").querySelector("ha-state-icon").classList.contains("spin"), "a fan that is off is still");
 
     // Safety checks
     hass = makeHass({ "switch.f2_moved": "off" });
@@ -227,6 +234,19 @@
     row = addFeature({ type: "custom:xtool-settings" }, { hass });
     await wait(50);
     check("settings", keysOf(row).map((k) => k.dataset.key).join() === "buzzer,if2_buzzer,device_sleep", "buzzer reminders, the IF2 buzzer, device sleep");
+    const p2Settings = addFeature({ type: "custom:xtool-settings", display: "names" }, { hass, entityId: "sensor.p2_status" });
+    await wait(50);
+    check("settings, P2", keysOf(p2Settings).map((k) => k.dataset.key).join() === "buzzer,exhaust_setting,flame_alarm_level"
+      && keysOf(p2Settings).map((k) => k.textContent).join() === "Buzzer,Exhaust,high", "the P2's buzzer, exhaust fan and flame alarm level");
+    keyNamed(p2Settings, "flame_alarm_level").click();
+    check("settings, P2", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "select", service: "select_option", data: { entity_id: "select.p2_flame_level", option: "low" } })
+      && keyNamed(p2Settings, "flame_alarm_level").title === "Flame alarm: high. Tap for low", "a tap steps the flame alarm to the next level");
+    const settingsOptions = document.createElement("xtool-feature-editor");
+    settingsOptions.hass = hass;
+    settingsOptions.context = { entity_id: "sensor.p2_status" };
+    settingsOptions.setConfig({ type: "custom:xtool-settings" });
+    check("settings, P2", settingsOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join() === "Buzzer,Exhaust fan,Flame alarm",
+      "the editor offers each by its entity's name");
     keyNamed(row, "device_sleep").click();
     await wait(20);
     check("settings", !asking() && lastCall(hass).domain === "switch", "a setting turns on and off with a tap, without asking");
@@ -341,10 +361,10 @@
     cropped.addEventListener("hass-more-info", (ev) => (cropOpened = ev.detail.entityId));
     const iconsOf = addFeature({ type: "custom:xtool-camera", display: "icons" }, { hass });
     await wait(60);
-    const iconOf = (key) => keyNamed(iconsOf, key)?.querySelector("ha-icon")?.icon;
+    const iconOf = (key) => keyNamed(iconsOf, key)?.querySelector("ha-state-icon")?.stateObj?.entity_id ?? keyNamed(iconsOf, key)?.querySelector("ha-icon")?.icon;
     check("camera, crop", keysOf(cropped).map((k) => k.dataset.key).join() === "camera.f2_main,camera.f2_deep,crop" && !keyNamed(cropped, "open")
-      && iconOf("camera.f2_main") === "mdi:crop-free" && iconOf("camera.f2_deep") === "mdi:fullscreen" && iconOf("crop") === "mdi:crop",
-      `Main, Deep and Crop, with their icons; no Reset, no Open (${["camera.f2_main", "camera.f2_deep", "crop"].map(iconOf).join(", ")})`);
+      && iconOf("camera.f2_main") === "camera.f2_main" && iconOf("camera.f2_deep") === "camera.f2_deep" && iconOf("crop") === "mdi:crop",
+      `Main, Deep and Crop, with their icons (each camera's own); no Reset, no Open (${["camera.f2_main", "camera.f2_deep", "crop"].map(iconOf).join(", ")})`);
     check("camera, crop", keyNamed(cropped, "crop").getAttribute("aria-pressed") === "false", "no crop in effect: Crop is off");
     tapAt(0.5, 0.5);
     check("camera, crop", cropOpened === "camera.f2_main" && hass.calls.length === 0, "Crop off: a tap opens the camera");
@@ -429,8 +449,8 @@
       "and then a new photo");
     const iconCamera = addFeature({ type: "custom:xtool-camera", camera: "Deep", display: "icons" }, { hass });
     await wait(60);
-    check("camera, show", keysOf(iconCamera).length === 3 && keyNamed(iconCamera, "perspective").querySelector("ha-icon").icon === "mdi:perspective-less"
-      && keysOf(iconCamera).every((k) => k.querySelector("ha-icon") && !k.querySelector("span")), "Show: Icons, for the camera buttons and the perspective");
+    check("camera, show", keysOf(iconCamera).length === 3 && keyNamed(iconCamera, "perspective").querySelector("ha-state-icon").stateObj.entity_id === "select.f2_deep_perspective"
+      && keysOf(iconCamera).every((k) => k.querySelector("ha-state-icon") && !k.querySelector("span")), "Show: Icons, for the camera buttons and the perspective (its entity's icon)");
     cameraOptions.setConfig({ type: "custom:xtool-camera" });
     const cropNames = cameraOptions.querySelector("ha-form").schema.map((s) => s.name);
     check("camera, options", cropNames.includes("crop") && cropNames.includes("show_perspective") && !cropNames.some((n) => n.startsWith("crop_") || n === "show_crop")
@@ -463,9 +483,9 @@
       "while off, the speed key starts the speed it shows (1 at first)");
     fan = addFeature({ type: "custom:xtool-if2-fan", display: "icons" }, { hass: makeHass({ "fan.if2_fan": { attributes: { preset_mode: "Auto" } } }) });
     await wait(60);
-    check("IF2 fan", keyNamed(fan, "auto").getAttribute("aria-pressed") === "true" && keysOf(fan).every((k) => k.querySelector("ha-icon"))
-      && !keyNamed(fan, "off").querySelector("span") && keyNamed(fan, "speed").querySelector("span")?.textContent === "1",
-      "in Auto: A pressed; Show: Icons, with the speed's number beside its icon");
+    check("IF2 fan", keyNamed(fan, "auto").getAttribute("aria-pressed") === "true" && keysOf(fan).every((k) => k.querySelector("ha-icon") && !k.querySelector("span"))
+      && keyNamed(fan, "speed").querySelector("ha-icon").icon === "mdi:fan-speed-1",
+      "in Auto: A pressed; Show: Icons, only icons, the speed's own (1)");
     const fanOptions = document.createElement("xtool-feature-editor");
     fanOptions.hass = hass;
     fanOptions.context = { entity_id: "sensor.f2_status" };
@@ -584,6 +604,38 @@
     check("job, options", jobForm.data.controls.join() === "start_pause,cancel"
       && jobForm.schema[0].selector.select.options.map((o) => o.label).join() === "Start / Pause,Start,Pause,Cancel" && jobForm.schema[0].selector.select.reorder,
       "Buttons: Start / Pause and Cancel by default, from Start / Pause, Start, Pause and Cancel, in order");
+
+    // Keys: one width for every feature, never narrower than the icon, wrapping instead of overflowing
+    hass = makeHass();
+    const jobKeys = addFeature({ type: "custom:xtool-job" }, { hass });
+    const allControls = addFeature({ type: "custom:xtool-peripherals" }, { hass });
+    const narrow = addFeature({ type: "custom:xtool-peripherals" }, { hass });
+    narrow.parentElement.style.width = "150px";
+    await wait(50);
+    const widths = [...keysOf(jobKeys), ...keysOf(allControls)].map((k) => Math.round(k.getBoundingClientRect().width));
+    check("keys", new Set(widths).size === 1 && widths[0] === Math.round((420 - 4 * 12) / 5),
+      `every key a fifth of the feature, in every feature (${widths.join(", ")})`);
+    const narrowKeys = keysOf(narrow).map((k) => k.getBoundingClientRect());
+    check("keys", narrowKeys.every((b) => b.width >= 36) && narrowKeys.every((b) => b.right <= narrow.getBoundingClientRect().right + 0.5)
+      && new Set(narrowKeys.map((b) => Math.round(b.top))).size > 1,
+      `in a narrow feature never narrower than the icon; the keys wrap instead of overflowing (${narrowKeys.map((b) => Math.round(b.width)).join(", ")})`);
+    check("keys", keysOf(allControls).every((k) => getComputedStyle(k.querySelector("ha-state-icon, ha-icon")).getPropertyValue("--mdc-icon-size").trim() === "24px"),
+      "the icon keeps its size");
+
+    // Several of one kind: an arrow under the icon for where each sits
+    const frontKey = keyNamed(allControls, "fill_light_front"), backKey = keyNamed(allControls, "fill_light_back");
+    const arrowOf = (key) => key.querySelector(".glyph > ha-state-icon + ha-icon.arrow")?.icon;
+    check("direction", arrowOf(frontKey) === "mdi:arrow-down" && arrowOf(backKey) === "mdi:arrow-up" && !keyNamed(allControls, "power").querySelector(".arrow")
+      && frontKey.querySelectorAll("ha-state-icon").length === 1, "front: down, back: up, under the light's one icon; none for a part there is one of");
+    const named = addFeature({ type: "custom:xtool-peripherals", controls: ["fill_light_front"], display: "names" }, { hass });
+    await wait(50);
+    check("direction", keyNamed(named, "fill_light_front").querySelector(".glyph > span + ha-icon.arrow") && keyNamed(named, "fill_light_front").textContent === "Light",
+      "Show: Names: the arrow under the name");
+    const oneLight = makeHass();
+    delete oneLight.entities["light.f2_fill_back"];
+    const single = addFeature({ type: "custom:xtool-peripherals" }, { hass: oneLight });
+    await wait(50);
+    check("direction", keyNamed(single, "fill_light_front") && !keyNamed(single, "fill_light_front").querySelector(".arrow"), "no arrow when the laser has one fill light");
 
     // A laser without the parts: nothing to show
     hass = makeHass();

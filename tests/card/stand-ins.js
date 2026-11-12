@@ -12,6 +12,19 @@
 // The entity categories, as the entity registry has them
 const CATEGORIES = { "update.f2_firmware": "diagnostic", "sensor.f2_wifi_signal": "diagnostic", "sensor.f2_ip_address": "diagnostic" };
 
+// The entities' own names, by translation key, as the integration's translations give them
+const NAMES = {
+  status: "Status", pause_job: "Pause job", resume_job: "Resume job", cancel_job: "Cancel job", power_switch: "Power",
+  smoking_fan: "Exhaust fan", fill_light_front: "Fill light (front)", fill_light_back: "Fill light (back)", ir_led: "Red dot",
+  ir_led_global: "Red dot", flame_alarm_v2: "Flame alarm", gap_check: "Stops when enclosure opened", stops_when_moved: "Stops when moved",
+  md_mode: "Access control", beep_enable: "Buzzer reminders", buzzer: "Buzzer", device_sleep: "Device sleep", machine_lock: "Safety key",
+  autofocus: "Autofocus", focus_height: "Focus height", camera_main: "Main camera", camera_deep: "Deep camera",
+  perspective: "Perspective", accessory_ductfanv3_buzzer: "Buzzer", cover_open: "Lid", camera_overview: "Overview camera",
+  camera_closeup: "Close camera", crop_preset: "Crop preset", exposure: "Exposure", thumbnail_refresh: "Thumbnail refresh interval",
+  overlay_laser_target: "Laser target", overlay_slat_lines: "Slat lines", overlay_close_camera_studio: "Close camera (studio)",
+  overlay_close_camera_custom: "Close camera (custom)", exhaust_fan_setting: "Exhaust fan", flame_alarm_level: "Flame alarm",
+};
+
 // [entity_id, translation_key, state, attributes]
 const F2 = [
   ["sensor.f2_status", "status", "idle"],
@@ -65,6 +78,9 @@ const P2 = [
   ["switch.p2_exhaust", "smoking_fan", "off"],
   ["binary_sensor.p2_cover", "cover_open", "off"],
   ["switch.p2_red_dot", "ir_led_global", "off"],
+  ["switch.p2_buzzer", "buzzer", "on"],
+  ["switch.p2_exhaust_setting", "exhaust_fan_setting", "on"],
+  ["select.p2_flame_level", "flame_alarm_level", "high", { options: ["low", "high"] }],
 ];
 const P2_OVERVIEW_CAMERA = [
   ["camera.p2_overview", "camera_overview", "idle", { entity_picture: "/api/camera_proxy/camera.p2_overview?token=c" }],
@@ -105,6 +121,11 @@ window.makeHass = (changes = {}) => {
     formatEntityState(stateObj, state = stateObj.state) {
       const unit = stateObj.attributes.unit_of_measurement;
       return unit ? `${state} ${unit}` : state;
+    },
+    // The entity's own name (an entity name item of type entity), from its translation key
+    formatEntityName(stateObj, item) {
+      if (item?.type !== "entity") throw new Error(`formatEntityName stand-in: ${JSON.stringify(item)}`);
+      return NAMES[hass.entities[stateObj.entity_id]?.translation_key] ?? "";
     },
     // A call's target is recorded with its data, as one entity_id
     callService(domain, service, data, target) {
@@ -228,6 +249,23 @@ window.defineInput = () => customElements.get("ha-input") || customElements.defi
 customElements.define("hui-light-brightness-card-feature", class extends HTMLElement {
   connectedCallback() {
     this.style.cssText = "display:block;height:42px";
+  }
+});
+
+// ha-state-icon: Home Assistant's state icon, the entity's own icon (shown
+// here as the entity_id and state it was given)
+customElements.define("ha-state-icon", class extends HTMLElement {
+  connectedCallback() {
+    Object.assign(this.style, { display: "inline-block", width: "24px", height: "24px" });
+  }
+
+  set stateObj(stateObj) {
+    this._stateObj = stateObj;
+    this.setAttribute("entity", stateObj?.entity_id ?? "");
+  }
+
+  get stateObj() {
+    return this._stateObj;
   }
 });
 
