@@ -6,8 +6,8 @@
  * - custom:xtool-job          Start or Resume, Pause and Cancel, following the job
  * - custom:xtool-peripherals  power, the exhaust fan, fill lights (on or off), red dot
  *                             and other parts; a fan's icon turns while it runs
- * - custom:xtool-light        each light chosen as a light's tile card shows it: its icon (a tap turns it on or off)
- *                             and the tile card's own light brightness feature
+ * - custom:xtool-lights       each light's icon (a tap turns it on or off) and brightness slider, as a light's
+ *                             tile card shows them, chosen and ordered one by one
  * - custom:xtool-safety       the safety checks, the safety key and Access control; turning a check off asks first
  * - custom:xtool-settings     the Configuration settings: buzzer, exhaust fan, flame alarm level, the IF2 buzzer, device sleep
  * - custom:xtool-camera       a camera, shown by Home Assistant's own image element, with buttons to switch;
@@ -15,11 +15,13 @@
  *                             P2's mode, crop preset, exposure and close light (Home Assistant's own features)
  * - custom:xtool-overlay      a key for each overlay switch chosen, of the cameras' pictures
  * - custom:xtool-if2-fan      the SafetyPro IF2 inline fan: Off, A (Auto) and a speed key that steps 1 to 4
- * - custom:xtool-position     the laser's position X,Y in a field, keys to slide X and Y, Move and Home
+ * - custom:xtool-position     the laser's position X,Y in a field (press and drag on it to slide both), Move and Home
  * - custom:xtool-measure      Measure, and the thickness or distance in a field with a key to slide it
  * - custom:xtool-focus        Autofocus, then down and up around the thickness to focus on, which can be typed
  * Each finds its entities on the same device as the card's entity, or on
- * the devices connected to it (the cameras' devices, the IF2's).
+ * the devices connected to it (the cameras' devices, the IF2's). Every
+ * feature is one row: its keys share the row's width, and it shows at most
+ * MAX_ITEMS of them (see MAX_ITEMS).
  *
  * custom:xtool-card is Home Assistant's tile card, wrapped: the tile card
  * still draws the name, state, actions and features. The xTool card adds:
@@ -388,10 +390,10 @@ const CONTROLS = {
   cover_lock: { kind: "toggle", name: "Lock", color: "indigo" },
 
   // Moving the laser, measuring and focusing
-  // Where the laser goes: X,Y, sliding left and right for X, up and down for Y
+  // Where the laser goes: X,Y in whole millimeters; a drag on the field
+  // slides X left and right, Y up and down
   position: {
-    kind: "field", role: "laser_x", roles: ["laser_x", "laser_y"],
-    keys: [{ key: "x", scrub: "x", icon: "mdi:arrow-left-right", before: true }, { key: "y", scrub: "y", icon: "mdi:arrow-up-down" }],
+    kind: "field", role: "laser_x", roles: ["laser_x", "laser_y"], decimals: 0, drag: ["x", "y"],
   },
   // A move works while the laser sleeps, but not while it works or is off
   move_laser: { kind: "press", name: "Move", color: "primary", busy: true },
@@ -804,27 +806,42 @@ function displayOf(config, fallback = "icons") {
 }
 const displayField = (helper) => ({ name: "display", label: "Show", ...(helper ? { helper } : {}), selector: select(DISPLAYS) });
 
-// The arrow under a key's icon for where its part sits (see CONTROLS: direction)
-const DIRECTION_ICONS = { left: "mdi:arrow-left", right: "mdi:arrow-right", back: "mdi:arrow-up", up: "mdi:arrow-up", front: "mdi:arrow-down", down: "mdi:arrow-down" };
+// The chevron under a key's icon for where its part sits (see CONTROLS: direction)
+const DIRECTION_ICONS = {
+  left: "mdi:chevron-left", right: "mdi:chevron-right", back: "mdi:chevron-up", up: "mdi:chevron-up", front: "mdi:chevron-down", down: "mdi:chevron-down",
+};
 
-// A row of keys of one width, each tinted in its color, the ones that are
-// on filled. Every key is a fifth of the feature's width, less the gaps,
-// and never narrower than its icon needs; a row with more keys than fit
-// wraps. A row with a field (.flow) gives the field what the keys leave.
+// The most items (keys, fields, a light's icon or slider) a feature shows
+// in its row; the editor keeps at most this many chosen. At the narrowest
+// (KEY_MIN wide, the gaps down to 4 px) they take 268 px.
+const MAX_ITEMS = 8;
+const KEY_MIN = "30px";
+
+// The chevron under an icon: bolder than the icon font draws it
+const CHEVRON_CSS = `
+  .glyph { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+  .glyph .arrow {
+    --mdc-icon-size: 18px; height: 18px; margin-top: -7px;
+    filter: drop-shadow(0 0 .35px currentColor) drop-shadow(0 0 .35px currentColor);
+  }
+`;
+
+// The gap between a row's items: the theme's, smaller (down to 4 px) when
+// the items would otherwise be narrower than KEY_MIN (--xtool-items: how many)
+const ROW_GAP = `clamp(4px, calc((100% - var(--xtool-items, 5) * ${KEY_MIN}) / max(var(--xtool-items, 5) - 1, 1)), var(--feature-button-spacing, 12px))`;
+
+// A row of keys of one width that fill it, as one line that never wraps,
+// each tinted in its color, the ones that are on filled; a key is never
+// narrower than its icon needs (KEY_MIN). A row with a field (.flow): each
+// key a fifth of the row, and the field the rest.
 // On the xTool card, Match dims the style under each key (a scrim) and
 // Flat and Console give each key a solid backing.
 const FEATURE_CSS = `
-  :host {
-    display: block; min-width: 0; max-width: 100%;
-    --xtool-gap: var(--feature-button-spacing, 12px);
-    --xtool-key-width: max(36px, calc((100% - 4 * var(--xtool-gap)) / 5));
-  }
-  .row {
-    display: grid; gap: var(--xtool-gap); grid-template-columns: repeat(auto-fill, minmax(var(--xtool-key-width), 1fr));
-    grid-auto-rows: var(--feature-height, 42px);
-  }
-  .row.flow { display: flex; height: var(--feature-height, 42px); }
-  .row.flow .key { flex: 0 0 var(--xtool-key-width); }
+  :host { display: block; min-width: 0; max-width: 100%; --xtool-gap: var(--feature-button-spacing, 12px); }
+  .row { display: flex; flex-wrap: nowrap; column-gap: ${ROW_GAP}; height: var(--feature-height, 42px); }
+  .row .key { flex: 1 1 0; min-width: ${KEY_MIN}; }
+  .row.flow { column-gap: var(--xtool-gap); }
+  .row.flow .key { flex: 0 0 max(${KEY_MIN}, calc((100% - 4 * var(--xtool-gap)) / 5)); }
   /* A field and its keys move as one group, without a box of their own */
   .group { display: contents; }
   .field {
@@ -840,10 +857,12 @@ const FEATURE_CSS = `
     font: inherit; color: inherit; text-align: center;
   }
   .field.disabled { opacity: .45; cursor: default; }
+  /* A field to press and drag on: the page does not scroll under it */
+  .field.drag { touch-action: none; cursor: move; }
   /* A key to slide on: the page does not scroll under it */
   .key.scrub { touch-action: none; cursor: ew-resize; }
   .key {
-    min-width: 0; height: 100%; padding: 0 4px; border: 0; cursor: pointer; box-sizing: border-box;
+    min-width: 0; height: 100%; padding: 0 4px; border: 0; cursor: pointer; box-sizing: border-box; overflow: hidden;
     position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 6px;
     border-radius: var(--feature-border-radius, 12px);
     background: var(--xtool-feature-backing, var(--xtool-feature-scrim, transparent));
@@ -859,10 +878,9 @@ const FEATURE_CSS = `
   .key:disabled { cursor: default; opacity: .45; }
   .key:disabled::before { opacity: .12; }
   .key > * { position: relative; }
-  .key ha-icon, .key ha-state-icon { flex: none; --mdc-icon-size: 24px; }
-  /* The icon (or name) with the arrow for where the part sits centered under it */
-  .glyph { display: flex; flex-direction: column; align-items: center; min-width: 0; }
-  .glyph .arrow { --mdc-icon-size: 12px; height: 12px; margin-top: -2px; }
+  .key ha-icon, .key ha-state-icon { flex: none; --mdc-icon-size: 22px; }
+  /* The icon (or name) with the chevron for where the part sits centered under it */
+  ${CHEVRON_CSS}
   /* A fan's icon turns while it runs, faster at a higher speed */
   .spin { animation: xtool-spin var(--spin, 1.2s) linear infinite; }
   @keyframes xtool-spin { to { transform: rotate(360deg); } }
@@ -1074,55 +1092,73 @@ const SCRUB_DEAD_ZONE = 4;
 const SCRUB_TICK = 50;
 
 /**
- * Press, then slide: while the pointer is held the value changes, faster the
+ * Press, then slide: while the pointer is held the values change, faster the
  * farther the pointer is from where the press started (with the square of
  * the distance), and the pointer is captured, so the slide can leave the
- * key. pull(dx, dy) is the distance that counts (positive raises the value);
- * change(steps) moves the value by that many steps; done() commits it. The
- * arrow keys move it one step at a time.
+ * element. pulls[i](dx, dy) is the distance that counts for value i
+ * (positive raises it); change(i, steps) moves value i by that many steps;
+ * done() commits them. On a key the slide starts at the press, and the
+ * arrow keys move the first value one step at a time. With tap (a field),
+ * it starts only once the pointer moves: a tap is left to the field.
  */
-function scrub(button, { pull, change, done }) {
+function scrub(el, { pulls, change, done, tap = false }) {
   let start, at, timer;
-  const stop = (ev) => {
-    if (!start) return;
-    clearInterval(timer);
-    start = undefined;
-    if (button.hasPointerCapture?.(ev.pointerId)) button.releasePointerCapture(ev.pointerId);
-    done();
-  };
-  button.addEventListener("pointerdown", (ev) => {
-    if (button.disabled || ev.button !== 0) return;
-    ev.preventDefault();
-    start = at = { x: ev.clientX, y: ev.clientY };
+  const off = () => el.disabled || el.classList.contains("disabled");
+  const begin = (ev) => {
     try {
-      button.setPointerCapture(ev.pointerId);
+      el.setPointerCapture(ev.pointerId);
     } catch (err) {
-      // A pointer the browser no longer tracks: the slide still follows the moves the key gets
+      // A pointer the browser no longer tracks: the slide still follows the moves the element gets
     }
     timer = setInterval(() => {
-      const distance = pull(at.x - start.x, at.y - start.y);
-      const beyond = Math.max(0, Math.abs(distance) - SCRUB_DEAD_ZONE);
-      if (beyond) change((Math.sign(distance) * beyond * beyond) / 100);
+      pulls.forEach((pull, i) => {
+        const distance = pull(at.x - start.x, at.y - start.y);
+        const beyond = Math.max(0, Math.abs(distance) - SCRUB_DEAD_ZONE);
+        if (beyond) change(i, (Math.sign(distance) * beyond * beyond) / 100);
+      });
     }, SCRUB_TICK);
+  };
+  const stop = (ev) => {
+    if (!start) return;
+    const sliding = timer !== undefined;
+    clearInterval(timer);
+    timer = undefined;
+    start = undefined;
+    if (el.hasPointerCapture?.(ev.pointerId)) el.releasePointerCapture(ev.pointerId);
+    if (sliding) done();
+  };
+  el.addEventListener("pointerdown", (ev) => {
+    if (off() || ev.button !== 0) return;
+    start = at = { x: ev.clientX, y: ev.clientY };
+    if (tap) return;
+    ev.preventDefault();
+    begin(ev);
   });
-  button.addEventListener("pointermove", (ev) => {
-    if (start) at = { x: ev.clientX, y: ev.clientY };
+  el.addEventListener("pointermove", (ev) => {
+    if (!start) return;
+    at = { x: ev.clientX, y: ev.clientY };
+    if (tap && timer === undefined && Math.hypot(at.x - start.x, at.y - start.y) > SCRUB_DEAD_ZONE) {
+      // A drag, not a tap: it slides, and the field is not typed in
+      el.querySelector("input")?.blur();
+      begin(ev);
+    }
   });
-  button.addEventListener("pointerup", stop);
-  button.addEventListener("pointercancel", stop);
-  button.addEventListener("lostpointercapture", stop);
-  button.addEventListener("keydown", (ev) => {
+  el.addEventListener("pointerup", stop);
+  el.addEventListener("pointercancel", stop);
+  el.addEventListener("lostpointercapture", stop);
+  if (tap) return;
+  el.addEventListener("keydown", (ev) => {
     const way = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[ev.key];
-    if (!way || button.disabled) return;
+    if (!way || off()) return;
     ev.preventDefault();
     ev.stopPropagation();
-    change(pull(way, -way) > 0 ? 1 : -1);
+    change(0, pulls[0](way, -way) > 0 ? 1 : -1);
     done();
   });
 }
 
-// What a scrub key's slide counts: X right, Y down (the work area's Y runs
-// from the back to the front, as in the camera picture), xy right or up
+// What a slide counts: X right, Y down (the work area's Y runs from the
+// back to the front, as in the camera picture), xy right or up
 const PULLS = { x: (dx) => dx, y: (dx, dy) => dy, xy: (dx, dy) => dx - dy };
 
 /**
@@ -1131,8 +1167,10 @@ const PULLS = { x: (dx) => dx, y: (dx, dy) => dy, xy: (dx, dy) => dx - dy };
  * (several are typed with commas between them: X,Y), and its keys around
  * it, each before or after the field. A step key changes the first number
  * by its step; a scrub key changes the number of its axis by sliding (see
- * scrub). Kept while the feature shows it, so typing and sliding go on
- * while Home Assistant's states change.
+ * scrub). A field with drag (the axes of its numbers, such as ["x", "y"])
+ * slides them all when pressed and dragged on; a tap types in it. Kept
+ * while the feature shows it, so typing and sliding go on while Home
+ * Assistant's states change.
  */
 class FieldGroup {
   constructor(feature, control) {
@@ -1156,6 +1194,14 @@ class FieldGroup {
     this._input.addEventListener("change", () => this._typed());
     this._input.addEventListener("click", (ev) => ev.stopPropagation());
     this.el.append(this._field);
+    if (control.drag) {
+      this._field.classList.add("drag");
+      scrub(this._field, {
+        pulls: control.drag.map((axis) => PULLS[axis]), tap: true,
+        change: (index, steps) => this._slide(index, steps),
+        done: () => this._release(),
+      });
+    }
   }
 
   /** The numbers now, and each entity's state. */
@@ -1195,8 +1241,8 @@ class FieldGroup {
         button.classList.add("scrub");
         const index = spec.scrub === "y" ? 1 : 0;
         scrub(button, {
-          pull: PULLS[spec.scrub],
-          change: (steps) => this._slide(index, steps),
+          pulls: [PULLS[spec.scrub]],
+          change: (_, steps) => this._slide(index, steps),
           done: () => this._release(),
         });
       }
@@ -1213,20 +1259,23 @@ class FieldGroup {
     if (spec.scrub) {
       return { key: spec.key, label: `${name}: press and slide to change`, icon: spec.icon, disabled: !usable };
     }
+    // A step from the number Home Assistant has when pressed, as each press is
     return {
       key: spec.key, label: spec.step > 0 ? "Increase" : "Decrease", icon: spec.icon,
       disabled: !usable || !Number.isFinite(value) || (spec.step > 0 ? value >= max : value <= min),
-      action: () => this._commit([value + spec.step]),
+      action: () => this._commit([this._values()[0] + spec.step]),
     };
   }
 
-  // A slide moves the pending number by steps of its entity's step, within its range
+  // A slide moves the pending number by steps of its entity's step (never
+  // less than the field shows), within its range
   _slide(index, steps) {
     const stateObj = this._states[index];
     const values = this._pending ?? this._values();
     if (!Number.isFinite(values[index])) return;
     const { min = -Infinity, max = Infinity, step = 1 } = stateObj.attributes;
-    this._pending = values.map((value, i) => (i === index ? Math.min(max, Math.max(min, value + steps * step)) : value));
+    const unit = Math.max(step, 10 ** -decimalsOf(this._control, stateObj));
+    this._pending = values.map((value, i) => (i === index ? Math.min(max, Math.max(min, value + steps * unit)) : value));
     this._input.value = this._format(this._pending);
   }
 
@@ -1313,13 +1362,15 @@ const dimmable = (hass, light) => (hass?.states[light]?.attributes.supported_col
 
 /**
  * A light as a light's tile card shows it: Home Assistant's tile icon with
- * the light's own icon, where a tap turns the light on or off, and Home
- * Assistant's light brightness feature beside it (for a light with a
- * brightness). The feature's off_at_minimum option turns the light off
- * when its slider is set to the minimum (1 %).
+ * the light's own icon (and the chevron for where it sits, see
+ * directionOf), where a tap turns the light on or off, and Home Assistant's
+ * light brightness feature (for a light with a brightness). el holds both,
+ * side by side; icon and slide are each on its own. The feature's
+ * off_at_minimum option turns the light off when its slider is set to the
+ * minimum (1 %).
  */
 class LightRow {
-  constructor(feature, entityId) {
+  constructor(feature, entityId, direction) {
     this._feature = feature;
     this._entityId = entityId;
     this.el = document.createElement("div");
@@ -1328,20 +1379,37 @@ class LightRow {
     this._icon.interactive = true;
     this._icon.actionHandlerOptions = { hasHold: false, hasDoubleClick: false };
     this._state = document.createElement("ha-state-icon");
-    this._state.slot = "icon";
-    this._icon.append(this._state);
+    if (direction) {
+      const glyph = document.createElement("span");
+      glyph.className = "glyph";
+      glyph.slot = "icon";
+      const arrow = document.createElement("ha-icon");
+      arrow.className = "arrow";
+      arrow.icon = DIRECTION_ICONS[direction];
+      glyph.append(this._state, arrow);
+      this._icon.append(glyph);
+    } else {
+      this._state.slot = "icon";
+      this._icon.append(this._state);
+    }
+    this.icon = this._icon;
     // Home Assistant's action handler on the tile icon sends an action event for a tap
     this._icon.addEventListener("action", (ev) => {
       ev.stopPropagation();
       if (ev.detail?.action === "tap") performAction(feature, "light.toggle", entityId);
     });
     this._slide = slideOf(new Map(), entityId, KINDS.light.input);
+    this.slide = this._slide;
+    // Home Assistant's brightness feature keeps its slider's value-changed
+    // to itself (it sets the brightness): heard on the way down, at the
+    // minimum it goes no further, and the light turns off instead
     this._slide.addEventListener("value-changed", (ev) => {
       const slider = ev.composedPath()[0];
       if (feature._config?.off_at_minimum === true && ev.detail?.value <= Number(slider?.min ?? 1)) {
+        ev.stopPropagation();
         feature._hass.callService("light", "turn_off", { entity_id: entityId });
       }
-    });
+    }, true);
     this.el.append(this._icon, this._slide);
   }
 
@@ -1349,6 +1417,7 @@ class LightRow {
     const hass = this._feature._hass, stateObj = hass.states[this._entityId];
     const rgb = stateObj?.attributes.rgb_color;
     const color = stateObj?.state === "on" ? (Array.isArray(rgb) ? `rgb(${rgb.join(", ")})` : DAYLIGHT) : LIGHT_OFF;
+    // As the tile card's icon: the icon in the color, its circle the color at Home Assistant's opacity
     this._icon.style.setProperty("--tile-icon-color", color);
     this._icon.accessibleLabel = entityName(hass, this._entityId);
     this._state.hass = hass;
@@ -1364,10 +1433,12 @@ class LightRow {
 // A light: its tile icon, and its slider beside it
 const LIGHT_CSS = `
   .light { display: flex; align-items: center; gap: var(--feature-button-spacing, 12px); min-width: 0; height: var(--feature-height, 42px); }
-  .light ha-tile-icon { flex: none; }
+  ha-tile-icon { flex: none; }
+  ha-tile-icon .glyph ha-state-icon { --mdc-icon-size: 20px; }
   .light .slide { flex: 1 1 auto; }
   .slide { display: block; min-width: 0; border-radius: var(--feature-border-radius, 12px); }
   .slide[hidden] { display: none; }
+  ${CHEVRON_CSS}
 `;
 
 /** Show these slides in a box, replacing what it shows only when they differ. */
@@ -1391,9 +1462,7 @@ function showSlides(box, slides) {
  *   leaves out chosen controls the device does not offer; offerAll: the
  *   editor offers every control, whatever the device has; category: the
  *   entity category it shows ("config" or "control", see categoryOf; none:
- *   any); toggles: instead of the list, one on and off option for each
- *   control ({ control id: option name }, on unless false; form.helpers
- *   gives their helpers by control id).
+ *   any). The list keeps at most MAX_ITEMS.
  * A feature whose controls depend on the device (such as each overlay
  * switch) gives them with controlIds(device) and controlFor(id, device, hass).
  */
@@ -1450,16 +1519,16 @@ class XtoolElement extends HTMLElement {
 
   /** The feature's editor form: { schema, data, save }, from its controls, display and options. */
   static editor(hass, entityId) {
-    const { label, helper, options = [], helpers = {} } = this.form;
+    const { label, options = [] } = this.form;
     const offered = this.offered(deviceOf(hass, entityId), hass);
     const values = offered.map((o) => o.value);
     const key = this.controlsKey;
-    const toggles = this.toggles ? offered.map((o) => ({ ...o, name: this.toggles[o.value] })) : [];
+    // More to offer than one row holds: the editor says how many it keeps
+    const limit = offered.length > MAX_ITEMS ? `Up to ${MAX_ITEMS}.` : "";
+    const helper = [this.form.helper, limit].filter(Boolean).join(" ");
+    const limited = (list) => (Array.isArray(list) ? list.slice(0, MAX_ITEMS) : list);
     return {
       schema: [
-        ...toggles.map(({ value, name, label: toggleLabel }) => ({
-          name, label: toggleLabel, ...(helpers[value] ? { helper: helpers[value] } : {}), selector: { boolean: {} },
-        })),
         ...(label ? [{
           name: key, label, ...(helper ? { helper } : {}),
           selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: offered } },
@@ -1470,11 +1539,11 @@ class XtoolElement extends HTMLElement {
         })),
       ],
       data: (c) => ({
-        ...Object.fromEntries(toggles.map(({ name }) => [name, c[name] !== false])),
-        ...(label ? { [key]: this.keepOffered && Array.isArray(c[key]) ? c[key].filter((value) => values.includes(value)) : c[key] ?? this.defaults ?? values } : {}),
+        ...(label ? { [key]: limited(this.keepOffered && Array.isArray(c[key]) ? c[key].filter((value) => values.includes(value)) : c[key] ?? this.defaults ?? values) } : {}),
         ...(this.display ? { display: displayOf(c, this.display) } : {}),
         ...Object.fromEntries(options.map(({ name, default: on = true }) => [name, typeof c[name] === "boolean" ? c[name] : on])),
       }),
+      save: (value) => (label && Array.isArray(value[key]) ? { ...value, [key]: limited(value[key]) } : value),
     };
   }
 
@@ -1522,13 +1591,8 @@ class XtoolElement extends HTMLElement {
     return { hass, device: deviceOf(hass, id), phase: phaseNow(hass, id), controlled: accessControlOn(hass, id), config: this._config };
   }
 
-  /**
-   * The ids of the controls chosen, in order: the option's list, or the
-   * defaults; with toggles, the ones whose option is not off.
-   */
+  /** The ids of the controls chosen, in order: the option's list, or the defaults. */
   _chosen() {
-    const { toggles } = this.constructor;
-    if (toggles) return this.constructor.controlIds(this._device).filter((id) => !toggles[id] || this._config[toggles[id]] !== false);
     const chosen = this._config[this.constructor.controlsKey];
     return Array.isArray(chosen) ? chosen : this.constructor.defaults ?? this.constructor.controlIds(this._device);
   }
@@ -1574,7 +1638,8 @@ class XtoolFeature extends XtoolElement {
 
   _render() {
     if (!this._ready()) return;
-    const buttons = this._buttons();
+    // One row: at most MAX_ITEMS
+    const buttons = this._buttons().slice(0, MAX_ITEMS);
     const colors = buttons.map((b) => (b.color ? textOn(this, cssColor(b.color)) : ""));
     if (colors.includes(null)) {
       // Not on the page yet: the button text colors are found once it is
@@ -1591,6 +1656,7 @@ class XtoolFeature extends XtoolElement {
     if (this._chosen().some((id) => controlOf(id, this._device.profile)?.kind === "field")) this.style.setProperty("--feature-color", NUMBER_ON);
     else this.style.removeProperty("--feature-color");
     this._row.classList.toggle("flow", fields);
+    this._row.style.setProperty("--xtool-items", String(Math.max(1, buttons.length)));
     // Hidden: the feature does not apply to the device as it is now
     this.style.display = this.constructor.hidden?.(this._moment()) ? "none" : "";
     const key = JSON.stringify([buttons.map(({ action, entities, ...b }) => (b.field ? { field: b.field } : b)), colors, this._display()]);
@@ -1778,15 +1844,9 @@ class XtoolCamera extends XtoolFeature {
   static display = "names";
   // The keys to switch cameras, Crop and the deep camera's perspective, then the inputs
   static controls = ["cameras", "crop", "perspective", ...CAMERA_INPUTS];
-  static toggles = {
-    cameras: "show_switch", crop: "crop", perspective: "show_perspective",
-    mode: "show_mode", crop_preset: "show_crop_preset", exposure: "show_exposure", close_light: "show_light",
-  };
   static form = {
-    helpers: {
-      crop: "Adds a Crop key for the main camera. Tap it, then tap two opposite corners on the picture to show only that part. The key stays on while the crop is in effect; tap it again to show the whole 200 x 200 mm area.",
-      perspective: "A key beside the camera buttons for the deep camera: it shows Uncorrected, Rotated or Straightened, and a tap steps to the next.",
-    },
+    label: "Controls",
+    helper: "In order. Crop: tap it, then tap two opposite corners on the picture to show only that part. The key stays on while the crop is in effect; tap it again to show the whole area.",
   };
 
   static supports(device) {
@@ -1812,7 +1872,6 @@ class XtoolCamera extends XtoolFeature {
     const { cameras } = deviceOf(hass, entityId);
     const labels = cameras.map((camera) => camera.label);
     const base = super.editor(hass, entityId);
-    const field = (name) => base.schema.filter((f) => f.name === name);
     return {
       schema: [
         {
@@ -1824,19 +1883,19 @@ class XtoolCamera extends XtoolFeature {
           helper: "As in Home Assistant's picture cards. Auto: snapshots, refreshed by Home Assistant. Live: the camera's stream.",
           selector: select(CAMERA_VIEWS),
         },
-        ...field("show_switch"),
+        ...base.schema.filter((f) => f.name === "controls"),
         displayField("For the camera's buttons and the deep camera's perspective."),
         {
           name: "show_time", label: "Show the last updated time",
           helper: "Along the bottom of the picture, in the Auto view, in the card's Time format (under Content).",
           selector: { boolean: {} },
         },
-        ...base.schema.filter((f) => !["show_switch", "display"].includes(f.name)),
       ],
       data: (c) => ({
         camera: labels.includes(c.camera) ? c.camera : labels[0], camera_view: c.camera_view === "live" ? "live" : "auto",
         ...base.data(c), show_time: !!c.show_time,
       }),
+      save: base.save,
     };
   }
 
@@ -1966,14 +2025,16 @@ class XtoolCamera extends XtoolFeature {
         key: entityId, entity: entityId, label: entityName(moment.hass, entityId) ?? `${label} camera`, text: label, color: "primary",
         pressed: entityId === current, disabled: !this._usable(entityId),
         action: () => {
-          const shownBefore = this._images.has(entityId) && entityId !== this._camera;
+          // Shown before: its image shows its last picture at once, and
+          // fetches a new one as it shows again (Home Assistant's image
+          // does): with its address dropped, that is a new photo
+          if (this._images.has(entityId) && entityId !== this._camera) this._forgetPicture(entityId);
           this._picked = entityId;
           this._first = undefined;
           this._cropping = false;
           this._area.hidden = true;
           this._key = undefined;
           this._render();
-          if (shownBefore) this._reloadImage(entityId);
         },
       }))),
       // On while choosing a crop and while one is in effect; off shows the whole area again
@@ -2122,11 +2183,7 @@ class XtoolCamera extends XtoolFeature {
   _reloadImage(camera) {
     const old = this._images.get(camera);
     if (!old || !this._hass) return;
-    // Home Assistant keeps a camera's picture address for 9 s, and the
-    // browser shows the picture it has for an address it has seen: drop
-    // this camera's, so the new image asks for a new one
-    const addresses = this._hass._cameraTmbUrl;
-    if (addresses) addresses[camera] = undefined;
+    this._forgetPicture(camera);
     // A reload still loading for this camera gives way to this one
     this._next?.get(camera)?.remove();
     this._next ??= new Map();
@@ -2157,6 +2214,16 @@ class XtoolCamera extends XtoolFeature {
     });
     // Home Assistant's image gives up on a picture after 10 s
     setTimeout(() => finish(false), 10000);
+  }
+
+  /**
+   * Home Assistant keeps a camera's picture address for 9 s, and the
+   * browser shows the picture it has for an address it has seen: drop this
+   * camera's, so the next fetch asks for a new photo.
+   */
+  _forgetPicture(camera) {
+    const addresses = this._hass?._cameraTmbUrl;
+    if (addresses) addresses[camera] = undefined;
   }
 
   _showHint() {
@@ -2244,31 +2311,59 @@ class XtoolCamera extends XtoolFeature {
 }
 
 // ---------------------------------------------------------------------------
-// Feature: the lights, each as a light's tile card shows it (see LightRow),
-// side by side, in the order chosen
+// Feature: the lights as a light's tile card shows them (see LightRow): each
+// light's icon and its slider are two choices, in one row, in the order
+// chosen
 // ---------------------------------------------------------------------------
-class XtoolLight extends XtoolElement {
-  static type = "xtool-light";
-  static label = "Light";
-  static pickerName = "xTool light";
-  static controls = ["fill_light_left", "fill_light_right", "fill_light_front", "fill_light_back", "fill_light"];
+const LIGHTS = ["fill_light_left", "fill_light_right", "fill_light_front", "fill_light_back", "fill_light"];
+const LIGHT_PARTS = [["icon", "icon"], ["slider", "slider"]];
+
+class XtoolLights extends XtoolElement {
+  static type = "xtool-lights";
+  static label = "Lights";
+  static pickerName = "xTool lights";
   static keepOffered = true;
   static form = {
     label: "Lights",
     options: [{
-      name: "off_at_minimum", label: "Turn off at the minimum", default: false,
-      helper: "Setting a light's slider to its minimum (1 %) turns the light off.",
+      name: "off_at_minimum", label: "Off at minimum", default: false,
+      helper: "Setting a light's slider to its minimum (1%) turns the light off.",
     }],
   };
+
+  /** Each light's icon and slider: "<light>_icon" and "<light>_slider". */
+  static controlIds() {
+    return LIGHTS.flatMap((id) => LIGHT_PARTS.map(([part]) => `${id}_${part}`));
+  }
+
+  /**
+   * The light's control (part: icon or slider), and its entity; a camera's
+   * own light is in the camera feature, not here.
+   */
+  static controlFor(id, device) {
+    const light = LIGHTS.find((l) => id.startsWith(`${l}_`) && LIGHT_PARTS.some(([part]) => id === `${l}_${part}`));
+    if (!light) return { control: undefined };
+    const entityId = device.roles[light];
+    const cameras = device.cameras.some((camera) => Object.values(camera.settings).includes(entityId));
+    return { control: { ...controlOf(light, device.profile), part: id.slice(light.length + 1) }, entityId: cameras ? undefined : entityId };
+  }
+
+  /** Each light's icon and slider, by the light's name. */
+  static offered(device, hass) {
+    return this.controlIds().map((id) => ({ id, ...this.controlFor(id, device) }))
+      .filter(({ control, entityId }) => control && entityId && (control.part !== "slider" || dimmable(hass, entityId)))
+      .map(({ id, control, entityId }) => ({ value: id, label: `${entityName(hass, entityId) ?? control.name} ${control.part}` }));
+  }
 
   constructor() {
     super();
     this.shadowRoot.innerHTML = `<style>
-      :host { display: block; min-width: 0; }
-      .lights { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--feature-button-spacing, 12px); }
+      :host { display: block; min-width: 0; max-width: 100%; }
+      .row { display: flex; flex-wrap: nowrap; align-items: center; column-gap: ${ROW_GAP}; height: var(--feature-height, 42px); }
+      .row .slide { flex: 1 1 0; min-width: 40px; }
       ${LIGHT_CSS}
-    </style><div class="lights" role="group"></div>`;
-    this._box = this.shadowRoot.querySelector(".lights");
+    </style><div class="row" role="group"></div>`;
+    this._box = this.shadowRoot.querySelector(".row");
     this._rows = new Map();
   }
 
@@ -2279,13 +2374,21 @@ class XtoolLight extends XtoolElement {
 
   _render() {
     if (!this._ready()) return;
-    const { roles } = this._device;
+    const device = this._device;
     this._box.setAttribute("aria-label", this.constructor.label);
-    showSlides(this._box, this._chosen().filter((id) => this.constructor.controls.includes(id) && roles[id]).map((id) => {
-      const entityId = roles[id];
-      if (!this._rows.has(entityId)) this._rows.set(entityId, new LightRow(this, entityId));
-      return this._rows.get(entityId).update();
-    }));
+    const items = this._chosen().map((id) => ({ id, ...this.constructor.controlFor(id, device) }))
+      .filter(({ control, entityId }) => control && entityId)
+      .slice(0, MAX_ITEMS)
+      .map(({ control, entityId }) => {
+        if (!this._rows.has(entityId)) this._rows.set(entityId, new LightRow(this, entityId, directionOf(control, device)));
+        const row = this._rows.get(entityId);
+        row.update();
+        return control.part === "icon" ? row.icon : row.slide;
+      })
+      // A light without a brightness has no slider
+      .filter((el) => !el.hidden);
+    this._box.style.setProperty("--xtool-items", String(Math.max(1, items.length)));
+    showSlides(this._box, items);
   }
 }
 
@@ -2315,8 +2418,8 @@ class XtoolOverlay extends XtoolFeature {
 // Features with a field: the laser's position, and measuring the material
 // ---------------------------------------------------------------------------
 
-// Moving the laser: its position X,Y (typed, or slid with the keys beside
-// it), and Move goes there; Home homes it
+// Moving the laser: its position X,Y in whole millimeters (typed, or slid
+// by pressing and dragging on the field), and Move goes there; Home homes it
 class XtoolPosition extends XtoolFeature {
   static type = "xtool-position";
   static label = "Position";
@@ -2469,11 +2572,9 @@ class XtoolFocus extends XtoolFeature {
   static pickerName = "xTool focus";
   static display = "icons";
   static controls = ["autofocus", "focus_height"];
+  static form = { label: "Controls" };
   // Autofocus starts an action: it shows no on or off state
   static keyOptions = { pressed: undefined };
-  // No options
-  static getConfigElement = undefined;
-  static editor = undefined;
 
   static supports(device) {
     return !!device.roles.focus_height;
@@ -2491,7 +2592,7 @@ class XtoolFocus extends XtoolFeature {
 
 // The features, in the order Home Assistant's feature picker lists them
 const FEATURES = Object.fromEntries([
-  XtoolJob, XtoolPeripherals, XtoolLight, XtoolSafety, XtoolSettings, XtoolCamera, XtoolOverlay, XtoolIf2Fan, XtoolFocus, XtoolPosition,
+  XtoolJob, XtoolPeripherals, XtoolLights, XtoolSafety, XtoolSettings, XtoolCamera, XtoolOverlay, XtoolIf2Fan, XtoolFocus, XtoolPosition,
   XtoolMeasure,
 ].map((feature) => [feature.type, feature]));
 const FEATURE_TAGS = Object.keys(FEATURES);
@@ -2947,6 +3048,12 @@ function innerTileConfig(config, open) {
 
 const progressOptions = (config) => ({ ...PROGRESS_DEFAULTS, ...(config?.progress ?? {}) });
 
+// Whether each laser's card is expanded in the editor's preview, while the
+// editor is open: Home Assistant can make the preview card anew for a
+// change, which keeps what was shown. A new editor starts expanded (see
+// XtoolCardEditor).
+const PREVIEW_OPEN = new Map();
+
 class XtoolCard extends HTMLElement {
   constructor() {
     super();
@@ -3131,7 +3238,7 @@ class XtoolCard extends HTMLElement {
     const edge = progressOptions(config).edge;
     if (!EDGES.some(([id]) => id === edge)) throw new Error(`Unknown progress edge: ${edge}`);
     this._config = { ...config, style };
-    this._open = !config.collapsible ? true : this._storedOpen() ?? config.expanded !== false;
+    this._open = !config.collapsible ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded !== false;
     this._autoCollapsed = false;
     this._wasOff = undefined;
     const tile = innerTileConfig(this._config, this._open);
@@ -3187,10 +3294,13 @@ class XtoolCard extends HTMLElement {
     return this._hass;
   }
 
-  // Dashboard properties the tile card uses
+  // Dashboard properties the tile card uses. In the editor's preview the
+  // card starts expanded and changes only when tapped (see PREVIEW_OPEN)
   set preview(value) {
+    const was = this._preview;
     this._preview = value;
     if (this._tile) this._tile.preview = value;
+    if (value && !was && this._config?.collapsible) this._setOpen(PREVIEW_OPEN.get(this._config.entity) ?? true, false);
   }
 
   set layout(value) {
@@ -3249,7 +3359,7 @@ class XtoolCard extends HTMLElement {
   _followPower(off) {
     const was = this._wasOff;
     this._wasOff = off;
-    if (!this._config.collapsible || this._config.auto_collapse === false || off === was) return;
+    if (!this._config.collapsible || this._config.auto_collapse === false || off === was || this._preview) return;
     if (off && this._open) {
       this._autoCollapsed = true;
       this._setOpen(false, false);
@@ -3261,8 +3371,9 @@ class XtoolCard extends HTMLElement {
 
   _setOpen(open, remember = true) {
     this._open = open;
+    if (this._preview) PREVIEW_OPEN.set(this._config.entity, open);
     try {
-      if (remember) window.localStorage.setItem(this._storageKey, open ? "1" : "0");
+      if (remember && !this._preview) window.localStorage.setItem(this._storageKey, open ? "1" : "0");
     } catch (err) {
       // Storage can be unavailable (private windows); the card still works
     }
@@ -3879,6 +3990,8 @@ function tileEditorType() {
 class XtoolCardEditor extends HTMLElement {
   constructor() {
     super();
+    // A new editor: its preview starts expanded
+    PREVIEW_OPEN.clear();
     this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
       <style>
