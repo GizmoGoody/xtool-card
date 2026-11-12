@@ -184,7 +184,7 @@
     check("graphite, console", deep(styles.console, "xtool-job, xtool-peripherals").every((el) => el.hasAttribute("xtool-console")),
       "the buttons are keys");
     check("graphite, console", deep(styles.console, "ha-control-switch").every((el) => el.hasAttribute("xtool-slide")), "the toggle is a slide");
-    check("graphite, console", !styles.console.shadowRoot.getElementById("stripe"), "the header separator is removed");
+    check("graphite, console", getComputedStyle(styles.console.shadowRoot.getElementById("stripe")).display === "block", "the silver line is drawn");
     check("no style", !frame(styles.plain).classList.contains("styled"), "no style: the theme's card");
 
     // Collapsing

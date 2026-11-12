@@ -39,7 +39,7 @@
  * Every corner, size and text color comes from the theme's variables.
  */
 
-const VERSION = "0.1.0-alpha.2";
+const VERSION = "0.1.0-alpha.1";
 const DOMAIN = "xtool";
 const CARD_TYPE = "xtool-card";
 const EDITOR_TYPE = "xtool-card-editor";
@@ -81,7 +81,7 @@ const ROLES = {
   measure_height: [["thickness_or_distance"], ["number"]],
   measured: [["measured_thickness_or_distance"], ["sensor"]],
   baseplate: [["baseplate"], ["binary_sensor"]],
-  flame_alarm: [["flame_alarm_v2", "flame_alarm"], ["switch", "select", "button"]],
+  flame_alarm: [["flame_alarm_v2", "flame_alarm"], ["switch"]],
   enclosure_stop: [["gap_check"], ["switch"]],
   moved_stop: [["stops_when_moved", "move_stop"], ["switch"]],
   access_control: [["md_mode"], ["switch"]],
@@ -115,6 +115,7 @@ const CAMERA_ROLES = {
   // The P2's crop presets, one select for each camera
   crop_preset: [["crop_preset"], ["select"]],
   exposure: [["exposure"], ["number"]],
+  thumbnail_refresh: [["thumbnail_refresh", "camera_thumbnail_refresh"], ["number"]],
 };
 const CROP_ROLES = ["crop_width", "crop_height", "crop_center_x", "crop_center_y"];
 const CAMERA_OVERLAYS = [
@@ -987,8 +988,6 @@ const PERIPHERALS = [
   { role: "red_dot", label: "Red dot", icon: "mdi:laser-pointer", color: "red" },
   { role: "red_dot_close", label: "Red dot (close)", icon: "mdi:laser-pointer", color: "red" },
   { role: "red_dot_quick", label: "Red dot (quick)", icon: "mdi:laser-pointer", color: "red" },
-  { role: "home_laser", label: "Home", icon: "mdi:home-import-outline", color: "primary", press: true },
-  { role: "measure", label: "Measure", icon: "mdi:ruler", color: "primary", press: true, busy: true },
   { role: "cooling_fan", label: "Cooling fan", icon: "mdi:fan-chevron-up", color: "cyan", fan: true },
   { role: "cover_lock", label: "Cover lock", icon: "mdi:lock", color: "indigo" },
   // A button: a tap starts it (off while the laser is busy)
@@ -999,8 +998,6 @@ const BUSY_PHASES = ["processing", "paused", "framing", "focusing", "off", "firm
 
 /** Whether a switch, light or fan is on, or a lock is locked. */
 const isOn = (stateObj) => stateObj?.state === "on" || stateObj?.state === "locked";
-const entityIcon = (hass, entityId, fallback) =>
-  hass?.entities?.[entityId]?.icon ?? hass?.states?.[entityId]?.attributes?.icon ?? fallback;
 
 /** The item with its name, where the laser has more fill lights than the camera's (the P2): the camera's is the close view's. */
 const relabeled = (hass, entityId, item) =>
@@ -1012,10 +1009,6 @@ function chosen(hass, entityId, list, roles) {
   if (!Array.isArray(roles)) return present;
   return roles.map((role) => present.find((item) => item.role === role)).filter(Boolean);
 }
-function orderButtons(buttons, roles) {
-  if (!Array.isArray(roles)) return buttons;
-  return roles.map((role) => buttons.find((button) => button.key === role)).filter(Boolean);
-}
 
 // The configuration switches of the laser and its accessories (the
 // Configuration section of their device pages)
@@ -1023,8 +1016,6 @@ const SETTINGS = [
   { role: "buzzer", label: "Buzzer reminders", icon: "mdi:volume-high", color: "teal" },
   { role: "if2_buzzer", label: "IF2 buzzer", icon: "mdi:bell-ring", color: "teal" },
   { role: "device_sleep", label: "Device sleep", icon: "mdi:power-sleep", color: "indigo" },
-  { role: "exhaust_setting", label: "Exhaust fan", icon: "mdi:fan", color: "blue", fan: true },
-  { role: "flame_alarm", label: "Flame alarm", icon: "mdi:fire-alert", color: "red", cycle: true },
 ];
 
 /** A row of on/off buttons for the parts in the class's list. */
@@ -1041,10 +1032,8 @@ class XtoolToggles extends XtoolFeature {
     return chosen(hass, id, this.constructor.list, this._config.controls).map((item) => {
       const entityId = sibling(hass, id, item.role);
       const on = isOn(hass.states[entityId]);
-      const cycleValue = item.cycle ? String(hass.states[entityId]?.state ?? "off") : undefined;
       return {
-        key: item.role, label: item.cycle ? `${item.label}: ${cycleValue}` : item.label, icon: entityIcon(hass, entityId, item.icon),
-        text: item.cycle ? cycleValue : item.label,
+        key: item.role, label: item.label, icon: item.icon, text: item.label,
         color: item.color, pressed: item.press ? false : on,
         disabled: !this._usable(entityId) || (item.busy && busy) || (item.role === "autofocus" && accessControlOn(hass, id)),
         // A fan that is on turns (on by default); these fans have no speed
@@ -1057,20 +1046,6 @@ class XtoolToggles extends XtoolFeature {
   _toggle(item, entityId, on) {
     if (item.press) {
       this._hass.callService("button", "press", { entity_id: entityId });
-      return;
-    }
-    if (item.cycle) {
-      const state = this._hass.states[entityId];
-      const options = state?.attributes?.options ?? ["off", "low", "high"];
-      const current = String(state?.state ?? "off").toLowerCase();
-      const next = options[(options.findIndex((value) => String(value).toLowerCase() === current) + 1) % options.length];
-      if (domainOf(entityId) === "select") {
-        this._hass.callService("select", "select_option", { entity_id: entityId, option: next });
-      } else if (String(next).toLowerCase() === "off") {
-        this._hass.callService("switch", "turn_off", { entity_id: entityId });
-      } else {
-        this._hass.callService("switch", "turn_on", { entity_id: entityId, level: next });
-      }
       return;
     }
     let confirmation;
@@ -1157,10 +1132,6 @@ class XtoolCamera extends XtoolFeature {
         background: linear-gradient(to top, rgba(0, 0, 0, .6), rgba(0, 0, 0, 0));
       }
       .shot .time:empty { display: none; }
-      .picker { display: block; box-sizing: border-box; width: 100%; height: var(--feature-height, 42px);
-        margin-bottom: var(--feature-button-spacing, 12px); padding: 0 12px; border: 0;
-        border-radius: var(--feature-border-radius, 12px); color: var(--primary-text-color);
-        background: var(--ha-card-background, rgba(127,127,127,.16)); font: inherit; }
       .row:empty { display: none; }`;
     this._shot = document.createElement("button");
     this._shot.type = "button";
@@ -1170,42 +1141,8 @@ class XtoolCamera extends XtoolFeature {
     this._area = this._shot.querySelector(".area");
     this._hint = this._shot.querySelector(".hint");
     this._images = new Map();
-    this._selectors = document.createElement("div");
-    this._selectors.className = "selectors";
-    this._picker = document.createElement("select");
-    this._picker.className = "picker";
-    this._picker.setAttribute("aria-label", "Camera");
-    this._picker.addEventListener("change", () => {
-      this._picked = this._picker.value;
-      this._first = undefined;
-      this._cropping = false;
-      this._key = undefined;
-      this._render();
-      this._showCamera();
-    });
-    this._row.before(this._picker, this._selectors);
-    this._shot.addEventListener("pointerdown", (ev) => {
-      if (this._cropping) return;
-      this._holdTimer = setTimeout(() => {
-        const crop = this._cameraCrop();
-        const point = crop && this._pointOf(ev, crop);
-        if (!point) return;
-        const x = sibling(this._hass, this._entityId, "laser_x");
-        const y = sibling(this._hass, this._entityId, "laser_y");
-        if (x) this._hass.callService("number", "set_value", { entity_id: x, value: Math.round(point.x) });
-        if (y) this._hass.callService("number", "set_value", { entity_id: y, value: Math.round(point.y) });
-        this._suppressClick = true;
-      }, 500);
-    });
-    for (const type of ["pointerup", "pointercancel", "pointerleave"]) {
-      this._shot.addEventListener(type, () => clearTimeout(this._holdTimer));
-    }
     this._shot.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      if (this._suppressClick) {
-        this._suppressClick = false;
-        return;
-      }
       if (!this._camera) return;
       // Crop on: a tap marks a corner. Off: a tap opens the camera
       if (this._cropping && this._crop()) this._cropTap(ev);
@@ -1249,15 +1186,11 @@ class XtoolCamera extends XtoolFeature {
       this._pictureAt = undefined;
       this._showCamera();
     }
-    const buttons = (Array.isArray(this._config.controls) ? this._config.controls : []).flatMap((key) => {
-      const camera = cameras.find(([entityId]) => entityId === key);
-      if (!camera) return [];
-      const [entityId, label] = camera;
-      return [{
-        key: entityId, label: `${label} camera`, text: label, color: "primary", pressed: entityId === current,
-        icon: entityIcon(this._hass, entityId, CAMERA_ICONS[this._hass.entities?.[entityId]?.translation_key] ?? "mdi:camera"),
-        disabled: !this._usable(entityId),
-        action: () => {
+    const buttons = this._config.show_switch === false || cameras.length < 2 ? [] : cameras.map(([entityId, label]) => ({
+      key: entityId, label: `${label} camera`, text: label, color: "primary", pressed: entityId === current,
+      icon: CAMERA_ICONS[this._hass.entities?.[entityId]?.translation_key] ?? "mdi:camera",
+      disabled: !this._usable(entityId),
+      action: () => {
         // A camera shown before shows its last picture, and a new one at once
         const shownBefore = this._images.has(entityId) && entityId !== this._camera;
         this._picked = entityId;
@@ -1267,11 +1200,10 @@ class XtoolCamera extends XtoolFeature {
         this._key = undefined;
         this._render();
         if (shownBefore) this._reloadImage(entityId);
-        },
-      }];
-    });
+      },
+    }));
     const crop = this._crop();
-    if (crop && (!Array.isArray(this._config.controls) || this._config.controls.includes("crop"))) {
+    if (crop) {
       // On while choosing a crop and while one is in effect; off shows the
       // whole 200 x 200 mm again
       const usable = this._usable(current);
@@ -1282,20 +1214,32 @@ class XtoolCamera extends XtoolFeature {
         pressed: usable && (!!this._cropping || cropped), disabled: !usable, action: () => this._toggleCropping(crop),
       });
     }
+    const perspective = this._perspectiveButton();
+    if (perspective) buttons.push(perspective);
     // A camera with crop presets (the P2's): the key shows the preset, and a
     // tap opens Home Assistant's own dialog for the select to choose another
+    const preset = cameraSetting(this._hass, this._camera, "crop_preset");
+    if (preset && this._config.show_crop_preset !== false) {
+      const stateObj = this._hass.states[preset];
+      buttons.push({
+        key: "crop_preset", label: `Crop: ${stateObj?.state}. Tap to choose`, text: stateObj?.state ?? "Crop", icon: "mdi:crop",
+        color: "primary", pressed: false, disabled: !this._usable(preset), alwaysText: true,
+        action: () => fire(this, "hass-more-info", { entityId: preset }),
+      });
+    }
     for (const [role, label, icon] of CAMERA_OVERLAYS) {
-      if (Array.isArray(this._config.controls) && !this._config.controls.includes(role)) continue;
       const entityId = cameraSetting(this._hass, this._camera, role);
       if (!entityId) continue;
       const on = isOn(this._hass.states[entityId]);
       buttons.push({
-        key: role, label, text: label, icon: entityIcon(this._hass, entityId, icon), color: "primary", pressed: on, disabled: !this._usable(entityId),
+        key: role, label, text: label, icon, color: "primary", pressed: on, disabled: !this._usable(entityId),
         action: () => performAction(this, `switch.${on ? "turn_off" : "turn_on"}`, entityId),
       });
     }
-    for (const [role, label, icon] of [["exposure", "Exposure", "mdi:brightness-6"]]) {
-      if (Array.isArray(this._config.controls) && !this._config.controls.includes(role)) continue;
+    for (const [role, label, icon] of [
+      ["exposure", "Exposure", "mdi:brightness-6"],
+      ["thumbnail_refresh", "Thumbnail refresh interval", "mdi:camera-refresh"],
+    ]) {
       const entityId = cameraSetting(this._hass, this._camera, role);
       if (!entityId) continue;
       buttons.push({
@@ -1304,7 +1248,7 @@ class XtoolCamera extends XtoolFeature {
         action: () => fire(this, "hass-more-info", { entityId }),
       });
     }
-    return orderButtons(buttons, this._config.controls);
+    return buttons;
   }
 
   /**
@@ -1340,14 +1284,7 @@ class XtoolCamera extends XtoolFeature {
    */
   _crop() {
     const hass = this._hass, camera = this._camera;
-    if (!camera || this._config.crop === false) return undefined;
-    return this._cameraCrop();
-  }
-
-  _cameraCrop() {
-    const hass = this._hass, camera = this._camera;
-    if (!camera) return undefined;
-    if (this._localCrop) return this._localCrop;
+    if (!camera || this._config.crop === false || hass.entities?.[camera]?.translation_key !== "camera_main") return undefined;
     const crop = {};
     for (const role of CROP_ROLES) {
       const entityId = cameraSetting(hass, camera, role);
@@ -1439,7 +1376,6 @@ class XtoolCamera extends XtoolFeature {
 
   _setCrop(crop) {
     const camera = this._camera;
-    this._localCrop = crop;
     this._first = undefined;
     this._cropping = false;
     this._area.hidden = true;
@@ -1510,16 +1446,6 @@ class XtoolCamera extends XtoolFeature {
 
   _showCamera() {
     if (!this._hass || !this._config || !this._camera) return;
-    const cameras = camerasOf(this._hass, this._entityId);
-    this._picker.replaceChildren(...cameras.map(([entityId, label]) => {
-      const option = document.createElement("option");
-      option.value = entityId;
-      option.textContent = label;
-      option.selected = entityId === this._camera;
-      return option;
-    }));
-    this._picker.hidden = cameras.length < 2;
-    this._showSelectors();
     if (!customElements.get("hui-image")) {
       // Loaded with Home Assistant's picture cards: ask the card helpers for one
       if (!this._loading) {
@@ -1533,7 +1459,6 @@ class XtoolCamera extends XtoolFeature {
             this._showCamera();
           });
       }
-
       return;
     }
     // One of Home Assistant's images for each camera shown: switching back
@@ -1551,25 +1476,6 @@ class XtoolCamera extends XtoolFeature {
     this._shot.setAttribute("aria-label", `${camerasOf(this._hass, this._entityId).find(([id]) => id === this._camera)?.[1] ?? ""} camera: ${this._cropping ? "crop" : "open"}`);
     this._watchPictures();
     this._showTime();
-  }
-
-  _showSelectors() {
-    const entities = ["crop_preset", "perspective"].map((role) => cameraSetting(this._hass, this._camera, role)).filter(Boolean);
-    const features = entities.map((entityId) => {
-      let feature = this._selectors.querySelector(`[data-entity="${entityId}"]`);
-      if (!feature) {
-        feature = document.createElement("hui-card-feature");
-        feature.dataset.entity = entityId;
-        feature.feature = { type: "select-options" };
-        feature.context = { entity_id: entityId };
-        this._selectors.append(feature);
-      }
-      feature.hass = this._hass;
-      return feature;
-    });
-    if (features.length !== this._selectors.children.length || features.some((feature, i) => feature !== this._selectors.children[i])) {
-      this._selectors.replaceChildren(...features);
-    }
   }
 
 
@@ -1696,15 +1602,6 @@ class XtoolFillLight extends HTMLElement {
         const feature = document.createElement("hui-card-feature");
         feature.feature = { type: "light-brightness" };
         feature.context = { entity_id: light.entityId };
-        const turnOffAtZero = (ev) => {
-          const value = Number(ev.detail?.value ?? ev.detail?.brightness ?? ev.detail?.brightness_pct);
-          if (value === 0) {
-            ev.stopPropagation();
-            this._hass.callService("light", "turn_off", { entity_id: light.entityId });
-          }
-        };
-        feature.addEventListener("value-changed", turnOffAtZero, true);
-        slide.addEventListener("value-changed", turnOffAtZero, true);
         slide.append(feature);
         this._slides.set(light.entityId, slide);
       }
@@ -1797,95 +1694,22 @@ class XtoolLaser extends XtoolEmbedding {
     return document.createElement("xtool-feature-editor");
   }
 
-  constructor() {
-    super();
-    const style = document.createElement("style");
-    style.textContent = `.position { display: flex; gap: var(--feature-button-spacing, 12px); margin-bottom: var(--feature-button-spacing, 12px); }
-      .position .key { flex: 0 0 42px; }
-      .position input { box-sizing: border-box; width: 100%; min-width: 0; height: var(--feature-height, 42px);
-        border: 0; border-radius: var(--feature-border-radius, 12px); padding: 0 12px;
-        color: var(--primary-text-color); background: var(--ha-card-background, rgba(127,127,127,.16)); font: inherit; text-align: center; }`;
-    this.shadowRoot.prepend(style);
-    this._position = document.createElement("div");
-    this._position.className = "position";
-    this._input = document.createElement("input");
-    this._input.type = "text";
-    this._input.inputMode = "decimal";
-    this._input.setAttribute("aria-label", "Laser position, X comma Y");
-    this._input.addEventListener("change", () => {
-      const values = this._input.value.split(",").map((value) => Number(value.trim()));
-      if (values.length !== 2 || values.some((value) => !Number.isFinite(value))) return;
-      this._setAxis("laser_x", values[0]);
-      this._setAxis("laser_y", values[1]);
-    });
-    this._input.addEventListener("input", (ev) => ev.stopPropagation());
-    this._position.append(this._input);
-    this._embeds.replaceChildren();
-    this._embeds.before(this._position);
-  }
-
-  _render() {
-    super._render();
-    const x = sibling(this._hass, this._entityId, "laser_x"), y = sibling(this._hass, this._entityId, "laser_y");
-    if (x && y && this.shadowRoot.activeElement !== this._input) this._input.value = `${this._hass.states[x]?.state ?? ""},${this._hass.states[y]?.state ?? ""}`;
-    this._position.hidden = !x && !y;
-    for (const key of ["x_adjust", "y_adjust"]) {
-      const button = this.shadowRoot.querySelector(`[data-key="${key}"]`);
-      if (!button || button.dataset.gesture) continue;
-      button.dataset.gesture = "true";
-      let start, base;
-      button.addEventListener("pointerdown", (ev) => {
-        start = key === "x_adjust" ? ev.clientX : ev.clientY;
-        const axis = key === "x_adjust" ? "laser_x" : "laser_y";
-        base = Number(this._hass.states[sibling(this._hass, this._entityId, axis)]?.state);
-        button.setPointerCapture?.(ev.pointerId);
-      });
-      button.addEventListener("pointermove", (ev) => {
-        if (start === undefined) return;
-        const axis = key === "x_adjust" ? "laser_x" : "laser_y";
-        const delta = (key === "x_adjust" ? ev.clientX : ev.clientY) - start;
-        if (Math.abs(delta) < 3) return;
-        const speed = Math.max(1, Math.floor(Math.abs(delta) / 8));
-        this._setAxis(axis, base + Math.sign(delta) * speed);
-      });
-      button.addEventListener("pointerup", () => { start = base = undefined; });
-      button.addEventListener("pointercancel", () => { start = base = undefined; });
-    }
-    const xButton = this.shadowRoot.querySelector('[data-key="x_adjust"]');
-    const yButton = this.shadowRoot.querySelector('[data-key="y_adjust"]');
-    if (xButton && yButton) {
-      this._position.replaceChildren(xButton, this._input, yButton);
-    }
-  }
-
-  _setAxis(role, value) {
-    const entityId = sibling(this._hass, this._entityId, role);
-    const state = entityId && this._hass.states[entityId];
-    if (!entityId || !state || !Number.isFinite(value)) return;
-    const min = Number(state.attributes.min ?? -Infinity), max = Number(state.attributes.max ?? Infinity);
-    const step = Number(state.attributes.step ?? 1);
-    const clamped = Math.min(max, Math.max(min, Math.round(value / step) * step));
-    this._hass.callService("number", "set_value", { entity_id: entityId, value: clamped });
-  }
-
   _features() {
-    return [];
+    return ["laser_x", "laser_y"].map((role) => ({ entityId: sibling(this._hass, this._entityId, role), feature: { type: "numeric-input", style: "buttons" } }))
+      .filter((f) => f.entityId);
   }
 
   _buttons() {
     const hass = this._hass, id = this._entityId;
     // A move works while the laser sleeps, but not while it works or is off
     const buttons = [
-      { key: "x_adjust", label: "Adjust X", text: "X", icon: "mdi:arrow-left-right", role: "laser_x", action: () => {} },
-      { key: "y_adjust", label: "Adjust Y", text: "Y", icon: "mdi:arrow-up-down", role: "laser_y", action: () => {} },
       { key: "move_laser", label: "Move the laser to the position above", text: "Move", icon: "mdi:crosshairs-gps", role: "move_laser" },
       { key: "home_laser", label: "Home the laser", text: "Home", icon: "mdi:home-import-outline", role: "home_laser" },
     ];
-    return orderButtons(buttons.filter((b) => sibling(hass, id, b.role)).map((b) => ({
+    return buttons.filter((b) => sibling(hass, id, b.role)).map((b) => ({
       key: b.key, label: b.label, text: b.text, icon: b.icon, color: "primary", pressed: false,
-      disabled: !this._usable(sibling(hass, id, b.role)) || (!["x_adjust", "y_adjust"].includes(b.key) && !this._idle(b.role)),
-      action: b.action ?? (() => this._press(b.role)),
-    })), this._config.controls);
+      disabled: !this._idle(b.role), action: () => this._press(b.role),
+    }));
   }
 }
 
@@ -1902,28 +1726,6 @@ class XtoolMeasure extends XtoolEmbedding {
     return document.createElement("xtool-feature-editor");
   }
 
-  constructor() {
-    super();
-    const style = document.createElement("style");
-    style.textContent = `.reading { min-height: var(--feature-height, 42px); margin-bottom: var(--feature-button-spacing, 12px);
-      display: flex; align-items: center; justify-content: center; color: var(--secondary-text-color); font: inherit; }`;
-    this.shadowRoot.prepend(style);
-    this._reading = document.createElement("div");
-    this._reading.className = "reading";
-    this._reading.setAttribute("aria-label", "Measured value");
-    this._embeds.before(this._reading);
-  }
-
-  _render() {
-    super._render();
-    const measured = sibling(this._hass, this._entityId, "measured");
-    const state = measured && this._hass.states[measured];
-    const value = state && !["unknown", "unavailable"].includes(state.state)
-      ? `${state.state} ${state.attributes.unit_of_measurement ?? ""}`.trim() : "No measurement";
-    this._reading.textContent = value;
-    this._reading.hidden = !measured;
-  }
-
   _features() {
     return [
       { role: "measure_mode", feature: { type: "select-options" } },
@@ -1934,10 +1736,13 @@ class XtoolMeasure extends XtoolEmbedding {
   _buttons() {
     const hass = this._hass, id = this._entityId;
     if (!sibling(hass, id, "measure")) return [];
-    return orderButtons([{
-      key: "measure", label: "Measure", text: "Measure",
+    const measured = hass.states[sibling(hass, id, "measured")];
+    const value = measured && !["unknown", "unavailable"].includes(measured.state)
+      ? `${measured.state} ${measured.attributes.unit_of_measurement ?? ""}`.trim() : undefined;
+    return [{
+      key: "measure", label: value ? `Measure. Last reading: ${value}` : "Measure", text: value ? `Measure: ${value}` : "Measure",
       icon: "mdi:ruler", color: "primary", pressed: false, disabled: !this._idle("measure"), action: () => this._press("measure"),
-    }], this._config.controls);
+    }];
   }
 }
 
@@ -1997,7 +1802,7 @@ class XtoolSafety extends XtoolFeature {
       const on = state === "on";
       const [onWord, offWord] = item.words ?? ["in", "removed"];
       return {
-        key: item.role, icon: entityIcon(hass, entityId, item.icon),
+        key: item.role, icon: item.icon,
         label: item.indicator
           ? `${item.label}: ${on ? onWord : state === "off" ? offWord : "unknown"}`
           : `${item.label}: ${on ? "on" : state === "off" ? "off" : "unknown"}`,
@@ -2190,7 +1995,7 @@ class XtoolFocus extends XtoolFeature {
     // As in Studio: no Autofocus while the laser works, frames, focuses or is
     // off, or while Access control is on
     const busy = BUSY_PHASES.includes(phaseOf(status ? hass.states[status]?.state : undefined));
-    return orderButtons([
+    return [
       ...(autofocus ? [{
         key: "autofocus", label: "Autofocus", icon: "mdi:image-filter-center-focus", color: "primary",
         disabled: !this._usable(autofocus) || busy || accessControlOn(hass, id),
@@ -2198,7 +2003,7 @@ class XtoolFocus extends XtoolFeature {
       }] : []),
       { key: "down", label: "Decrease", icon: "mdi:arrow-down", disabled: !usable || value <= min, action: () => this._setHeight(Math.round((value - step) * 10) / 10) },
       { key: "up", label: "Increase", icon: "mdi:arrow-up", disabled: !usable || value >= max, action: () => this._setHeight(Math.round((value + step) * 10) / 10) },
-    ], this._config.controls);
+    ];
   }
 
   _render() {
@@ -2304,31 +2109,8 @@ const FEATURE_FORMS = {
       data: (c) => ({ lights: Array.isArray(c.lights) ? c.lights.filter((role) => roles.includes(role)) : roles }),
     };
   },
-  "custom:xtool-focus": () => ({
-    schema: [
-      { name: "controls", label: "Buttons", selector: { select: { multiple: true, reorder: true, options: [
-        ["autofocus", "Autofocus"], ["down", "Decrease"], ["up", "Increase"],
-      ].map(([value, label]) => ({ value, label })) } } },
-      displayField(),
-    ],
-    data: (c) => ({ controls: c.controls ?? ["autofocus", "down", "up"], display: displayOf(c) }),
-  }),
-  "custom:xtool-laser": () => ({
-    schema: [
-      { name: "controls", label: "Buttons", selector: { select: { multiple: true, reorder: true, options: [
-        ["x_adjust", "X adjustment"], ["y_adjust", "Y adjustment"], ["move_laser", "Move"], ["home_laser", "Home"],
-      ].map(([value, label]) => ({ value, label })) } } },
-      displayField(),
-    ],
-    data: (c) => ({ controls: c.controls ?? ["x_adjust", "y_adjust", "move_laser", "home_laser"], display: displayOf(c, "names") }),
-  }),
-  "custom:xtool-measure": () => ({
-    schema: [
-      { name: "controls", label: "Buttons", selector: { select: { multiple: true, reorder: true, options: [{ value: "measure", label: "Measure" }] } } },
-      displayField(),
-    ],
-    data: (c) => ({ controls: c.controls ?? ["measure"], display: displayOf(c, "names") }),
-  }),
+  "custom:xtool-laser": () => ({ schema: [displayField()], data: (c) => ({ display: displayOf(c, "names") }) }),
+  "custom:xtool-measure": () => ({ schema: [displayField()], data: (c) => ({ display: displayOf(c, "names") }) }),
   "custom:xtool-settings": (hass, entityId) => ({
     schema: [
       { name: "controls", label: "Configuration", selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: controlOptions(hass, entityId, SETTINGS) } } },
@@ -2340,25 +2122,20 @@ const FEATURE_FORMS = {
     const cameras = camerasOf(hass, entityId);
     const labels = cameras.map(([, label]) => label);
     const keyOf = (id) => hass?.entities?.[id]?.translation_key;
+    const main = cameras.find(([id]) => keyOf(id) === "camera_main")?.[0];
     const deep = cameras.find(([id]) => keyOf(id) === "camera_deep")?.[0];
-    const cropCamera = cameras.find(([id]) => CROP_ROLES.every((role) => cameraSetting(hass, id, role)))?.[0];
-    const crops = cropCamera ? CROP_ROLES : [];
+    const crops = main ? CROP_ROLES.filter((role) => cameraSetting(hass, main, role)) : [];
     const perspective = deep && cameraSetting(hass, deep, "perspective");
     return {
       schema: (c) => [
         { name: "camera", label: "Camera", selector: { select: { mode: "dropdown", options: labels } } },
-        { name: "controls", label: "Buttons", helper: "Select and reorder the camera buttons.",
-          selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: [
-            ...cameras.map(([value, label]) => ({ value, label })),
-            ...CAMERA_OVERLAYS.map(([value, label]) => ({ value, label })),
-            { value: "crop", label: "Crop" }, { value: "exposure", label: "Exposure" },
-          ] } } },
         {
           name: "camera_view", label: "Camera view",
           helper: "As in Home Assistant's picture cards. Auto: snapshots, refreshed by Home Assistant. Live: the camera's stream.",
           selector: select(CAMERA_VIEWS),
         },
-        displayField("For the camera's buttons."),
+        { name: "show_switch", label: "Buttons to switch cameras", selector: { boolean: {} } },
+        displayField("For the camera's buttons and the deep camera's perspective."),
         {
           name: "show_time", label: "Show the last updated time",
           helper: "Along the bottom of the picture, in the Auto view, in the card's Time format (under Content).",
@@ -2369,12 +2146,23 @@ const FEATURE_FORMS = {
           helper: "Adds a Crop key for the main camera. Tap it, then tap two opposite corners on the picture to show only that part. The key stays on while the crop is in effect; tap it again to show the whole 200 x 200 mm area.",
           selector: { boolean: {} },
         }] : []),
+        ...(cameras.some(([id]) => cameraSetting(hass, id, "crop_preset")) ? [{
+          name: "show_crop_preset", label: "Crop preset",
+          helper: "A key that shows the camera's crop preset; a tap opens Home Assistant's dialog to choose another.",
+          selector: { boolean: {} },
+        }] : []),
+        ...(perspective ? [{
+          name: "show_perspective", label: "Deep camera perspective",
+          helper: "A key beside the camera buttons for the deep camera: it shows Uncorrected, Rotated or Straightened, and a tap steps to the next.",
+          selector: { boolean: {} },
+        }] : []),
       ],
       data: (c) => ({
-        camera: labels.includes(c.camera) ? c.camera : labels[0], controls: Array.isArray(c.controls) ? c.controls : [],
-        camera_view: c.camera_view === "live" ? "live" : "auto",
-        display: displayOf(c, "names"), show_time: !!c.show_time,
+        camera: labels.includes(c.camera) ? c.camera : labels[0], camera_view: c.camera_view === "live" ? "live" : "auto",
+        show_switch: c.show_switch !== false, display: displayOf(c, "names"), show_time: !!c.show_time,
         ...(crops.length === CROP_ROLES.length ? { crop: c.crop !== false } : {}),
+        ...(cameras.some(([id]) => cameraSetting(hass, id, "crop_preset")) ? { show_crop_preset: c.show_crop_preset !== false } : {}),
+        ...(perspective ? { show_perspective: c.show_perspective !== false } : {}),
       }),
     };
   },
@@ -2663,7 +2451,7 @@ class XtoolCard extends HTMLElement {
         .tile { position: relative; display: block; height: 100%; --ha-card-feature-divider: none; }
 
         /* The xTool style: the body behind everything, the window behind the title */
-        #body, #window { position: absolute; display: none; }
+        #body, #window, #stripe { position: absolute; display: none; }
         .styled #body { display: block; inset: 0; }
         .styled #window { display: block; overflow: hidden; border-radius: max(4px, calc(var(--ha-card-border-radius, 12px) - 5px)); }
         #window::after { content: ""; position: absolute; inset: 0; background: var(--xtool-gloss); }
@@ -2683,6 +2471,10 @@ class XtoolCard extends HTMLElement {
           background: radial-gradient(120% 90% at 50% 120%, rgba(214, 140, 60, .28) 0%, rgba(214, 140, 60, 0) 60%),
             linear-gradient(175deg, #1d2024 0%, #141619 60%, #0f1113 100%);
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(255, 255, 255, .06), inset 0 3px 8px rgba(0, 0, 0, .6);
+        }
+        .graphite #stripe {
+          display: block; height: 2px; border-radius: 1px;
+          background: linear-gradient(to right, rgba(200, 205, 212, .1) 0%, #c8cdd4 25%, #eef1f4 55%, rgba(200, 205, 212, .15) 100%);
         }
         .styled::after {
           content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 3;
@@ -2756,7 +2548,7 @@ class XtoolCard extends HTMLElement {
         .styled .badge { --xtool-badge-ring: rgba(0, 0, 0, .55); }
       </style>
       <div class="frame">
-        <div class="clip under"><div id="body"></div><div id="window"></div><div id="areas"></div></div>
+        <div class="clip under"><div id="body"></div><div id="window"></div><div id="stripe"></div><div id="areas"></div></div>
         <div class="clip over"><div id="edge"><div class="sweep"></div></div><span id="pct"></span></div>
         <span class="badge" role="img"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor"
           stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -2765,6 +2557,7 @@ class XtoolCard extends HTMLElement {
     this._statesProvider = new StatesProvider(this._frame);
     this._over = this.shadowRoot.querySelector(".clip.over");
     this._window = this.shadowRoot.getElementById("window");
+    this._stripe = this.shadowRoot.getElementById("stripe");
     this._areas = this.shadowRoot.getElementById("areas");
     this._edge = this.shadowRoot.getElementById("edge");
     this._pct = this.shadowRoot.getElementById("pct");
@@ -3298,6 +3091,9 @@ class XtoolCard extends HTMLElement {
     Object.assign(this._window.style, {
       left: `${margin}px`, top: `${margin}px`, width: `${W - 2 * margin}px`, height: `${Math.max(0, bottom - margin)}px`,
     });
+    Object.assign(this._stripe.style, { left: `${margin + 4}px`, width: `${W - 2 * margin - 8}px`, top: `${bottom + 2}px` });
+    // No body below the window (no features below the title): no line
+    this._stripe.style.visibility = bottom >= H - margin ? "hidden" : "";
   }
 
   /**
