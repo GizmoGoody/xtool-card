@@ -314,8 +314,9 @@ const running = (phase) => phase === "processing" || phase === "framing";
  *   XtoolElement._moment) for a key that follows the state. A key shows its
  *   entity's own icon (Home Assistant's state icon). Its title and its
  *   choice in the editor are its entity's name in the integration; option
- *   names a choice that has no entity of its own, and detail(moment) adds
- *   to the title,
+ *   names a choice that has no entity of its own, title(moment) gives the
+ *   title when the entity's name does not fit the moment, and
+ *   detail(moment) adds to the title,
  * - color: its key's color,
  * - input: what changes in Home Assistant's feature that shows it as an
  *   input (see KINDS), such as a slider for a number,
@@ -352,6 +353,8 @@ const CONTROLS = {
   start: {
     kind: "press", role: "resume", key: "resume", color: "green",
     name: ({ phase }) => (phase === "paused" ? "Resume" : "Start"),
+    // Its entity resumes a paused job; otherwise the key starts one
+    title: ({ phase }) => (phase === "paused" ? undefined : "Start the job"),
     // With Access control on, Studio offers no start from the machine
     allowed: ({ phase, controlled }) => !running(phase) && !["off", "sleeping", "firmware"].includes(phase) && (!controlled || phase === "paused"),
   },
@@ -940,7 +943,7 @@ function directionOf(control, device) {
  */
 function keyBase(control, entityId, moment) {
   const name = valueOf(control.name, moment) ?? entityName(moment.hass, entityId);
-  const title = control.title ?? entityName(moment.hass, entityId) ?? name;
+  const title = valueOf(control.title, moment) ?? entityName(moment.hass, entityId) ?? name;
   const detail = valueOf(control.detail, moment);
   return {
     key: control.key ?? control.id, entity: entityId, text: name, color: control.color,

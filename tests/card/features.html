@@ -44,12 +44,12 @@
     hass = makeHass({ "sensor.f2_status": "idle" });
     job = addFeature({ type: "custom:xtool-job" }, { hass });
     await wait(50);
-    check("job, idle", keyNamed(job, "resume").textContent === "Start" && !keyNamed(job, "resume").disabled && keyNamed(job, "cancel").disabled,
+    check("job, idle", keyNamed(job, "resume").textContent === "Start" && keyNamed(job, "resume").title === "Start the job" && !keyNamed(job, "resume").disabled && keyNamed(job, "cancel").disabled,
       "Start, and Cancel off");
     hass = makeHass({ "sensor.f2_status": "paused" });
     job = addFeature({ type: "custom:xtool-job", confirm_cancel: false }, { hass });
     await wait(50);
-    check("job, paused", keyNamed(job, "resume").textContent === "Resume", "Resume");
+    check("job, paused", keyNamed(job, "resume").textContent === "Resume" && keyNamed(job, "resume").title === "Resume job", "Resume, titled with its entity's name");
     keyNamed(job, "cancel").click();
     await wait(20);
     check("job, paused", !asking() && lastCall(hass).data.entity_id === "button.f2_cancel", "without asking, when turned off in the options");
