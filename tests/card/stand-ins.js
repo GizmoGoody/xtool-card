@@ -138,7 +138,7 @@ const P2 = [
 ];
 const P2_OVERVIEW_CAMERA = [
   ["camera.p2_overview", "camera_overview", "idle", { entity_picture: "/api/camera_proxy/camera.p2_overview?token=c" }],
-  ["select.p2_overview_crop", "crop_preset", "Sync to Mode", { options: ["Sync to Mode", "Custom"] }],
+  ["select.p2_overview_crop", "crop_preset", "uncropped", { options: ["uncropped", "sync_to_mode", "work_bed", "custom"] }],
   ["number.p2_thickness", "thickness_or_distance", "3", { min: 0, max: 50, step: 0.1, unit_of_measurement: "mm", mode: "box" }],
   ["select.p2_mode", "processing_mode", "process_on_slats", { options: ["process_on_slats", "honeycomb_panel", "slats_removed"] }],
   ["number.p2_overview_crop_width", "crop_width", "610", { min: 0, max: 915, step: 1, unit_of_measurement: "mm" }],
@@ -152,7 +152,7 @@ const P2_OVERVIEW_CAMERA = [
 ];
 const P2_CLOSE_CAMERA = [
   ["camera.p2_close", "camera_closeup", "idle", { entity_picture: "/api/camera_proxy/camera.p2_close?token=d" }],
-  ["select.p2_close_crop", "crop_preset", "Custom", { options: ["Sync to Mode", "Custom"] }],
+  ["select.p2_close_crop", "crop_preset", "studio", { options: ["uncropped", "studio", "custom"] }],
   ["number.p2_close_crop_width", "crop_width", "140", { min: 0, max: 140, step: 1, unit_of_measurement: "mm" }],
   ["number.p2_close_crop_height", "crop_height", "100", { min: 0, max: 100, step: 1, unit_of_measurement: "mm" }],
   ["number.p2_close_crop_center_x", "crop_center_x", "0", { min: -70, max: 70, step: 0.5, unit_of_measurement: "mm" }],
@@ -516,10 +516,12 @@ customElements.define("hui-tile-card", class extends HTMLElement {
     if (!this.built) {
       this.built = true;
       this.shadowRoot.innerHTML = `<style>
-        ha-card { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding: 10px; gap: 12px;
+        ha-card { display: flex; flex-direction: column; height: 100%; box-sizing: border-box;
           background: var(--ha-card-background, var(--card-background-color, #222));
           border: 1px solid var(--ha-card-border-color, #444); border-radius: var(--ha-card-border-radius, 12px); }
-        .top { display: flex; align-items: center; gap: 10px; }
+        /* Home Assistant's tile container sits over the card's 1 px border */
+        .top { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 10px; box-sizing: border-box; margin: -1px -1px 0; }
+        ha-card > hui-card-features { padding: 0 12px 12px; }
         ha-tile-icon { display: block; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex: none; }
         img { width: 36px; height: 36px; display: block; }
         ha-tile-info { flex: 1; color: var(--primary-text-color, #fff); }
@@ -534,6 +536,7 @@ customElements.define("hui-tile-card", class extends HTMLElement {
       for (const [list, place] of [[beside, this.shadowRoot.querySelector(".top")], [below, this.shadowRoot.querySelector("ha-card")]]) {
         if (!list.length) continue;
         const group = document.createElement("hui-card-features");
+        group.slot = place.localName === "ha-card" ? "features" : "features-inline";
         group.setup = { features: list, hass: this._hass, entityId: this.config.entity, columns: place.localName === "ha-card" && list.length > 1 ? 2 : 1 };
         place.append(group);
         this.groups.push(group);

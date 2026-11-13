@@ -285,6 +285,13 @@ const OVERLAY_ORDER = [
   "overlay_red_dot_close", "overlay_red_dot_quick",
 ];
 
+// The overlays chosen by default (see XtoolOverlay.defaultsFor): where the
+// laser fires, where the red dots point, the slats, and the close camera's
+// picture and area on the overview
+const DEFAULT_OVERLAYS = [
+  "overlay_laser_target", "overlay_red_dot_close", "overlay_slat_lines", "overlay_close_camera_image", "overlay_close_camera_studio",
+];
+
 /** An overlay's control: its switch, named by its entity and its camera. */
 function overlayControl(entityId, camera, hass) {
   const name = `${entityName(hass, entityId) ?? entityId} (${entityName(hass, camera.entityId) ?? camera.label})`;
@@ -379,6 +386,9 @@ const CONTROLS = {
     confirm: { off: "A job is running. Turning the power off stops it at once and it cannot be resumed.", while: ["processing", "paused"] },
   },
   exhaust: { kind: "toggle", name: "Exhaust", color: "blue", fan: true },
+  // The IF2 2.0's fan (its feature's own keys, see XtoolIf2Fan): blue and
+  // turning while it spins, faster at each of its four speeds
+  if2_fan: { kind: "fan", name: "Fan", color: "blue", fan: true },
   cooling_fan: { kind: "toggle", name: "Cooling", color: "cyan", fan: true },
   fill_light: { kind: "light", name: "Light", color: DAYLIGHT, group: "fill_light" },
   fill_light_front: { kind: "light", name: "Light", color: DAYLIGHT, group: "fill_light", direction: "front" },
@@ -1024,6 +1034,21 @@ function toggle(feature, control, entityId, on) {
   performAction(feature, service, entityId, confirmation);
 }
 
+// A fan's turn, in seconds: one speed, or each of four (see fanLook)
+const FAN_TURN = 1.2;
+const FAN_TURNS = [2.4, 1.6, 1, 0.6];
+
+/**
+ * How a fan's key looks (see CONTROLS: fan): while it turns, in its color,
+ * its icon turning (with the feature's animate_fan option, on by default),
+ * at speed (1 to 4) when it has one. Nothing while it stands still.
+ */
+function fanLook(control, on, config, speed) {
+  if (!control.fan || !on) return {};
+  const spin = config?.animate_fan === false ? undefined : speed ? FAN_TURNS[Math.min(4, Math.max(1, speed)) - 1] : FAN_TURN;
+  return { color: control.color, pressed: true, spin };
+}
+
 /** A key for something on or off: a switch, light, fan or lock, or a state that is only shown. */
 function switchKey(feature, control, entityId, moment) {
   const stateObj = moment.hass.states[entityId];
@@ -1043,12 +1068,7 @@ function switchKey(feature, control, entityId, moment) {
       color: unsafe ? "red" : "green", pressed: on, fill: unsafe, disabled, action,
     };
   }
-  return {
-    ...base, pressed: on, disabled,
-    // A fan that is on turns (on by default); these fans have no speed
-    spin: control.fan && on && moment.config.animate_fan !== false ? 1.2 : undefined,
-    action,
-  };
+  return { ...base, pressed: on, disabled, ...fanLook(control, on, moment.config), action };
 }
 
 /** A key for a button entity: a tap presses it, asking first when the control says so. */
@@ -1283,7 +1303,8 @@ class FieldGroup {
     this._shown = this._format(this._values());
     this._input.disabled = !usable;
     this._field.classList.toggle("disabled", !usable);
-    this._input.setAttribute("aria-label", item.entities.map((entityId) => entityName(feature._hass, entityId) ?? entityId).join(", "));
+    nameItem(this._field, item.entities.map((entityId) => entityName(feature._hass, entityId) ?? entityId).join(", "));
+    this._input.setAttribute("aria-label", this._field.title);
     if (this._pending || feature.shadowRoot.activeElement !== this._input) this._input.value = this._format(values);
     // The keys, drawn again only when they change (and never while sliding)
     const keys = (this._control.keys ?? []).map((spec) => this._keyOf(spec, values, states, usable));
@@ -1393,6 +1414,16 @@ const KINDS = {
 /** A control's key, or undefined when it has none now. */
 const keyOf = (feature, control, entityId, moment) => KINDS[control.kind]?.key(feature, control, entityId, moment);
 
+/** Whether Home Assistant's feature for an entity has a value to show (unavailable shows, disabled). */
+function shows(stateObj) {
+  if (!stateObj || stateObj.state === "unknown") return false;
+  const options = stateObj.attributes.options;
+  return stateObj.state === "unavailable" || !Array.isArray(options) || options.includes(stateObj.state);
+}
+
+/** Whether one of Home Assistant's features is a slider. */
+const SLIDERS = (feature) => feature.type === "light-brightness" || (feature.type === "numeric-input" && feature.style === "slider");
+
 /** A slide holding Home Assistant's own feature for an entity, made once and kept in slides. */
 function slideOf(slides, entityId, feature) {
   const id = `${entityId}|${feature.type}`;
@@ -1405,6 +1436,13 @@ function slideOf(slides, entityId, feature) {
     el.feature = { ...feature };
     el.context = { entity_id: entityId };
     slide.append(el);
+    // A slider (an exposure, a brightness) shows its entity's icon at its
+    // start, over Home Assistant's slider (see showSlides)
+    if (SLIDERS(feature)) {
+      slide.classList.add("slider");
+      const icon = document.createElement("ha-state-icon");
+      slide.append(icon);
+    }
     slides.set(id, slide);
   }
   return slide;
@@ -1490,6 +1528,7 @@ class LightRow {
     // As the tile card's icon: the icon in the color, its circle the color at Home Assistant's opacity
     this._icon.style.setProperty("--tile-icon-color", color);
     this._icon.accessibleLabel = entityName(hass, this._entityId);
+    nameItem(this._icon, this._icon.accessibleLabel);
     this._state.hass = hass;
     this._state.stateObj = stateObj;
     this._slide.hidden = !dimmable(hass, this._entityId);
@@ -1515,11 +1554,42 @@ const LIGHT_CSS = `
   .light .slide { flex: 1 1 auto; }
   .slide { display: block; min-width: 0; border-radius: var(--feature-border-radius, 12px); }
   .slide[hidden] { display: none; }
+  /* A slider's icon, small, at its start, under the pointer's reach */
+  .slide.slider { position: relative; }
+  .slide.slider > ha-state-icon {
+    position: absolute; inset-inline-start: 10px; top: 50%; transform: translateY(-50%); pointer-events: none;
+    --mdc-icon-size: 16px; color: var(--primary-text-color); opacity: .7; display: flex;
+  }
   ${CHEVRON_CSS}
 `;
 
-/** Show these slides in a box, replacing what it shows only when they differ. */
+/**
+ * Name an item of a row for hover (its title, the tooltip on a desktop)
+ * and for screen readers: every key, field, slider, select and light icon
+ * is named here.
+ */
+function nameItem(el, name) {
+  if (!name) return;
+  if (el.title !== name) el.title = name;
+  if (el.getAttribute("aria-label") !== name) el.setAttribute("aria-label", name);
+}
+
+/**
+ * Show these slides in a box, replacing what it shows only when they
+ * differ. Each slide (Home Assistant's feature) is named by its entity, and
+ * shows the entity's icon at its start when it is a slider (see slideOf).
+ */
 function showSlides(box, slides) {
+  for (const slide of slides) {
+    const feature = slide.querySelector?.(":scope > hui-card-feature");
+    const hass = feature?.hass, entityId = feature?.context?.entity_id;
+    if (hass && entityId) nameItem(slide, entityName(hass, entityId));
+    const icon = slide.querySelector?.(":scope > ha-state-icon");
+    if (icon && hass) {
+      icon.hass = hass;
+      icon.stateObj = hass.states[entityId];
+    }
+  }
   if (slides.length !== box.children.length || slides.some((slide, i) => box.children[i] !== slide)) box.replaceChildren(...slides);
 }
 
@@ -1554,6 +1624,11 @@ class XtoolElement extends HTMLElement {
 
   static getConfigElement() {
     return document.createElement("xtool-feature-editor");
+  }
+
+  /** The controls shown when none are chosen: the feature's defaults, or (undefined) all it offers. */
+  static defaultsFor() {
+    return this.defaults;
   }
 
   /** The ids of the controls the feature can show for a device, in their default order. */
@@ -1597,7 +1672,8 @@ class XtoolElement extends HTMLElement {
   /** The feature's editor form: { schema, data, save }, from its controls, display and options. */
   static editor(hass, entityId) {
     const { label, options = [] } = this.form;
-    const offered = this.offered(deviceOf(hass, entityId), hass);
+    const device = deviceOf(hass, entityId);
+    const offered = this.offered(device, hass);
     const values = offered.map((o) => o.value);
     const key = this.controlsKey;
     const { helper } = this.form;
@@ -1613,7 +1689,7 @@ class XtoolElement extends HTMLElement {
         })),
       ],
       data: (c) => ({
-        ...(label ? { [key]: this.keepOffered && Array.isArray(c[key]) ? c[key].filter((value) => values.includes(value)) : c[key] ?? this.defaults ?? values } : {}),
+        ...(label ? { [key]: this.keepOffered && Array.isArray(c[key]) ? c[key].filter((value) => values.includes(value)) : c[key] ?? this.defaultsFor(device) ?? values } : {}),
         ...(this.display ? { display: displayOf(c, this.display) } : {}),
         ...Object.fromEntries(options.map(({ name, default: on = true }) => [name, typeof c[name] === "boolean" ? c[name] : on])),
       }),
@@ -1678,7 +1754,7 @@ class XtoolElement extends HTMLElement {
   /** The ids of the controls chosen, in order: the option's list, or the defaults. */
   _chosen() {
     const chosen = this._config[this.constructor.controlsKey];
-    return Array.isArray(chosen) ? chosen : this.constructor.defaults ?? this.constructor.controlIds(this._device);
+    return Array.isArray(chosen) ? chosen : this.constructor.defaultsFor(this._device) ?? this.constructor.controlIds(this._device);
   }
 
   _usable(entityId) {
@@ -1789,8 +1865,7 @@ class XtoolFeature extends XtoolElement {
     button.className = "key";
     button.dataset.key = b.key;
     button.dataset.min = ITEM_MIN.key;
-    button.title = b.label;
-    button.setAttribute("aria-label", b.label);
+    nameItem(button, b.label);
     if (b.pressed !== undefined) button.setAttribute("aria-pressed", String(!!b.pressed));
     button.disabled = !!b.disabled;
     if (b.color) button.style.setProperty("--c", cssColor(b.color));
@@ -1917,8 +1992,12 @@ class XtoolSafety extends XtoolFeature {
 // ---------------------------------------------------------------------------
 const CAMERA_VIEWS = [["auto", "Auto"], ["live", "Live"]];
 
+// The crop preset of a crop chosen on the camera's own (the P2's presets)
+const CUSTOM_CROP = "custom";
+
 // The camera's controls that are Home Assistant's own features (and the
-// close camera's light), below its keys, for the camera shown
+// close camera's light), below its keys: each only for a camera that has
+// it, while that camera is shown
 const CAMERA_INPUTS = ["mode", "crop_preset", "exposure", "close_light_icon", "close_light_slider"];
 
 class XtoolCamera extends XtoolFeature {
@@ -1930,7 +2009,7 @@ class XtoolCamera extends XtoolFeature {
   static controls = ["cameras", "crop", "perspective", ...CAMERA_INPUTS];
   static form = {
     label: "Controls",
-    helper: "In order. Crop: tap it, then tap two opposite corners on the picture to show only that part. The key stays on while the crop is in effect; tap it again to show the whole area.",
+    helper: "In order. Crop: tap it, then tap two opposite corners on the picture to show only that part. It stays on, for another crop, until it is tapped again (the camera then goes back to its crop preset, or its whole area) or the other camera is shown.",
   };
 
   static supports(device) {
@@ -2089,24 +2168,11 @@ class XtoolCamera extends XtoolFeature {
     this._showInputs();
   }
 
-  /**
-   * A tap on the picture. While Crop is on (choosing a crop, or a crop in
-   * effect) it marks a corner, and never opens the camera; otherwise it
-   * opens the camera.
-   */
+  /** A tap on the picture: while Crop is on it marks a corner (and never opens the camera); otherwise it opens the camera. */
   _tap(ev) {
     if (!this._camera) return;
-    const crop = this._crop();
-    if (crop && (this._cropping || this._cropped(crop))) {
-      if (!this._cropping) {
-        this._cropping = true;
-        this._key = undefined;
-        this._render();
-      }
-      this._cropTap(ev);
-      return;
-    }
-    fire(this, "hass-more-info", { entityId: this._camera });
+    if (this._cropping && this._crop()) this._cropTap(ev);
+    else fire(this, "hass-more-info", { entityId: this._camera });
   }
 
   connectedCallback() {
@@ -2176,9 +2242,10 @@ class XtoolCamera extends XtoolFeature {
   }
 
   /**
-   * The chosen inputs of the camera shown (Home Assistant's own features),
-   * and the close camera's light (its icon and its slider, as in xTool
-   * lights), whichever camera is shown.
+   * The chosen inputs the camera shown has (Home Assistant's own features,
+   * and its light: its icon and its slider, as in xTool lights). One whose
+   * entity has no value to show (unknown, or a select's state that is not
+   * one of its options) is left out: Home Assistant would draw it blank.
    */
   _showInputs() {
     const camera = this._shownCamera;
@@ -2186,8 +2253,8 @@ class XtoolCamera extends XtoolFeature {
     showSlides(this._inputsBox, !camera ? [] : chosen.map((id) => {
       const { light, part } = lightPart(id) ?? {};
       const control = controlOf(light ?? id, this._device.profile);
-      const entityId = camera.settings[control.role] ?? (light ? this._device.cameras.map((c) => c.settings[control.role]).find(Boolean) : undefined);
-      if (!entityId) return undefined;
+      const entityId = camera.settings[control.role];
+      if (!entityId || !shows(this._hass.states[entityId])) return undefined;
       if (light) {
         if (!this._lights.has(entityId)) this._lights.set(entityId, new LightRow(this, entityId));
         const row = this._lights.get(entityId);
@@ -2200,10 +2267,37 @@ class XtoolCamera extends XtoolFeature {
     }).filter(Boolean));
   }
 
+  /**
+   * Home Assistant's image stops fetching photos when the connection to
+   * Home Assistant drops, and after it returns does not start again while
+   * it stays on screen (its spinner shows for good). A camera that was
+   * unavailable can leave it on its broken picture. Either way, each
+   * camera's image is made anew (see _renewImages).
+   */
   set hass(hass) {
+    const before = this._hass;
     super.hass = hass;
+    if (before) {
+      const back = before.connected === false && hass.connected !== false;
+      const returned = [...(this._images?.keys() ?? [])]
+        .filter((camera) => before.states[camera]?.state === "unavailable" && hass.states[camera] && hass.states[camera].state !== "unavailable");
+      if (back) this._renewImages([...this._images.keys()]);
+      else if (returned.length) this._renewImages(returned);
+    }
     this._showCamera();
     this._drawTarget();
+  }
+
+  /** Make these cameras' images anew: the shown one at once, the others when shown again. */
+  _renewImages(cameras) {
+    for (const camera of cameras) {
+      this._next?.get(camera)?.remove();
+      this._next?.delete(camera);
+      this._images.get(camera)?.remove();
+      this._images.delete(camera);
+      this._forgetPicture(camera);
+    }
+    this._watched = undefined;
   }
 
   setConfig(config) {
@@ -2227,8 +2321,13 @@ class XtoolCamera extends XtoolFeature {
     if (current !== this._camera) {
       this._camera = current;
       this._pictureAt = undefined;
+      this._first = undefined;
+      this._area.hidden = true;
+      // Crop starts on when the camera shows a crop of its own (see _ownCrop)
+      this._cropping = this._ownCrop();
       this._showCamera();
     }
+    this._notePreset();
     const camera = this._shownCamera;
     const keys = {
       // A key for each camera: a camera shown before shows its last picture, and a new one at once
@@ -2241,22 +2340,21 @@ class XtoolCamera extends XtoolFeature {
           // does): with its address dropped, that is a new photo
           if (this._images.has(entityId) && entityId !== this._camera) this._forgetPicture(entityId);
           this._picked = entityId;
-          this._first = undefined;
-          this._cropping = false;
-          this._area.hidden = true;
           this._key = undefined;
           this._render();
         },
       }))),
-      // On while choosing a crop and while one is in effect; off shows the whole area again
+      // On: taps on the picture choose a crop of its own, until it is
+      // turned off or another camera is shown. Off: the camera's crop
+      // returns to its preset (see _toggleCropping)
       crop: () => {
         const crop = this._crop();
         if (!crop) return [];
-        const usable = this._usable(current), cropped = this._cropped(crop);
+        const usable = this._usable(current);
         return [{
-          key: "crop", label: cropped ? "Crop: on. Tap to show it all" : this._cropping ? "Crop: tap the picture" : "Crop by tapping",
+          key: "crop", label: this._cropping ? "Crop: on. Tap two corners on the picture; tap Crop to go back" : "Crop by tapping",
           text: "Crop", icon: "mdi:crop", color: "primary",
-          pressed: usable && (!!this._cropping || cropped), disabled: !usable, action: () => this._toggleCropping(crop),
+          pressed: usable && !!this._cropping, disabled: !usable, action: () => this._toggleCropping(),
         }];
       },
       // The deep camera's perspective; the integration takes the new photo
@@ -2302,7 +2400,28 @@ class XtoolCamera extends XtoolFeature {
 
   /** Whether a crop is in effect: not the camera's whole crop area. */
   _cropped(crop) {
-    return Object.entries(this._cropReset).some(([side, value]) => crop[side] !== value);
+    return Object.entries(this._cropReset ?? {}).some(([side, value]) => crop[side] !== value);
+  }
+
+  /**
+   * Whether the shown camera shows a crop of its own (not a preset): with
+   * crop presets (the P2's), its preset is Custom; without (the F2 Ultra
+   * UV's), its crop is not its whole area.
+   */
+  _ownCrop() {
+    const preset = this._shownCamera?.settings.crop_preset;
+    if (preset) return this._hass.states[preset]?.state === CUSTOM_CROP;
+    const crop = this._crop();
+    return !!crop && this._cropped(crop);
+  }
+
+  /** Remember each camera's last crop preset (not Custom): Crop goes back to it. */
+  _notePreset() {
+    this._presets ??= new Map();
+    for (const camera of this._device.cameras) {
+      const state = this._hass.states[camera.settings.crop_preset]?.state;
+      if (state && state !== CUSTOM_CROP && shows(this._hass.states[camera.settings.crop_preset])) this._presets.set(camera.entityId, state);
+    }
   }
 
   /** A point's place in the picture box (px). */
@@ -2334,7 +2453,7 @@ class XtoolCamera extends XtoolFeature {
     return { x: crop.center_x + (u - 0.5) * crop.width, y: crop.center_y + (v - 0.5) * crop.height, ...this._placeOf(ev) };
   }
 
-  // First tap: the top-left corner; second tap: the bottom-right corner
+  // First tap: a corner; second tap: the opposite corner, which sets the crop
   _cropTap(ev) {
     const crop = this._crop();
     const point = crop && this._pointOf(ev, crop);
@@ -2351,24 +2470,37 @@ class XtoolCamera extends XtoolFeature {
     this._showHint();
     const width = Math.abs(point.x - first.x), height = Math.abs(point.y - first.y);
     if (!width || !height) return;
-    this._setCrop({
+    this._sendCrop({
       width: Math.round(width), height: Math.round(height),
       center_x: Math.round((point.x + first.x) / 2), center_y: Math.round((point.y + first.y) / 2),
     });
   }
 
-  // Off: start choosing a crop. On: stop choosing, and show it all again
-  _toggleCropping(crop) {
-    if (this._cropping || this._cropped(crop)) {
-      const cropped = this._cropped(crop);
-      this._stopCropping();
-      if (cropped) this._setCrop(this._cropReset);
+  /**
+   * Off: turn on, and taps on the picture choose a crop. On: turn off, and
+   * the camera goes back to its crop preset (the last one it showed; the
+   * first of its presets if it showed none), or, without presets, to its
+   * whole area.
+   */
+  _toggleCropping() {
+    // The crop now (the key can be older than the numbers)
+    const crop = this._crop();
+    if (!this._cropping) {
+      this._cropping = true;
+      this._showHint();
+      this._key = undefined;
+      this._render();
       return;
     }
-    this._cropping = true;
-    this._showHint();
-    this._key = undefined;
-    this._render();
+    this._stopCropping();
+    const preset = this._shownCamera?.settings.crop_preset;
+    if (preset) {
+      const stateObj = this._hass.states[preset];
+      const option = this._presets?.get(this._camera) ?? stateObj?.attributes.options?.find((o) => o !== CUSTOM_CROP);
+      if (option && option !== stateObj?.state) this._sendPreset(preset, option);
+    } else if (crop && this._cropped(crop)) {
+      this._sendCrop(this._cropReset);
+    }
   }
 
   _stopCropping() {
@@ -2380,17 +2512,18 @@ class XtoolCamera extends XtoolFeature {
     this._render();
   }
 
-  _setCrop(crop) {
+  // The integration takes the new photo before the action ends: show it then
+  _sendCrop(crop) {
     const camera = this._camera;
-    this._first = undefined;
-    this._cropping = false;
-    this._area.hidden = true;
-    this._showHint();
-    this._render();
-    // The integration takes the new photo before the action ends: show it now
     Promise.resolve(this._hass.callService(DOMAIN, "camera", {
       crop_width: crop.width, crop_height: crop.height, crop_center_x: crop.center_x, crop_center_y: crop.center_y,
     }, { entity_id: camera })).then(() => this._reloadImage(camera), () => {});
+  }
+
+  _sendPreset(entityId, option) {
+    const camera = this._camera;
+    Promise.resolve(this._hass.callService("select", "select_option", { entity_id: entityId, option }))
+      .then(() => this._reloadImage(camera), () => {});
   }
 
   /**
@@ -2631,6 +2764,13 @@ class XtoolOverlay extends XtoolFeature {
     const camera = device.cameras.find((c) => c.overlays.some((overlay) => overlay.entityId === id));
     return { control: camera && overlayControl(id, camera, hass), entityId: camera && id };
   }
+
+  /** Five by default: the overlays in DEFAULT_OVERLAYS, each of the first camera that has it, then others in order. */
+  static defaultsFor(device) {
+    const all = device.cameras.flatMap((camera) => camera.overlays);
+    const picked = DEFAULT_OVERLAYS.map((key) => all.find((o) => o.key === key)?.entityId).filter(Boolean);
+    return [...picked, ...all.map((o) => o.entityId).filter((id) => !picked.includes(id))].slice(0, 5);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2672,7 +2812,7 @@ const NUMBER_ON = "var(--state-number-active-color, var(--state-active-color, va
 // The IF2 2.0's keys: Off, Auto and the speed. They are this feature's own:
 // they set the fan entity's modes, not an entity each
 const IF2_KEYS = [["off", "Off"], ["auto", "Auto"], ["speed", "Speed"]];
-const IF2_ICONS = { off: "mdi:fan-off", auto: "mdi:fan-auto", speed: "mdi:fan", 1: "mdi:fan-speed-1", 2: "mdi:fan-speed-2", 3: "mdi:fan-speed-3" };
+const IF2_ICONS = { off: "mdi:fan-off", auto: "mdi:fan", speed: "mdi:fan", 1: "mdi:fan-speed-1", 2: "mdi:fan-speed-2", 3: "mdi:fan-speed-3" };
 
 class XtoolIf2Fan extends XtoolFeature {
   static type = "xtool-if2-fan";
@@ -2738,19 +2878,26 @@ class XtoolIf2Fan extends XtoolFeature {
       const speed = this._speed ?? 1;
       const nextSpeed = value === "speed" ? (speed % speeds) + 1 : speed;
       const disabled = fanState.state === "unavailable";
+      // The key in use (Auto or the speed), while the fan spins: blue, its
+      // fan turning at the speed the IF2 reports
+      const spinning = fanState.state === "on";
+      const sensed = Math.round((fanState.attributes.percentage ?? 0) / step);
+      const look = (key) => (key === value ? fanLook(CONTROLS.if2_fan, spinning, this._config, sensed) : {});
       const buttons = [{
         key: "off", label: "Off", text: "Off", icon: IF2_ICONS.off, color: "primary", pressed: value === "off", disabled,
         action: () => value !== "off" && hass.callService("fan", "turn_off", { entity_id: fan }),
       }];
       if (preset) {
         buttons.push({
-          key: "auto", label: "Auto", text: "A", icon: IF2_ICONS.auto, color: "primary", pressed: value === "auto", disabled,
+          key: "auto", label: "Auto", text: "A", alwaysText: true, icon: IF2_ICONS.auto, color: "primary", pressed: value === "auto", disabled,
+          ...look("auto"),
           action: () => value !== "auto" && hass.callService("fan", "set_preset_mode", { entity_id: fan, preset_mode: preset }),
         });
       }
       buttons.push({
         key: "speed", label: value === "speed" ? `Speed ${speed}. Tap for ${nextSpeed}` : `Speed ${speed}`,
         text: String(speed), alwaysText: true, icon: IF2_ICONS.speed, color: "primary", pressed: value === "speed", disabled,
+        ...look("speed"),
         action: () => {
           this._speed = nextSpeed;
           hass.callService("fan", "set_percentage", { entity_id: fan, percentage: Math.min(100, nextSpeed * step) });
@@ -3200,7 +3347,7 @@ function glassReflections(tone, pattern) {
   }
   return layers.join(", ");
 }
-const FLAT = { champagne: "#c4a191", graphite: "#2d3136" };
+const FLAT = { champagne: "#cdae94", graphite: "#2d3136" };
 // The same keys and values as the SVS and Lampster cards
 const FEATURES_STYLES = [["match", "Match style"], ["flat", "Flat"], ["console", "Console"]];
 const BADGES = [
@@ -3240,7 +3387,7 @@ const BADGE_PATHS = {
 };
 
 // Options this card adds to the tile card's
-const OWN_KEYS = ["style", "features_style", "pattern", "badges", "status_light", "progress", "collapsible", "expanded", "auto_collapse"];
+const OWN_KEYS = ["style", "features_style", "pattern", "badges", "status_light", "progress", "collapsible", "expanded", "auto_collapse", "auto_expand"];
 
 /** The tile card's own options (as its editor shows them). */
 function tileConfig(config) {
@@ -3302,10 +3449,11 @@ class XtoolCard extends HTMLElement {
         .off #window { filter: brightness(.55) saturate(.55); }
         .champagne #body {
           background: radial-gradient(rgba(255, 255, 255, .07) .6px, transparent .7px) 0 0 / 3px 3px,
-            linear-gradient(160deg, #d7b8a8 0%, #c4a191 45%, #b08e7f 100%);
+            linear-gradient(160deg, #dcc1aa 0%, #cdae94 45%, #b8977c 100%);
         }
         .champagne #window {
-          background: linear-gradient(170deg, #ef8a3a 0%, #e0681f 45%, #b9480f 100%);
+          background: radial-gradient(90% 120% at 50% 110%, rgba(245, 162, 26, .55) 0%, rgba(245, 162, 26, 0) 70%),
+            linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%);
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 0 0 1px rgba(90, 30, 0, .35), inset 0 3px 8px rgba(90, 30, 0, .3);
         }
         .graphite #body { background: linear-gradient(170deg, #3a3f45 0%, #2d3136 40%, #24272b 100%); }
@@ -3411,7 +3559,7 @@ class XtoolCard extends HTMLElement {
       const at = this._tapAt;
       this._tapAt = undefined;
       if (this._open && at && this._amongFeatures(at)) return;
-      this._autoCollapsed = false;
+      this._tappedWhileOff = true;
       this._setOpen(!this._open);
     });
     this._resize.observe(this._frame);
@@ -3458,7 +3606,7 @@ class XtoolCard extends HTMLElement {
     if (!EDGES.some(([id]) => id === edge)) throw new Error(`Unknown progress edge: ${edge}`);
     this._config = { ...config, style };
     this._open = !config.collapsible ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded !== false;
-    this._autoCollapsed = false;
+    this._tappedWhileOff = false;
     this._wasOff = undefined;
     const tile = innerTileConfig(this._config, this._open);
     if (this._tile) {
@@ -3570,20 +3718,22 @@ class XtoolCard extends HTMLElement {
   }
 
   /**
-   * With Collapse when off, the card collapses when the machine turns off
-   * (or is off when the card loads) and opens again when it turns back on,
-   * unless the card was tapped in between. The browser keeps the choice
-   * made by a tap, not this one.
+   * A collapsible card follows the machine's power, on each change of its
+   * status between off and not off (and, for Collapse, when it is off as
+   * the card loads):
+   * - Collapse when powered off (auto_collapse): the card collapses.
+   * - Expand when powered on (auto_expand): the card expands, unless it
+   *   was tapped since the machine turned off.
+   * The browser keeps the choice made by a tap, not these.
    */
   _followPower(off) {
     const was = this._wasOff;
     this._wasOff = off;
-    if (!this._config.collapsible || this._config.auto_collapse === false || off === was || this._preview) return;
-    if (off && this._open) {
-      this._autoCollapsed = true;
-      this._setOpen(false, false);
-    } else if (!off && this._autoCollapsed) {
-      this._autoCollapsed = false;
+    if (!this._config.collapsible || off === was || this._preview) return;
+    if (off) {
+      this._tappedWhileOff = false;
+      if (this._config.auto_collapse !== false && this._open) this._setOpen(false, false);
+    } else if (was === true && this._config.auto_expand !== false && !this._tappedWhileOff && !this._open) {
       this._setOpen(true, false);
     }
   }
@@ -3882,6 +4032,8 @@ class XtoolCard extends HTMLElement {
     if (!XtoolCard._windowSheet) {
       XtoolCard._windowSheet = new CSSStyleSheet();
       XtoolCard._windowSheet.replaceSync(`
+        /* The features below the title, moved down to keep their gap under the window (see _drawWindow) */
+        hui-card-features[slot="features"] { margin-top: var(--xtool-header-gap, 0px); }
         :host(.champagne) ha-tile-info {
           --primary-text-color: rgba(255, 248, 240, .97); --secondary-text-color: rgba(255, 236, 220, .86);
           text-shadow: 0 1px 2px rgba(90, 30, 0, .55);
@@ -3911,7 +4063,10 @@ class XtoolCard extends HTMLElement {
    * if it ever changes, the window covers the whole card.
    */
   _drawWindow() {
-    if (!TONE[this._config.style]) return;
+    if (!TONE[this._config.style]) {
+      this._tile?.style.removeProperty("--xtool-header-gap");
+      return;
+    }
     const W = this._frame.offsetWidth, H = this._frame.offsetHeight;
     if (!W || !H) return;
     // The window's edge is 4 px in; the controls in the header have 10 px
@@ -3920,15 +4075,26 @@ class XtoolCard extends HTMLElement {
     let bottom = H - margin;
     const root = this._tile?.shadowRoot;
     const info = root && findDeep(root, "ha-tile-info");
-    const infoBox = info && this._box(info);
-    if (infoBox) {
+    const icon = root && findDeep(root, "ha-tile-icon");
+    const infoBox = info && this._box(info), iconBox = icon && this._box(icon);
+    const shift = parseFloat(this._tile.style.getPropertyValue("--xtool-header-gap")) || 0;
+    if (infoBox && iconBox) {
       const groups = findAllDeep(root, "hui-card-features").map((el) => this._box(el)).filter(Boolean);
       const infoBottom = infoBox.y + infoBox.h;
       const below = groups.filter((b) => b.y >= infoBottom - 1);
-      // The window ends halfway into the gap above the first features below
-      // the title. (The box of the group beside the title is taller than its
+      // Expanded, the window keeps the height it has collapsed (the title
+      // row: the icon, with the same space above and below), and the
+      // features below the title move down to keep a gap of 6 px under it.
+      // (The box of the group beside the title is taller than its
       // controls, so it does not set the window's height.)
-      if (below.length) bottom = Math.min(...below.map((b) => b.y)) - 6;
+      if (below.length) {
+        bottom = 2 * iconBox.y + iconBox.h - margin;
+        const top = Math.min(...below.map((b) => b.y)) - shift;
+        const gap = Math.max(0, Math.round(bottom + 6 - top));
+        if (gap !== shift) this._tile.style.setProperty("--xtool-header-gap", `${gap}px`);
+      } else if (shift) {
+        this._tile.style.removeProperty("--xtool-header-gap");
+      }
     }
     Object.assign(this._window.style, {
       left: `${margin}px`, top: `${margin}px`, width: `${W - 2 * margin}px`, height: `${Math.max(0, bottom - margin)}px`,
@@ -3967,6 +4133,7 @@ class XtoolCard extends HTMLElement {
       this._watchAdded(wrap.shadowRoot);
       const inner = wrap.shadowRoot ?? wrap;
       const ours = findDeep(inner, FEATURE_TAGS.join(", "));
+      this._watchAdded(ours?.shadowRoot);
       const keys = ours ? [...(ours.shadowRoot?.querySelectorAll(".key, .shot, .slide:not([hidden]), .field, ha-tile-icon") ?? [])] : [];
       const element = [...inner.children].find((c) => c.tagName !== "STYLE");
       for (const key of keys.length ? keys : [element]) {
@@ -4270,6 +4437,7 @@ class XtoolCardEditor extends HTMLElement {
       collapsible: !!v.collapsible,
       expanded: v.expanded !== false,
       auto_collapse: v.auto_collapse !== false,
+      auto_expand: v.auto_expand !== false,
     });
   }
 
@@ -4364,8 +4532,10 @@ class XtoolCardEditor extends HTMLElement {
       },
       ...(c.collapsible ? [
         { name: "expanded", label: "Expanded at load", selector: { boolean: {} } },
+        { name: "auto_collapse", label: "Collapse when powered off", selector: { boolean: {} } },
         {
-          name: "auto_collapse", label: "Collapse when off",
+          name: "auto_expand", label: "Expand when powered on",
+          helper: "Unless the card was tapped while the machine was off.",
           selector: { boolean: {} },
         },
       ] : []),
@@ -4413,6 +4583,7 @@ class XtoolCardEditor extends HTMLElement {
       collapsible: !!c.collapsible,
       expanded: c.expanded !== false,
       auto_collapse: c.auto_collapse !== false,
+      auto_expand: c.auto_expand !== false,
     };
   }
 
@@ -4443,14 +4614,17 @@ function explicit(config) {
     c.pattern = Number.isFinite(c.pattern) ? c.pattern : DEFAULT_PATTERN;
   }
   c.status_light = c.status_light !== false;
-  // Expanded at load and Collapse when off matter only for a collapsible card
+  // Expanded at load, Collapse when powered off and Expand when powered on
+  // matter only for a collapsible card
   if (c.collapsible) {
     c.expanded = c.expanded !== false;
     c.auto_collapse = c.auto_collapse !== false;
+    c.auto_expand = c.auto_expand !== false;
   } else {
     delete c.collapsible;
     delete c.expanded;
     delete c.auto_collapse;
+    delete c.auto_expand;
   }
   return c;
 }
