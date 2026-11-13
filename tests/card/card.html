@@ -69,6 +69,7 @@
     flat: addCard("champagne, flat", { style: "champagne", features_style: "flat", ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     console: addCard("graphite, console", { style: "graphite", features_style: "console", features: [...jobFeatures.features, { type: "toggle" }] }, { hass: f2("processing"), height: 280 }),
     plain: addCard("no style", { ...jobFeatures }, { hass: f2("processing"), height: 220 }),
+    titleOnly: addCard("champagne, title only", { style: "champagne" }, { hass: f2("processing"), height: 56 }),
   };
 
   // Collapsing to the title
@@ -79,6 +80,8 @@
     features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-peripherals" }, { type: "custom:xtool-safety" }] }, { hass: f2("idle"), height: 160 });
   const autoCollapse = addCard("collapse when off", { entity: "sensor.p2_status", collapsible: true, ...jobFeatures }, { hass: p2("idle"), height: 220 });
   const keepOpen = addCard("collapse when off: off", { entity: "sensor.p2_status", collapsible: true, auto_collapse: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
+  const noExpand = addCard("expand when powered on: off", { entity: "sensor.p2_status", collapsible: true, auto_expand: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
+  const expandOnly = addCard("expand when powered on, collapse off", { entity: "sensor.p2_status", collapsible: true, auto_collapse: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
   const offAtLoad = addCard("off at load", { collapsible: true, ...jobFeatures }, { hass: f2("off"), height: 220 });
   const offStyled = addCard("off, graphite", { style: "graphite", ...jobFeatures }, { hass: f2("off"), height: 220 });
   const noLight = addCard("no status light", { status_light: false }, { hass: f2("idle"), height: 80 });
@@ -170,6 +173,11 @@
     check("champagne, match", frame(styles.champagne).classList.contains("styled") && frame(styles.champagne).classList.contains("champagne"),
       "the champagne style is drawn");
     const wh = parseFloat(windowBox(styles.champagne).style.height), fh = frame(styles.champagne).offsetHeight;
+    const collapsedHeight = parseFloat(windowBox(styles.titleOnly).style.height);
+    const firstBelow = styles.champagne.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector('hui-card-features[slot="features"]').getBoundingClientRect().top;
+    const windowBottom = windowBox(styles.champagne).getBoundingClientRect().bottom;
+    check("champagne, match", Math.abs(wh - collapsedHeight) < 0.5 && Math.abs(firstBelow - windowBottom - 6) < 1,
+      `expanded, the window keeps its collapsed height (${wh} and ${collapsedHeight} px), 6 px above the features (${Math.round(firstBelow - windowBottom)} px)`);
     check("champagne, match", wh > 30 && wh < fh / 2, `the window covers the title only (${Math.round(wh)} of ${fh} px)`);
     check("champagne, match", styles.champagne.shadowRoot.querySelectorAll(".area").length === 0, "Match draws no areas");
     await wait(100);
@@ -281,6 +289,34 @@
     autoCollapse.hass = p2("idle");
     await wait(50);
     check("collapse when off", inner(autoCollapse).config.features.length === 2, "turning on expands it again");
+    // Expand when powered on: off, the card stays collapsed as the machine turns on
+    noExpand.hass = p2("unavailable");
+    await wait(50);
+    noExpand.hass = p2("idle");
+    await wait(50);
+    check("expand when powered on: off", inner(noExpand).config.features.length === 0, "with Expand when powered on off, the card stays collapsed");
+    // Collapse off, Expand on: a card collapsed by a tap expands as the machine turns on
+    const tapCard = (card) => inner(card).shadowRoot.querySelector("ha-card").dispatchEvent(new CustomEvent("ll-custom", {
+      bubbles: true, composed: true, detail: inner(card).config.tap_action,
+    }));
+    tapCard(expandOnly);
+    await wait(30);
+    expandOnly.hass = p2("unavailable");
+    await wait(50);
+    check("expand when powered on, collapse off", inner(expandOnly).config.features.length === 0, "a card collapsed by a tap stays collapsed as the machine turns off");
+    expandOnly.hass = p2("idle");
+    await wait(50);
+    check("expand when powered on, collapse off", inner(expandOnly).config.features.length === 2, "and expands as it turns on");
+    // A tap while the machine is off: the card does not expand as it turns on
+    autoCollapse.hass = p2("unavailable");
+    await wait(50);
+    tapCard(autoCollapse);
+    await wait(30);
+    tapCard(autoCollapse);
+    await wait(30);
+    autoCollapse.hass = p2("idle");
+    await wait(50);
+    check("collapse when off", inner(autoCollapse).config.features.length === 0, "tapped while the machine was off, it stays as tapped when it turns on");
     check("off at load", inner(offAtLoad).config.features.length === 0, "a card that loads while the machine is off is collapsed");
     const tapOff = () => inner(offAtLoad).shadowRoot.querySelector("ha-card").dispatchEvent(new CustomEvent("ll-custom", {
       bubbles: true, composed: true, detail: inner(offAtLoad).config.tap_action,
