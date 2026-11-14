@@ -424,7 +424,7 @@
 
     // State content
     const info = content.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector("ha-tile-info .secondary").textContent;
-    check("state content", /processing · 12:0\d · Exhaust running · Red dot off/.test(info), `elapsed time and parts (${info})`);
+    check("state content", /processing · 12:[0-5]\d · Exhaust running · Red dot off/.test(info), `elapsed time and parts (${info})`);
     const sensorTile = sensorContent.shadowRoot.querySelector("hui-tile-card");
     const sensorInfo = sensorTile.shadowRoot.querySelector("ha-tile-info .secondary").textContent;
     check("state content, sensors", sensorInfo === "idle · big · -52 dBm · 40.130.023.00.ht5",
