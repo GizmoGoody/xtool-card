@@ -279,8 +279,8 @@
 
     // Collapsed: only the title row, its feature's keys in one line
     const inlineRow = deep(collapsedControls, "xtool-controls")[0]?.shadowRoot.querySelector(".row");
-    const inlineKeys = [...(inlineRow?.querySelectorAll(".key") ?? [])].map((k) => k.getBoundingClientRect());
-    check("collapsed, controls inline", inner(collapsedControls).config.features.length === 1 && inlineKeys.length > 4
+    const inlineKeys = [...(inlineRow?.querySelectorAll(".key") ?? [])].filter((k) => k.offsetWidth).map((k) => k.getBoundingClientRect());
+    check("collapsed, controls inline", inner(collapsedControls).config.features.length === 1 && inlineKeys.length >= 4
       && new Set(inlineKeys.map((b) => Math.round(b.top))).size === 1 && inlineKeys.at(-1).right <= inlineRow.getBoundingClientRect().right + 1,
       `the feature beside the title keeps its ${inlineKeys.length} keys in one line, so the card is one row tall`);
 

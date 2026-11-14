@@ -605,7 +605,8 @@ customElements.define("hui-tile-card", class extends HTMLElement {
         <ha-tile-info slot="info"><div class="primary">Laser</div><div class="secondary"></div></ha-tile-info></ha-tile-container></ha-card>`;
       // Like the tile card: features below, or with "inline" the first one beside the title
       const features = this.config.features ?? [];
-      const inline = this.config.features_position === "inline" && features.length > 1;
+      // Home Assistant's computeCardFeatureLayout: with "inline" the first beside the title, the rest below in up to two columns
+      const inline = this.config.features_position === "inline";
       const beside = inline ? features.slice(0, 1) : [];
       const below = inline ? features.slice(1) : features;
       const container = this.shadowRoot.querySelector("ha-tile-container");
@@ -615,7 +616,7 @@ customElements.define("hui-tile-card", class extends HTMLElement {
         if (!list.length) continue;
         const group = document.createElement("hui-card-features");
         group.slot = slot;
-        group.setup = { features: list, hass: this._hass, entityId: this.config.entity, columns: slot === "features" && list.length > 1 ? 2 : 1 };
+        group.setup = { features: list, hass: this._hass, entityId: this.config.entity, columns: slot === "features" && inline ? Math.min(list.length, 2) : 1 };
         container.append(group);
         this.groups.push(group);
       }
@@ -631,8 +632,9 @@ customElements.define("hui-tile-card", class extends HTMLElement {
   // Home Assistant's: a row for the title (two when vertical) and one for each feature below
   getGridOptions() {
     const features = this.config?.features ?? [];
-    const inline = this.config?.features_position === "inline" && features.length > 1;
-    const rows = 1 + (inline ? features.length - 1 : features.length) + (this.config?.vertical ? 1 : 0);
+    const inline = this.config?.features_position === "inline";
+    const below = inline ? features.length - 1 : features.length;
+    const rows = 1 + Math.ceil(below / (inline ? Math.max(Math.min(below, 2), 1) : 1)) + (this.config?.vertical ? 1 : 0);
     return { columns: 6, rows, min_columns: this.config?.vertical ? 3 : features.length && this.config?.features_position === "inline" ? 12 : 6, min_rows: rows };
   }
 });

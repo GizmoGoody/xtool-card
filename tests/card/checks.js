@@ -39,7 +39,7 @@ window.addCard = (title, config, { height = 120, width = 420, hass } = {}) => {
   const figure = document.createElement("figure");
   figure.innerHTML = `<figcaption>${title}</figcaption>`;
   const cell = document.createElement("div");
-  cell.style.cssText = `width:${width}px;height:${height}px`;
+  cell.style.cssText = `width:${width}px;height:${typeof height === "number" ? `${height}px` : height}`;
   const card = document.createElement("xtool-card");
   card.setConfig({ type: "custom:xtool-card", entity: "sensor.f2_status", ...config });
   card.hass = hass ?? makeHass();
@@ -54,7 +54,7 @@ window.addCoreTile = (title, config, { height = 120, width = 420, hass } = {}) =
   const figure = document.createElement("figure");
   figure.innerHTML = `<figcaption>${title}</figcaption>`;
   const cell = document.createElement("div");
-  cell.style.cssText = `width:${width}px;height:${height}px`;
+  cell.style.cssText = `width:${width}px;height:${typeof height === "number" ? `${height}px` : height}`;
   const tile = document.createElement("hui-tile-card");
   tile.setConfig({ type: "tile", entity: "sensor.f2_status", ...config });
   tile.hass = hass ?? makeHass();
