@@ -15,7 +15,7 @@
 <script>
   const f2 = (status, more = {}) => makeHass({ "sensor.f2_status": status, ...more });
   const p2 = (status, more = {}) => makeHass({ "sensor.p2_status": status, ...more });
-  const jobFeatures = { features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-peripherals" }] };
+  const jobFeatures = { features_position: "bottom", features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] };
 
   // The state pictures
   const pictures = {
@@ -50,53 +50,77 @@
   // The progress edge
   const edges = {
     sweep: addCard("no progress sensor: sweep", {}, { hass: f2("processing") }),
-    top: addCard("progress 42 on top, with percentage", { entity: "sensor.p2_status", progress: { show_percentage: true } }, { hass: p2("processing") }),
-    partial: addCard("from 10 to 90", { entity: "sensor.p2_status", progress: { start: 10, end: 90 } }, { hass: p2("processing") }),
-    around: addCard("around", { entity: "sensor.p2_status", progress: { edge: "around" } }, { hass: p2("processing") }),
-    left: addCard("left", { entity: "sensor.p2_status", progress: { edge: "left", thickness: 6 } }, { hass: p2("processing") }),
-    none: addCard("edge none", { entity: "sensor.p2_status", progress: { edge: "none" } }, { hass: p2("processing") }),
+    top: addCard("progress 42 on top, with percentage", { entity: "sensor.p2_status", progress_edge: { show_percentage: true } }, { hass: p2("processing") }),
+    partial: addCard("from 10 to 90", { entity: "sensor.p2_status", progress_edge: { starts_at: 10, ends_at: 90 } }, { hass: p2("processing") }),
+    around: addCard("around", { entity: "sensor.p2_status", progress_edge: { edge: "around" } }, { hass: p2("processing") }),
+    left: addCard("left", { entity: "sensor.p2_status", progress_edge: { edge: "left", thickness: 6 } }, { hass: p2("processing") }),
+    none: addCard("edge none", { entity: "sensor.p2_status", progress_edge: { edge: "none" } }, { hass: p2("processing") }),
     notWhile: addCard("not shown while idle", { entity: "sensor.p2_status" }, { hass: p2("idle") }),
-    thresholds: addCard("thresholds", { entity: "sensor.p2_status", progress: { color: "thresholds" } }, { hass: p2("processing") }),
+    thresholds: addCard("thresholds", { entity: "sensor.p2_status", progress_edge: { color: "thresholds" } }, { hass: p2("processing") }),
   };
 
   // The xTool styles and features styles
   const styles = {
-    champagne: addCard("champagne, match", { style: "champagne", ...jobFeatures }, { hass: f2("processing"), height: 220 }),
+    champagne: addCard("champagne, match", { style: "champagne", features_style: "match", ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     timeFormat: addCard("camera time, card's Time format total", { style: "champagne", time_format: "total",
-      features: [{ type: "custom:xtool-camera", show_time: true }] }, { hass: f2("idle"), height: 360 }),
-    samePattern: addCard("champagne, pattern 4242", { style: "champagne", pattern: 4242, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
-    otherPattern: addCard("champagne, pattern 17", { style: "champagne", pattern: 17, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
+      features: [{ type: "custom:xtool-camera", show_last_updated: true }] }, { hass: f2("idle"), height: 360 }),
+    samePattern: addCard("champagne, pattern 4242", { style: "champagne", features_style: "match", pattern: 4242, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
+    otherPattern: addCard("champagne, pattern 17", { style: "champagne", features_style: "match", pattern: 17, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     flat: addCard("champagne, flat", { style: "champagne", features_style: "flat", ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     console: addCard("graphite, console", { style: "graphite", features_style: "console", features: [...jobFeatures.features, { type: "toggle" }] }, { hass: f2("processing"), height: 280 }),
     plain: addCard("no style", { ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     titleOnly: addCard("champagne, title only", { style: "champagne" }, { hass: f2("processing"), height: 56 }),
   };
 
+  // The space under the title, against Home Assistant's tile card in a cell
+  // of the same size: in every style and features style, with the features
+  // below the title or the first beside it, and in a taller cell
+  const gapFeatures = [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }];
+  const gapLooks = [["none", "console"], ["champagne", "match"], ["champagne", "flat"], ["champagne", "console"], ["graphite", "match"], ["graphite", "flat"], ["graphite", "console"]];
+  const gapCards = [];
+  for (const position of ["bottom", "inline"]) {
+    const tile = { features_position: position, features: gapFeatures, show_entity_picture: true, state_content: ["state", "engraving_lens", "elapsed"] };
+    const rows = 1 + (position === "inline" ? 2 : 3);
+    for (const extra of [0, 1]) {
+      const size = { hass: f2("idle"), height: rowsHeight(rows + extra) };
+      const core = addCoreTile(`core tile, ${position}${extra ? ", a row taller" : ""}`, tile, size);
+      for (const [style, look] of extra ? [["champagne", "console"]] : gapLooks) {
+        const card = addCard(`gap: ${style}, ${look}, ${position}${extra ? ", a row taller" : ""}`,
+          { style, features_style: look, features_position: position, features: gapFeatures }, size);
+        gapCards.push({ card, core, name: `${style}, ${look}, ${position}${extra ? ", a row taller" : ""}` });
+      }
+    }
+  }
+
+  // The defaults: Console, the first feature beside the title, the laser's own State content
+  const defaultCard = addCard("defaults", { style: "graphite", features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] },
+    { hass: f2("idle"), height: rowsHeight(2) });
+
   // Collapsing to the title
   try { localStorage.clear(); } catch (err) { /* no storage: the card still works */ }
   const collapsible = addCard("tap shows or hides the features", { style: "graphite", collapsible: true, ...jobFeatures }, { hass: f2("idle"), height: 220 });
-  const closedAtLoad = addCard("hidden at load", { entity: "sensor.p2_status", collapsible: true, expanded: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
-  const closedInline = addCard("hidden at load, inline", { collapsible: true, expanded: false, features_position: "inline",
-    features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-peripherals" }, { type: "custom:xtool-safety" }] }, { hass: f2("idle"), height: 160 });
+  const closedAtLoad = addCard("hidden at load", { entity: "sensor.p2_status", collapsible: true, expanded_at_load: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
+  const closedInline = addCard("hidden at load, inline", { collapsible: true, expanded_at_load: false, features_position: "inline",
+    features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }] }, { hass: f2("idle"), height: 160 });
   const autoCollapse = addCard("collapse when off", { entity: "sensor.p2_status", collapsible: true, ...jobFeatures }, { hass: p2("idle"), height: 220 });
-  const keepOpen = addCard("collapse when off: off", { entity: "sensor.p2_status", collapsible: true, auto_collapse: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
-  const noExpand = addCard("expand when powered on: off", { entity: "sensor.p2_status", collapsible: true, auto_expand: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
-  const expandOnly = addCard("expand when powered on, collapse off", { entity: "sensor.p2_status", collapsible: true, auto_collapse: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
+  const keepOpen = addCard("collapse when off: off", { entity: "sensor.p2_status", collapsible: true, collapse_when_off: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
+  const noExpand = addCard("expand when powered on: off", { entity: "sensor.p2_status", collapsible: true, expand_when_on: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
+  const expandOnly = addCard("expand when powered on, collapse off", { entity: "sensor.p2_status", collapsible: true, collapse_when_off: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
   const offAtLoad = addCard("off at load", { collapsible: true, ...jobFeatures }, { hass: f2("off"), height: 220 });
   const offStyled = addCard("off, graphite", { style: "graphite", ...jobFeatures }, { hass: f2("off"), height: 220 });
   const noLight = addCard("no status light", { status_light: false }, { hass: f2("idle"), height: 80 });
   // Collapsed, with the P2's controls beside the title
-  const collapsedControls = addCard("collapsed, controls inline", { entity: "sensor.p2_status", collapsible: true, expanded: false, features_position: "inline",
-    features: [{ type: "custom:xtool-peripherals" }, { type: "custom:xtool-job" }] }, { hass: p2("idle"), height: 120 });
+  const collapsedControls = addCard("collapsed, controls inline", { entity: "sensor.p2_status", collapsible: true, expanded_at_load: false, features_position: "inline",
+    features: [{ type: "custom:xtool-controls" }, { type: "custom:xtool-job" }] }, { hass: p2("idle"), height: 120 });
 
   // A feature beside the title (features position: inline), and two columns of features
   const inlineCard = addCard("inline job, champagne", { style: "champagne", features_style: "console", features_position: "inline",
-    features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-peripherals" }, { type: "custom:xtool-safety" }] }, { hass: f2("idle"), height: 280 });
-  const camera = addCard("camera", { features: [{ type: "custom:xtool-camera" }, { type: "custom:xtool-if2-fan" }] }, { hass: f2("idle"), height: 120 });
+    features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }] }, { hass: f2("idle"), height: 280 });
+  const camera = addCard("camera", { features: [{ type: "custom:xtool-camera" }, { type: "custom:xtool-safetypro-if2-fan" }] }, { hass: f2("idle"), height: 120 });
 
   // Home Assistant's own features inside the card's, in Console: one channel each, fitted to the control
-  const haInside = addCard("console, Home Assistant features inside", { style: "champagne", features_style: "console",
-    features: [{ type: "custom:xtool-lights", controls: ["fill_light_front_icon", "fill_light_front_slider"] }, { type: "custom:xtool-if2-fan" }] }, { hass: f2("idle"), height: 200 });
+  const haInside = addCard("console, Home Assistant features inside", { style: "champagne", features_style: "console", features_position: "bottom",
+    features: [{ type: "custom:xtool-lights", controls: ["fill_light_front_icon", "fill_light_front_slider"] }, { type: "custom:xtool-safetypro-if2-fan" }] }, { hass: f2("idle"), height: 200 });
 
   // State content attributes
   const content = addCard("state content", { state_content: ["state", "elapsed", "exhaust", "red_dot"] }, { hass: f2("processing") });
@@ -167,6 +191,15 @@
     check("not shown while idle", !edge(edges.notWhile).classList.contains("on"), "no edge while idle");
     check("thresholds", edge(edges.thresholds).style.background.includes("--warning-color"), "42% is in the attention color");
 
+    const inner = (card) => card.shadowRoot.querySelector("hui-tile-card");
+
+    // The defaults
+    check("defaults", inner(defaultCard).config.features_position === "inline" && inner(defaultCard).config.state_content.join() === "state,engraving_lens,elapsed",
+      `features beside the title; State content: the state, the engraving lens and the time it has run (${inner(defaultCard).config.state_content.join(", ")})`);
+    check("defaults", inner(pictures.raster).config.state_content.join() === "state,elapsed", "a laser without an engraving lens sensor: the state and the time it has run");
+    check("defaults", defaultCard.shadowRoot.querySelectorAll(".area.console").length > 0 && deep(defaultCard, "xtool-job")[0]?.hasAttribute("xtool-console"),
+      "features style: Console");
+
     // Styles
     const frame = (card) => card.shadowRoot.querySelector(".frame");
     const windowBox = (card) => card.shadowRoot.getElementById("window");
@@ -174,11 +207,25 @@
       "the champagne style is drawn");
     const wh = parseFloat(windowBox(styles.champagne).style.height), fh = frame(styles.champagne).offsetHeight;
     const collapsedHeight = parseFloat(windowBox(styles.titleOnly).style.height);
-    const firstBelow = styles.champagne.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector('hui-card-features[slot="features"]').getBoundingClientRect().top;
-    const windowBottom = windowBox(styles.champagne).getBoundingClientRect().bottom;
-    check("champagne, match", Math.abs(wh - collapsedHeight) < 0.5 && Math.abs(firstBelow - windowBottom - 4) < 1,
-      `expanded, the window keeps its collapsed height (${wh} and ${collapsedHeight} px), and the features start where the title row ends, as under a tile card's title (${Math.round(firstBelow - windowBottom)} px below the window, its 4 px margin)`);
+    check("champagne, match", Math.abs(wh - collapsedHeight) < 0.5 && Math.abs(wh - 48) < 0.5,
+      `expanded, the window keeps its collapsed height, one row less its 4 px margins (${wh} and ${collapsedHeight} px)`);
     check("champagne, match", wh > 30 && wh < fh / 2, `the window covers the title only (${Math.round(wh)} of ${fh} px)`);
+
+    // The space from the bottom of the title's text to the first feature below, as on Home Assistant's tile card
+    const textToFeature = (tile) => {
+      const text = tile.shadowRoot.querySelector("ha-tile-info .secondary").getBoundingClientRect();
+      const group = tile.shadowRoot.querySelector('hui-card-features[slot="features"]');
+      return group.shadowRoot.querySelector("hui-card-feature").getBoundingClientRect().top - text.bottom;
+    };
+    for (const { card, core, name } of gapCards) {
+      const ours = textToFeature(inner(card)), theirs = textToFeature(core);
+      check(`gap: ${name}`, Math.abs(ours - theirs) < 0.5, `the title's text to the first feature below: ${Math.round(ours)} px, as on the tile card (${Math.round(theirs)} px)`);
+      if (card._config.style === "none") continue;
+      // The window is one row, centered on the icon, however tall the cell
+      const win = windowBox(card).getBoundingClientRect(), icon = inner(card).shadowRoot.querySelector("ha-tile-icon").getBoundingClientRect();
+      check(`gap: ${name}`, Math.abs(win.height - 48) < 0.5 && Math.abs((win.top + win.bottom) / 2 - (icon.top + icon.bottom) / 2) < 0.5,
+        `the window is one row, centered on the icon (${Math.round(win.height)} px)`);
+    }
     check("champagne, match", styles.champagne.shadowRoot.querySelectorAll(".area").length === 0, "Match draws no areas");
     await wait(100);
     const timedCamera = deep(styles.timeFormat, "xtool-camera")[0];
@@ -192,14 +239,13 @@
     check("champagne, flat", keys > 0 && styles.flat.shadowRoot.querySelectorAll(".area.flat").length === keys,
       `a flat patch behind each button shown (${keys})`);
     check("champagne, flat", styles.flat.shadowRoot.querySelector("hui-tile-card").classList.contains("solid"), "the buttons get a solid backing");
-    check("graphite, console", deep(styles.console, "xtool-job, xtool-peripherals").every((el) => el.hasAttribute("xtool-console")),
+    check("graphite, console", deep(styles.console, "xtool-job, xtool-controls").every((el) => el.hasAttribute("xtool-console")),
       "the buttons are keys");
     check("graphite, console", deep(styles.console, "ha-control-switch").every((el) => el.hasAttribute("xtool-slide")), "the toggle is a slide");
     check("graphite, console", !styles.console.shadowRoot.getElementById("stripe"), "no line below the title row");
     check("no style", !frame(styles.plain).classList.contains("styled"), "no style: the theme's card");
 
     // Collapsing
-    const inner = (card) => card.shadowRoot.querySelector("hui-tile-card");
     check("tap shows or hides the features", inner(collapsible).config.tap_action?.action === "fire-dom-event" && inner(collapsible).config.features.length === 2,
       "a tap on the card toggles the features, which show at first");
     const tap = () => inner(collapsible).shadowRoot.querySelector("ha-card").dispatchEvent(new CustomEvent("ll-custom", {
@@ -212,14 +258,14 @@
     tap();
     await wait(50);
     // A tap between the features (it reaches the card behind them) leaves them open
-    const featureArea = inner(collapsible).shadowRoot.querySelector("ha-card > hui-card-features").getBoundingClientRect();
+    const featureArea = inner(collapsible).shadowRoot.querySelector('hui-card-features[slot="features"]').getBoundingClientRect();
     collapsible.shadowRoot.querySelector(".frame").dispatchEvent(new PointerEvent("pointerdown", {
       bubbles: true, composed: true, clientX: featureArea.left + 2, clientY: featureArea.top + 2,
     }));
     tap();
     await wait(50);
     check("tap shows or hides the features", inner(collapsible).config.features.length === 2, "a tap between the features leaves them open");
-    const title = inner(collapsible).shadowRoot.querySelector(".top").getBoundingClientRect();
+    const title = inner(collapsible).shadowRoot.querySelector("ha-tile-icon").getBoundingClientRect();
     collapsible.shadowRoot.querySelector(".frame").dispatchEvent(new PointerEvent("pointerdown", {
       bubbles: true, composed: true, clientX: title.left + 2, clientY: title.top + 2,
     }));
@@ -232,7 +278,7 @@
     check("hidden at load", inner(closedAtLoad).config.features.length === 0, "Expanded at load: off");
 
     // Collapsed: only the title row, its feature's keys in one line
-    const inlineRow = deep(collapsedControls, "xtool-peripherals")[0]?.shadowRoot.querySelector(".row");
+    const inlineRow = deep(collapsedControls, "xtool-controls")[0]?.shadowRoot.querySelector(".row");
     const inlineKeys = [...(inlineRow?.querySelectorAll(".key") ?? [])].map((k) => k.getBoundingClientRect());
     check("collapsed, controls inline", inner(collapsedControls).config.features.length === 1 && inlineKeys.length > 4
       && new Set(inlineKeys.map((b) => Math.round(b.top))).size === 1 && inlineKeys.at(-1).right <= inlineRow.getBoundingClientRect().right + 1,
@@ -241,7 +287,7 @@
     // The editor's preview: expanded when the editor opens, then only a tap changes it
     try { localStorage.setItem("xtool-card:sensor.f2_status", "0"); } catch (err) { /* no storage */ }
     document.createElement("xtool-card-editor");
-    const previewConfig = { type: "custom:xtool-card", entity: "sensor.f2_status", collapsible: true, expanded: false, ...jobFeatures };
+    const previewConfig = { type: "custom:xtool-card", entity: "sensor.f2_status", collapsible: true, expanded_at_load: false, ...jobFeatures };
     const preview = document.createElement("xtool-card");
     preview.setConfig(previewConfig);
     preview.hass = f2("off");
@@ -348,20 +394,25 @@
     // The window covers the header row, with room for the controls beside the title
     const tileRoot = inner(inlineCard).shadowRoot;
     const win = inlineCard.shadowRoot.getElementById("window").getBoundingClientRect();
-    const beside = tileRoot.querySelector(".top hui-card-features").getBoundingClientRect();
-    const below = tileRoot.querySelector("ha-card > hui-card-features").getBoundingClientRect();
+    // The feature beside the title (its group is as tall as the title row)
+    const beside = tileRoot.querySelector('hui-card-features[slot="features-inline"]').shadowRoot.querySelector("hui-card-feature").getBoundingClientRect();
+    const below = tileRoot.querySelector('hui-card-features[slot="features"]').getBoundingClientRect();
     check("inline job", win.bottom >= beside.bottom + 5 && win.top <= beside.top - 3, `the window holds the feature beside the title (window ${Math.round(win.top)} to ${Math.round(win.bottom)}, feature ${Math.round(beside.top)} to ${Math.round(beside.bottom)})`);
     check("inline job", win.bottom <= below.top, "the features below sit on the body");
     check("inline job", win.right - beside.right >= 5, `room at the right (${Math.round(win.right - beside.right)} px)`);
 
     // No divider before a feature in a second column
-    const group = tileRoot.querySelector("ha-card > hui-card-features");
+    const group = tileRoot.querySelector('hui-card-features[slot="features"]');
     const second = group.shadowRoot.querySelector(".divided");
     check("inline job", !!second && getComputedStyle(second).borderInlineStartStyle === "none", "the divider is gone from the second column");
     check("inline job", group.shadowRoot.adoptedStyleSheets.length === 1, "removed from the feature group, once");
 
     // The card's height follows its content
-    check("grid", inlineCard.getGridOptions().rows === "auto" && inlineCard.getGridOptions().columns === 6, "rows: auto, with the tile card's columns");
+    const tileGrid = inner(inlineCard).getGridOptions();
+    check("grid", inlineCard.getGridOptions().rows === tileGrid.rows && inlineCard.getGridOptions().min_rows === tileGrid.min_rows
+      && inlineCard.getGridOptions().columns === tileGrid.columns, `the tile card's rows and columns, so a taller cell is shared out as on a tile card (${tileGrid.rows} rows)`);
+    check("grid", camera.getGridOptions().rows === "auto" && collapsible.getGridOptions().rows === "auto",
+      "rows: auto with a camera, which grows with the width, and for a collapsible card");
     check("grid", camera.getCardSize() === 7, `the camera counts as five rows (${camera.getCardSize()})`);
 
     // One channel for each Home Assistant control inside the card's features
@@ -372,10 +423,10 @@
       `fitted to the 42 px controls, the light's icon as tall as its row (${channels.map((a) => a.style.height).join(", ")})`);
 
     // State content
-    const info = content.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector("ha-tile-info").textContent;
+    const info = content.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector("ha-tile-info .secondary").textContent;
     check("state content", /processing · 12:0\d · Exhaust running · Red dot off/.test(info), `elapsed time and parts (${info})`);
     const sensorTile = sensorContent.shadowRoot.querySelector("hui-tile-card");
-    const sensorInfo = sensorTile.shadowRoot.querySelector("ha-tile-info").textContent;
+    const sensorInfo = sensorTile.shadowRoot.querySelector("ha-tile-info .secondary").textContent;
     check("state content, sensors", sensorInfo === "idle · big · -52 dBm · 40.130.023.00.ht5",
       `the laser's sensors, the chosen diagnostics, and the firmware version; no other diagnostics (${sensorInfo})`);
     const sensorAttributes = sensorTile.hass.states["sensor.f2_status"].attributes;
@@ -387,7 +438,7 @@
     sensorTile.dispatchEvent(request);
     check("state content, sensors", fromContext?.["sensor.f2_status"]?.attributes.engraving_lens === "big",
       "the states context inside the card has the card's attributes");
-    const finishedInfo = pictures.finished.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector("ha-tile-info").textContent;
+    const finishedInfo = pictures.finished.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector("ha-tile-info .secondary").textContent;
     check("finished", finishedInfo === "finished · 18:52", `the last job's time (${finishedInfo})`);
 
     // The machine's status light, as a ring around the picture (the F2 Ultra UV: white)
@@ -405,12 +456,12 @@
 
     // The corners: the same expanded as collapsed
     const roundCard = (expanded) => {
-      const card = addCard(expanded ? "round, expanded" : "round, collapsed", { collapsible: true, expanded, ...jobFeatures }, { height: expanded ? 200 : 56 });
+      const card = addCard(expanded ? "round, expanded" : "round, collapsed", { collapsible: true, expanded_at_load: expanded, ...jobFeatures }, { height: expanded ? 200 : 56 });
       card.parentElement.style.setProperty("--ha-card-border-radius", "60px");
       return card;
     };
     const roundOpen = roundCard(true), roundClosed = roundCard(false);
-    const plainOpen = addCard("theme corners, expanded", { collapsible: true, expanded: true, ...jobFeatures }, { height: 200 });
+    const plainOpen = addCard("theme corners, expanded", { collapsible: true, expanded_at_load: true, ...jobFeatures }, { height: 200 });
     await wait(150);
     const cornerOf = (card) => getComputedStyle(card.shadowRoot.querySelector(".frame")).borderTopLeftRadius;
     const tileCorner = (card) => getComputedStyle(tileOf(card).shadowRoot.querySelector("ha-card")).borderTopLeftRadius;

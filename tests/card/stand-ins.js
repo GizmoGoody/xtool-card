@@ -476,11 +476,22 @@ customElements.define("hui-card-feature", class extends HTMLElement {
 customElements.define("hui-card-features", class extends HTMLElement {
   constructor() {
     super();
-    // Like Home Assistant's: a second column, with a divider before each feature in it
+    // Home Assistant's styles (hui-card-features): a grid, a second
+    // column with a divider before each feature in it
     this.attachShadow({ mode: "open" }).innerHTML = `<style>
-      :host { display: flex; flex-direction: column; gap: 12px; width: 100%; --feature-height: 42px; --feature-border-radius: 12px; }
-      :host([columns="2"]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
-      .divided { box-sizing: border-box; border-inline-start: 1px solid #f0f; }
+      :host {
+        --feature-height: 42px; --feature-columns: 1; --feature-border-radius: var(--ha-card-features-border-radius, 12px);
+        --feature-button-spacing: 12px;
+        --feature-column-gap: var(--ha-card-feature-column-gap, var(--ha-card-feature-gap, 12px));
+        --feature-divider-inset: var(--ha-card-feature-divider-inset, 0px);
+        position: relative; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr);
+        gap: var(--ha-card-feature-gap, 12px) var(--feature-column-gap); box-sizing: border-box; align-content: space-evenly;
+      }
+      :host([columns="2"]) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .divided {
+        box-sizing: border-box; margin-inline-start: calc(-1 * var(--feature-divider-inset));
+        padding-inline-start: var(--feature-divider-inset); border-inline-start: var(--ha-card-feature-divider, 1px solid #f0f);
+      }
     </style>`;
   }
 
@@ -500,7 +511,54 @@ customElements.define("hui-card-features", class extends HTMLElement {
   }
 });
 
-// hui-tile-card: the tile card, with the options the xTool card relies on
+// ha-tile-container: Home Assistant's tile layout, its structure and styles
+// as they are (the title row's content, the feature beside it, the features
+// below), so the card's layout is measured against the real one
+customElements.define("ha-tile-container", class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" }).innerHTML = `<style>
+      :host { height: 100%; width: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+      .container { margin: calc(-1 * var(--ha-card-border-width, 1px)); display: flex; flex-direction: column; flex: 1; }
+      .row { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+      .container.inline .row { flex-direction: row; }
+      .content {
+        position: relative; display: flex; flex-direction: row; align-items: center; padding: 0 10px;
+        min-height: var(--row-height, 56px); flex: 1; min-width: 0; box-sizing: border-box; gap: 10px;
+      }
+      .vertical { flex-direction: column; text-align: center; justify-content: center; padding: 10px var(--ha-space-2, 8px); }
+      .info { display: flex; width: 100%; min-width: 0; }
+      .vertical .info, .vertical ::slotted([slot="info"]) { width: 100%; flex: none; }
+      ::slotted([slot="icon"]) { position: relative; padding: 6px; margin: -6px; }
+      ::slotted([slot="info"]) { position: relative; min-width: 0; box-sizing: border-box; }
+      ::slotted([slot="features"]) { padding: 0 var(--ha-space-3, 12px) var(--ha-space-3, 12px) var(--ha-space-3, 12px); }
+      .container.inline ::slotted([slot="features-inline"]) {
+        width: calc(50% - var(--column-gap, 0px) / 2 - var(--ha-space-3, 12px)); --feature-columns: 2; flex: none;
+        padding: 0 var(--ha-space-3, 12px); padding-inline-start: 0;
+      }
+      .container.inline:not(.has-features-below) ::slotted([slot="features-inline"]),
+      .container.inline:not(.fixed-height) ::slotted([slot="features-inline"]) { --feature-height: var(--ha-space-9, 36px); }
+      .container.inline.has-features-below ::slotted([slot="features"]) {
+        --ha-card-feature-column-gap: calc(var(--column-gap, 0px) + var(--ha-space-3, 12px) * 2);
+        --ha-card-feature-divider: 1px solid var(--ha-color-border-neutral-quiet, #888);
+        --ha-card-feature-divider-inset: calc(var(--ha-space-3, 12px) + var(--column-gap, 0px) / 2);
+      }
+    </style><div class="container"><div class="row"><div class="content"><slot name="icon"></slot>
+      <div class="info" id="info"><slot name="info"></slot></div></div><slot name="features-inline"></slot></div>
+      <slot name="features"></slot></div>`;
+  }
+
+  /** featurePosition, vertical and whether features show below, as Home Assistant sets them. */
+  set layout({ featurePosition, vertical, below }) {
+    const container = this.shadowRoot.querySelector(".container");
+    container.classList.toggle("inline", featurePosition === "inline");
+    container.classList.toggle("has-features-below", featurePosition === "inline" && below);
+    this.shadowRoot.querySelector(".content").classList.toggle("vertical", !!vertical);
+  }
+});
+
+// hui-tile-card: the tile card, with the options the xTool card relies on,
+// in Home Assistant's tile layout (ha-tile-container)
 customElements.define("hui-tile-card", class extends HTMLElement {
   constructor() {
     super();
@@ -534,42 +592,48 @@ customElements.define("hui-tile-card", class extends HTMLElement {
     if (!this.built) {
       this.built = true;
       this.shadowRoot.innerHTML = `<style>
-        ha-card { display: flex; flex-direction: column; height: 100%; box-sizing: border-box;
+        :host { display: block; height: 100%; }
+        ha-card { display: block; height: 100%; box-sizing: border-box; position: relative;
           background: var(--ha-card-background, var(--card-background-color, #222));
           border: 1px solid var(--ha-card-border-color, #444); border-radius: var(--ha-card-border-radius, 12px); }
-        /* Home Assistant's tile container sits over the card's 1 px border */
-        .top { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 10px; box-sizing: border-box; margin: -1px -1px 0; }
-        ha-card > hui-card-features { padding: 0 12px 12px; }
-        ha-tile-icon { display: block; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex: none; }
-        img { width: 36px; height: 36px; display: block; }
-        ha-tile-info { flex: 1; color: var(--primary-text-color, #fff); }
-        .top hui-card-features { flex: 1.2; }
-      </style><ha-card><div class="top"><ha-tile-icon></ha-tile-icon><ha-tile-info></ha-tile-info></div></ha-card>`;
+        ha-tile-icon { display: block; width: 36px; height: 36px; border-radius: 50%; flex: none; }
+        img { width: 36px; height: 36px; display: block; border-radius: 50%; }
+        ha-tile-info { display: block; color: var(--primary-text-color, #fff); }
+        .primary { font-size: 14px; line-height: 20px; font-weight: 500; }
+        .secondary { font-size: 12px; line-height: 16px; }
+      </style><ha-card><ha-tile-container><ha-tile-icon slot="icon"></ha-tile-icon>
+        <ha-tile-info slot="info"><div class="primary">Laser</div><div class="secondary"></div></ha-tile-info></ha-tile-container></ha-card>`;
       // Like the tile card: features below, or with "inline" the first one beside the title
       const features = this.config.features ?? [];
       const inline = this.config.features_position === "inline" && features.length > 1;
       const beside = inline ? features.slice(0, 1) : [];
       const below = inline ? features.slice(1) : features;
+      const container = this.shadowRoot.querySelector("ha-tile-container");
+      container.layout = { featurePosition: this.config.features_position, vertical: this.config.vertical, below: below.length > 0 };
       this.groups = [];
-      for (const [list, place] of [[beside, this.shadowRoot.querySelector(".top")], [below, this.shadowRoot.querySelector("ha-card")]]) {
+      for (const [list, slot] of [[beside, "features-inline"], [below, "features"]]) {
         if (!list.length) continue;
         const group = document.createElement("hui-card-features");
-        group.slot = place.localName === "ha-card" ? "features" : "features-inline";
-        group.setup = { features: list, hass: this._hass, entityId: this.config.entity, columns: place.localName === "ha-card" && list.length > 1 ? 2 : 1 };
-        place.append(group);
+        group.slot = slot;
+        group.setup = { features: list, hass: this._hass, entityId: this.config.entity, columns: slot === "features" && list.length > 1 ? 2 : 1 };
+        container.append(group);
         this.groups.push(group);
       }
     }
     this.shadowRoot.querySelector("ha-tile-icon").innerHTML = picture ? `<img src="${picture}">` : "icon";
     // The state content: the state and the attributes chosen
     const content = [].concat(this.config.state_content ?? ["state"]);
-    this.shadowRoot.querySelector("ha-tile-info").textContent =
+    this.shadowRoot.querySelector("ha-tile-info .secondary").textContent =
       content.map((name) => (name === "state" ? stateObj.state : stateObj.attributes[name])).filter(Boolean).join(" · ");
     for (const group of this.groups ?? []) group.hass = this._hass;
   }
 
+  // Home Assistant's: a row for the title (two when vertical) and one for each feature below
   getGridOptions() {
-    return { columns: 6, rows: 1 + (this.config?.features?.length ?? 0) };
+    const features = this.config?.features ?? [];
+    const inline = this.config?.features_position === "inline" && features.length > 1;
+    const rows = 1 + (inline ? features.length - 1 : features.length) + (this.config?.vertical ? 1 : 0);
+    return { columns: 6, rows, min_columns: this.config?.vertical ? 3 : features.length && this.config?.features_position === "inline" ? 12 : 6, min_rows: rows };
   }
 });
 

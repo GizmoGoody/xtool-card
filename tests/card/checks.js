@@ -49,6 +49,24 @@ window.addCard = (title, config, { height = 120, width = 420, hass } = {}) => {
   return card;
 };
 
+/** Add Home Assistant's tile card (the stand-in, in its real layout) to the page, in a cell of the same size. */
+window.addCoreTile = (title, config, { height = 120, width = 420, hass } = {}) => {
+  const figure = document.createElement("figure");
+  figure.innerHTML = `<figcaption>${title}</figcaption>`;
+  const cell = document.createElement("div");
+  cell.style.cssText = `width:${width}px;height:${height}px`;
+  const tile = document.createElement("hui-tile-card");
+  tile.setConfig({ type: "tile", entity: "sensor.f2_status", ...config });
+  tile.hass = hass ?? makeHass();
+  cell.append(tile);
+  figure.append(cell);
+  document.getElementById("cards").append(figure);
+  return tile;
+};
+
+/** A grid cell's height for rows (Home Assistant's sections: 56 px rows, 8 px apart). */
+window.rowsHeight = (rows) => rows * 56 + (rows - 1) * 8;
+
 /** Add one feature on its own (as in a plain tile card) to the page. */
 window.addFeature = (config, { hass, entityId = "sensor.f2_status" } = {}) => {
   const element = document.createElement(config.type.replace("custom:", ""));

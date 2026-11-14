@@ -4,18 +4,18 @@
  * Tile features (they work in any tile card for an xTool entity, and in the
  * xTool card):
  * - custom:xtool-job          Start or Resume, Pause and Cancel, following the job
- * - custom:xtool-peripherals  power, the exhaust fan, fill lights (on or off), red dot
+ * - custom:xtool-controls     power, the exhaust fan, fill lights (on or off), red dot
  *                             and other parts; a fan's icon turns while it runs
  * - custom:xtool-lights       each light's icon (a tap turns it on or off) and brightness slider, as a light's
  *                             tile card shows them, chosen and ordered one by one
  * - custom:xtool-safety       the safety checks and the flame alarm level, the safety key, lid and baseplate
  *                             (read-outs), and Access control; turning a check off asks first
- * - custom:xtool-settings     the Configuration settings: buzzer, exhaust fan, the IF2 buzzer, device sleep
+ * - custom:xtool-configuration the Configuration settings: buzzer, exhaust fan, the IF2 buzzer, device sleep
  * - custom:xtool-camera       a camera, shown by Home Assistant's own image element, with keys to switch;
  *                             tap two corners on the picture to crop it; the deep camera's perspective; the
  *                             P2's mode, crop preset, exposure and close light (Home Assistant's own features)
- * - custom:xtool-overlay      a key for each overlay switch chosen, of the cameras' pictures
- * - custom:xtool-if2-fan      the SafetyPro IF2 inline fan: Off, A (Auto) and a speed key that steps 1 to 4
+ * - custom:xtool-overlays     a key for each overlay switch chosen, of the cameras' pictures
+ * - custom:xtool-safetypro-if2-fan the SafetyPro IF2 inline fan: Off, A (Auto) and a speed key that steps 1 to 4
  * - custom:xtool-position     the laser's position X,Y in a field (press and drag on it to slide both), Move and Home
  * - custom:xtool-measure      Measure, and the thickness or distance in a field (typed, or slid on)
  * - custom:xtool-focus        Autofocus, and the thickness to focus on in a field (typed, or slid on)
@@ -95,7 +95,12 @@ const HA_COLORS = [
   "primary", "accent", "red", "pink", "purple", "deep-purple", "indigo", "blue", "light-blue", "cyan",
   "teal", "green", "light-green", "lime", "yellow", "amber", "orange", "deep-orange", "brown",
   "light-grey", "grey", "dark-grey", "blue-grey", "black", "white", "disabled",
+  "error", "warning", "success", "info",
 ];
+// The theme's state colors, which Home Assistant's color picker offers
+// (ui_color's extra_options) before its own colors
+const STATE_COLORS = [["error", "Error"], ["warning", "Warning"], ["success", "Success"], ["info", "Info"]]
+  .map(([value, label]) => ({ value, label, display_color: `var(--${value}-color)` }));
 const cssColor = (color) => (HA_COLORS.includes(color) ? `var(--${color}-color)` : color);
 
 // The working color by laser, and the color of every other state
@@ -284,7 +289,7 @@ const OVERLAY_ORDER = [
   "overlay_studio", "overlay_custom", "overlay_laser_target", "overlay_slat_lines", "overlay_red_dot_close", "overlay_red_dot_quick",
 ];
 
-// The overlays chosen by default (see XtoolOverlay.defaultsFor): where the
+// The overlays chosen by default (see XtoolOverlays.defaultsFor): where the
 // laser fires, the close camera's picture on the overview, where the two
 // red dots point, and the slats
 const DEFAULT_OVERLAYS = [
@@ -339,6 +344,8 @@ const running = (phase) => phase === "processing" || phase === "framing";
  *   control is on; allowed(moment): any other rule for when it is available,
  * - fan: its icon turns while it is on (the feature's animate_fan option),
  * - cycle: a select whose key steps to the next option on a tap,
+ * - brief: a select whose key shows the option chosen in brief beside its
+ *   icon when its name does not show (High and Low: H and L, see briefOf),
  * - check: a safety check, green while it is safe and filled red while it
  *   is not: { problem: the state that is the problem, "on" or "off" (none:
  *   neither is), words: the words for on and off in its title },
@@ -378,7 +385,7 @@ const CONTROLS = {
     kind: "press", name: "Cancel", color: "red",
     allowed: ({ phase }) => running(phase) || phase === "paused",
     confirm: { title: "Cancel the job?", text: "The job stops and cannot be resumed.", confirm_text: "Cancel the job" },
-    confirmOption: "confirm_cancel",
+    confirmOption: "ask_before_cancelling",
   },
 
   // Parts
@@ -388,7 +395,7 @@ const CONTROLS = {
     confirm: { off: "A job is running. Turning the power off stops it at once and it cannot be resumed.", while: ["processing", "paused"] },
   },
   exhaust: { kind: "toggle", name: "Exhaust", color: "blue", fan: true },
-  // The IF2 2.0's fan (its feature's own keys, see XtoolIf2Fan): blue and
+  // The IF2 2.0's fan (its feature's own keys, see XtoolSafetyproIf2Fan): blue and
   // turning while it spins, faster at each of its four speeds
   if2_fan: { kind: "fan", name: "Fan", color: "blue", fan: true },
   cooling_fan: { kind: "toggle", name: "Cooling", color: "cyan", fan: true },
@@ -457,7 +464,7 @@ const CONTROLS = {
   buzzer: { kind: "toggle", name: "Buzzer", color: "teal" },
   exhaust_setting: { kind: "toggle", name: "Exhaust", color: "blue" },
   // The P2's flame alarm level, a setting that belongs with the checks: a tap steps to the next
-  flame_alarm_level: { kind: "select", cycle: true, name: "Flame", color: "red", feature: "xtool-safety" },
+  flame_alarm_level: { kind: "select", cycle: true, brief: true, name: "Flame", color: "red", feature: "xtool-safety" },
   if2_buzzer: { kind: "toggle", name: "IF2", color: "teal" },
   device_sleep: { kind: "toggle", name: "Sleep", color: "indigo" },
 
@@ -815,9 +822,9 @@ const KEY_CSS = `
 // without an icon shows its name, and a key without a name its icon.
 const DISPLAYS = [["icons", "Icons"], ["names", "Names"], ["both", "Icons and names"]];
 function displayOf(config, fallback = "icons") {
-  return DISPLAYS.some(([value]) => value === config?.display) ? config.display : fallback;
+  return DISPLAYS.some(([value]) => value === config?.show) ? config.show : fallback;
 }
-const displayField = (helper) => ({ name: "display", label: "Show", ...(helper ? { helper } : {}), selector: select(DISPLAYS) });
+const displayField = (helper) => ({ name: "show", label: "Show", ...(helper ? { helper } : {}), selector: select(DISPLAYS) });
 
 /** What a key shows with Show (display): its icon, its text, or both. */
 function faceOf(b, display) {
@@ -1109,7 +1116,7 @@ function fanLook(control, on, config, speed) {
 }
 
 // The color of a safety check that is off (or in its problem state), unless the Safety feature's Disabled color says otherwise
-const OFF_COLOR = "red";
+const DISABLED_COLOR = "red";
 
 /** A key for something on or off: a switch, light, fan or lock, or a state that is only shown (a read-out). */
 function switchKey(feature, control, entityId, moment) {
@@ -1127,7 +1134,7 @@ function switchKey(feature, control, entityId, moment) {
     const unsafe = problem === "on" ? on : problem === "off" ? state === "off" : false;
     return {
       ...base, label: `${base.label}: ${on ? words[0] : state === "off" ? words[1] : "unknown"}`,
-      color: unsafe ? moment.config?.off_color ?? OFF_COLOR : "green", pressed: on, fill: unsafe, disabled, action,
+      color: unsafe ? moment.config?.disabled_color ?? DISABLED_COLOR : "green", pressed: on, fill: unsafe, disabled, action,
       readout: control.kind === "display",
     };
   }
@@ -1180,9 +1187,25 @@ function selectKey(feature, control, entityId, moment) {
   const next = options[(options.indexOf(stateObj.state) + 1) % options.length];
   return {
     ...base, label: `${base.label}: ${words(stateObj.state)}. Tap for ${words(next)}`, text: words(stateObj.state),
+    ...(control.brief ? { brief: briefOf(stateObj.state, options, words) } : {}),
     disabled: stateObj.state === "unavailable" || !next,
     action: () => Promise.resolve(feature._hass.callService("select", "select_option", { entity_id: entityId, option: next })),
   };
+}
+
+/**
+ * The shortest start of an option's name, in capitals, that no other
+ * option's name starts with (High and Low: H and L); the whole name when
+ * every start is shared.
+ */
+function briefOf(option, options, words) {
+  const name = String(words(option) ?? option);
+  const others = options.filter((o) => o !== option).map((o) => String(words(o) ?? o).toUpperCase());
+  for (let n = 1; n <= name.length; n++) {
+    const start = name.slice(0, n).toUpperCase();
+    if (!others.some((o) => o.startsWith(start))) return start;
+  }
+  return name;
 }
 
 /**
@@ -1612,6 +1635,8 @@ const LIGHT_CSS = `
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none;
     --mdc-icon-size: 22px; color: var(--primary-text-color); mix-blend-mode: overlay; display: flex;
   }
+  /* Off or unavailable, dimmed as a key is */
+  .slide.slider > ha-state-icon.off { opacity: .45; }
   ${CHEVRON_CSS}
 `;
 
@@ -1640,6 +1665,7 @@ function showSlides(box, slides) {
     if (icon && hass) {
       icon.hass = hass;
       icon.stateObj = hass.states[entityId];
+      icon.classList.toggle("off", !icon.stateObj || ["off", "unavailable", "unknown"].includes(icon.stateObj.state));
     }
   }
   if (slides.length !== box.children.length || slides.some((slide, i) => box.children[i] !== slide)) box.replaceChildren(...slides);
@@ -1649,8 +1675,9 @@ function showSlides(box, slides) {
  * What every feature has: its configuration, Home Assistant and its context
  * (the card's entity), the device model, and the controls chosen. A
  * feature declares, as static fields:
- * - type: its element name; label: its name on the row (for screen
- *   readers); pickerName: its name in Home Assistant's feature picker,
+ * - label: its title, its name on the row (for screen readers), which
+ *   gives its element name (type: xtool- and the title); pickerName: its
+ *   name in Home Assistant's feature picker ("xTool" and the title),
  * - controls: the ids of the controls it offers (see CONTROLS), in their
  *   default order; defaults: the ones shown by default (all it offers that
  *   the device has, unless given); controlsKey: the option that lists the
@@ -1667,6 +1694,11 @@ function showSlides(box, slides) {
  * switch) gives them with controlIds(device) and controlFor(id, device, hass).
  */
 class XtoolElement extends HTMLElement {
+  /** Its element name: xtool- and its title (label), as Home Assistant's feature picker shows it after "xTool". */
+  static get type() {
+    return `xtool-${this.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  }
+
   static controls = [];
   static controlsKey = "controls";
   static form = {};
@@ -1752,7 +1784,7 @@ class XtoolElement extends HTMLElement {
           [key]: this.keepOffered && Array.isArray(c[key]) ? c[key].filter((value) => values.includes(value))
             : c[key] ?? (this.defaultsFor(device) ?? values).filter((value) => values.includes(value)),
         } : {}),
-        ...(this.display ? { display: displayOf(c, this.display) } : {}),
+        ...(this.display ? { show: displayOf(c, this.display) } : {}),
         ...Object.fromEntries(options.map(({ name, selector, default: value = true }) => [
           name, selector ? c[name] ?? value : typeof c[name] === "boolean" ? c[name] : value,
         ])),
@@ -1849,7 +1881,8 @@ class XtoolElement extends HTMLElement {
  * icon it shows) or icon, text, color, pressed, disabled, action, fill
  * (filled in its color though not on), spin (seconds per turn of the
  * icon), direction (drawn as needsDirection says), alwaysText (its text shows with Show:
- * Icons too, as the IF2's speed number does) }. static keyOptions changes every
+ * Icons too, as the IF2's speed number does), brief (its state in brief, shown
+ * beside its icon when its text is not, see CONTROLS: brief) }. static keyOptions changes every
  * key the feature makes from a control.
  */
 class XtoolFeature extends XtoolElement {
@@ -2018,6 +2051,12 @@ class XtoolFeature extends XtoolElement {
       button.append(first);
     }
     if (showIcon && showText) button.append(text);
+    // With its icon alone, a key that has one shows its state in brief beside it (see CONTROLS: brief)
+    else if (showIcon && b.brief) {
+      const brief = document.createElement("span");
+      brief.textContent = b.brief;
+      button.append(brief);
+    }
     if (b.fill && !b.readout) button.classList.add("fill");
     button.addEventListener("click", (ev) => {
       ev.stopPropagation();
@@ -2035,7 +2074,6 @@ class XtoolFeature extends XtoolElement {
 // when paused), Start / Pause (Pause while the job runs), Pause and Cancel.
 // Start / Pause and Cancel by default.
 class XtoolJob extends XtoolFeature {
-  static type = "xtool-job";
   static label = "Job";
   static pickerName = "xTool job";
   static controls = ["start_pause", "start", "pause", "cancel"];
@@ -2045,9 +2083,9 @@ class XtoolJob extends XtoolFeature {
   // The job's keys start actions: they show no on or off state
   static keyOptions = { pressed: undefined };
   static form = {
-    label: "Buttons",
+    label: "Controls",
     helper: "In order. Start / Pause is one button: Pause while the job runs, Start (or Resume) otherwise.",
-    options: [{ name: "confirm_cancel", label: "Ask before cancelling a job" }],
+    options: [{ name: "ask_before_cancelling", label: "Ask before cancelling a job" }],
   };
 }
 
@@ -2062,8 +2100,7 @@ const PARTS = [
 
 // Peripherals: power, the fans, the fill lights, the red dots and the cover
 // lock, on and off, and Autofocus
-class XtoolPeripherals extends XtoolFeature {
-  static type = "xtool-peripherals";
+class XtoolControls extends XtoolFeature {
   static label = "Controls";
   static pickerName = "xTool controls";
   static controls = PARTS;
@@ -2075,29 +2112,27 @@ class XtoolPeripherals extends XtoolFeature {
 }
 
 // The configuration settings of the laser and its accessories
-class XtoolSettings extends XtoolFeature {
-  static type = "xtool-settings";
+class XtoolConfiguration extends XtoolFeature {
   static label = "Configuration";
   static pickerName = "xTool configuration";
   static controls = PARTS;
   static category = "config";
-  static form = { label: "Configuration" };
+  static form = { label: "Controls" };
 }
 
 // Safety: the safety checks (switches: turning one off asks first), and the
 // safety key, lid and baseplate, which can only be shown (a tap opens them)
 class XtoolSafety extends XtoolFeature {
-  static type = "xtool-safety";
   static label = "Safety";
   static pickerName = "xTool safety";
   static controls = ["flame_alarm", "flame_alarm_level", "enclosure_stop", "moved_stop", "safety_key", "cover_open", "baseplate", "access_control"];
   static form = {
-    label: "Safety",
+    label: "Controls",
     helper: "Turning a check off always asks first. The safety key, lid and baseplate are only shown: a tap opens them.",
     options: [{
-      name: "off_color", label: "Disabled color", default: OFF_COLOR,
+      name: "disabled_color", label: "Disabled color", default: DISABLED_COLOR,
       helper: "For a check that is off, and a lid, key or baseplate that is not safe.",
-      selector: { ui_color: { default_color: OFF_COLOR } },
+      selector: { ui_color: { default_color: DISABLED_COLOR, extra_options: STATE_COLORS } },
     }],
   };
 }
@@ -2120,7 +2155,6 @@ const CUSTOM_CROP = "custom";
 const CAMERA_INPUTS = ["mode", "crop_preset", "exposure", "close_light_icon", "close_light_slider"];
 
 class XtoolCamera extends XtoolFeature {
-  static type = "xtool-camera";
   static label = "Camera";
   static pickerName = "xTool camera";
   // The keys to switch cameras (one for each, or one that steps to the next),
@@ -2171,16 +2205,16 @@ class XtoolCamera extends XtoolFeature {
           selector: select(CAMERA_VIEWS),
         },
         ...base.schema.filter((f) => f.name === "controls"),
-        displayField("For the camera's keys and the deep camera's perspective. The camera keys always show their names."),
+        displayField("For the camera's keys and the deep camera's perspective."),
         {
-          name: "show_time", label: "Show the last updated time",
+          name: "show_last_updated", label: "Show the last updated time",
           helper: "Along the bottom of the picture, in the Auto view, in the card's Time format (under Content).",
           selector: { boolean: {} },
         },
       ],
       data: (c) => ({
         camera: labels.includes(c.camera) ? c.camera : labels[0], camera_view: c.camera_view === "live" ? "live" : "auto",
-        ...base.data(c), show_time: !!c.show_time,
+        ...base.data(c), show_last_updated: c.show_last_updated !== false,
       }),
       save: base.save,
     };
@@ -2477,9 +2511,9 @@ class XtoolCamera extends XtoolFeature {
     const camera = this._shownCamera;
     const nameOf = ({ entityId, label }) => entityName(moment.hass, entityId) ?? `${label} camera`;
     const keys = {
-      // A key for each camera; the cameras' icons are alike, so their names always show
+      // A key for each camera
       cameras: () => (cameras.length < 2 ? [] : cameras.map((c) => ({
-        key: c.entityId, entity: c.entityId, label: nameOf(c), text: c.label, alwaysText: true, color: "primary",
+        key: c.entityId, entity: c.entityId, label: nameOf(c), text: c.label, color: "primary",
         pressed: c.entityId === current, disabled: !this._usable(c.entityId), action: () => this._pick(c.entityId),
       }))),
       // One key for the camera shown: a tap shows the next one that can be shown
@@ -2489,7 +2523,7 @@ class XtoolCamera extends XtoolFeature {
         const next = [...cameras.slice(at + 1), ...cameras.slice(0, at)].find((c) => this._usable(c.entityId));
         const shown = cameras[at];
         return [{
-          key: "camera_toggle", entity: shown.entityId, text: shown.label, alwaysText: true, color: "primary",
+          key: "camera_toggle", entity: shown.entityId, text: shown.label, color: "primary",
           label: next ? `${nameOf(shown)}. Tap for ${nameOf(next)}` : nameOf(shown), pressed: false, disabled: !next,
           action: () => next && this._pick(next.entityId),
         }];
@@ -2802,7 +2836,7 @@ class XtoolCamera extends XtoolFeature {
    * only inside a tile card, which loads that element.
    */
   _showTime() {
-    const shown = !!this._config?.show_time && this._view === "auto" && this._pictureAt;
+    const shown = this._config?.show_last_updated !== false && this._view === "auto" && this._pictureAt;
     if (!shown) {
       this._time.replaceChildren();
       return;
@@ -2824,12 +2858,11 @@ class XtoolCamera extends XtoolFeature {
 const LIGHTS = ["fill_light_left", "fill_light_right", "fill_light_front", "fill_light_back", "fill_light"];
 
 class XtoolLights extends XtoolElement {
-  static type = "xtool-lights";
   static label = "Lights";
   static pickerName = "xTool lights";
   static keepOffered = true;
   static form = {
-    label: "Lights",
+    label: "Controls",
     options: [{
       name: "off_at_minimum", label: "Off at minimum", default: false,
       helper: "Setting a light's slider to its minimum (1%) turns the light off.",
@@ -2871,11 +2904,6 @@ class XtoolLights extends XtoolElement {
     this._rows = new Map();
   }
 
-  // A new feature shows every light
-  static getStubConfig(hass, context) {
-    return { type: `custom:${this.type}`, controls: this.offered(deviceOf(hass, context?.entity_id), hass).map((o) => o.value) };
-  }
-
   _render() {
     if (!this._ready()) return;
     const device = this._device;
@@ -2905,11 +2933,10 @@ class XtoolLights extends XtoolElement {
 // Feature: the overlays drawn on the cameras' pictures, a key for each
 // overlay switch chosen, in order
 // ---------------------------------------------------------------------------
-class XtoolOverlay extends XtoolFeature {
-  static type = "xtool-overlay";
+class XtoolOverlays extends XtoolFeature {
   static label = "Overlays";
   static pickerName = "xTool overlays";
-  static form = { label: "Overlays" };
+  static form = { label: "Controls" };
 
   /** Each camera's overlay switches, by entity_id, camera by camera. */
   static controlIds(device) {
@@ -2936,7 +2963,6 @@ class XtoolOverlay extends XtoolFeature {
 // Moving the laser: its position X,Y in whole millimeters (typed, or slid
 // by pressing and dragging on the field), and Move goes there; Home homes it
 class XtoolPosition extends XtoolFeature {
-  static type = "xtool-position";
   static label = "Position";
   static pickerName = "xTool position";
   static controls = ["position", "move_laser", "home_laser"];
@@ -2947,7 +2973,6 @@ class XtoolPosition extends XtoolFeature {
 // the laser works with (typed, or slid on: right or up raises it). The Measure
 // key's title has the last reading
 class XtoolMeasure extends XtoolFeature {
-  static type = "xtool-measure";
   static label = "Measure";
   static pickerName = "xTool measure";
   static controls = ["measure", "measure_height"];
@@ -2968,8 +2993,7 @@ const NUMBER_ON = "var(--state-number-active-color, var(--state-active-color, va
 const IF2_KEYS = [["off", "Off"], ["auto", "Auto"], ["speed", "Speed"]];
 const IF2_ICONS = { off: "mdi:fan-off", auto: "mdi:fan", speed: "mdi:fan", 1: "mdi:fan-speed-1", 2: "mdi:fan-speed-2", 3: "mdi:fan-speed-3" };
 
-class XtoolIf2Fan extends XtoolFeature {
-  static type = "xtool-if2-fan";
+class XtoolSafetyproIf2Fan extends XtoolFeature {
   static label = "SafetyPro IF2 fan";
   static pickerName = "xTool SafetyPro IF2 fan";
 
@@ -2985,29 +3009,29 @@ class XtoolIf2Fan extends XtoolFeature {
       // One control: Off, Auto and the speed (IF2 2.0), or the gears (IF2)
       schema: (c) => [
         ...(fan ? [{
-          name: "controls", label: "Keys",
+          name: "controls", label: "Controls",
           helper: "In order. The speed key shows the speed, and a tap steps to the next.",
           selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: IF2_KEYS.map(([value, label]) => ({ value, label })) } },
         }] : []),
         displayField(),
         ...(!fan && gears ? [
-          { name: "customize_options", label: "Customize choices", selector: { boolean: {} } },
-          ...(Array.isArray(c.options) ? [{
-            name: "options", label: "Choices",
+          { name: "customize_choices", label: "Customize choices", selector: { boolean: {} } },
+          ...(Array.isArray(c.choices) ? [{
+            name: "choices", label: "Choices",
             selector: { select: { multiple: true, reorder: true, options } },
           }] : []),
         ] : []),
       ],
       data: (c) => ({
         ...(fan ? { controls: Array.isArray(c.controls) ? c.controls : IF2_KEYS.map(([value]) => value) } : {}),
-        display: displayOf(c),
-        ...(!fan && gears ? { customize_options: Array.isArray(c.options), ...(Array.isArray(c.options) ? { options: c.options } : {}) } : {}),
+        show: displayOf(c),
+        ...(!fan && gears ? { customize_choices: Array.isArray(c.choices), ...(Array.isArray(c.choices) ? { choices: c.choices } : {}) } : {}),
       }),
       // Turning Customize on starts with every choice; off removes the list
       save: (v) => {
-        const { customize_options: customOptions, ...c } = v;
-        if (!fan && gears && customOptions) c.options = Array.isArray(c.options) ? c.options : options;
-        else delete c.options;
+        const { customize_choices: customChoices, ...c } = v;
+        if (!fan && gears && customChoices) c.choices = Array.isArray(c.choices) ? c.choices : options;
+        else delete c.choices;
         return c;
       },
     };
@@ -3064,7 +3088,7 @@ class XtoolIf2Fan extends XtoolFeature {
     const gearState = gears ? hass.states[gears] : undefined;
     if (!gearState) return [];
     const all = gearState.attributes.options ?? [];
-    const shown = Array.isArray(c.options) ? c.options.filter((o) => all.includes(o)) : all;
+    const shown = Array.isArray(c.choices) ? c.choices.filter((o) => all.includes(o)) : all;
     return shown.map((value) => {
       const name = hass.formatEntityState?.(gearState, value) ?? value;
       return {
@@ -3087,7 +3111,6 @@ class XtoolIf2Fan extends XtoolFeature {
 // focusing (the job sets the height, as in Studio), so the feature is hidden.
 // ---------------------------------------------------------------------------
 class XtoolFocus extends XtoolFeature {
-  static type = "xtool-focus";
   static label = "Focus";
   static pickerName = "xTool focus";
   static controls = ["autofocus", "focus_height"];
@@ -3111,7 +3134,7 @@ class XtoolFocus extends XtoolFeature {
 
 // The features, in the order Home Assistant's feature picker lists them
 const FEATURES = Object.fromEntries([
-  XtoolJob, XtoolPeripherals, XtoolLights, XtoolSafety, XtoolSettings, XtoolCamera, XtoolOverlay, XtoolIf2Fan, XtoolFocus, XtoolPosition,
+  XtoolJob, XtoolControls, XtoolLights, XtoolSafety, XtoolConfiguration, XtoolCamera, XtoolOverlays, XtoolSafetyproIf2Fan, XtoolFocus, XtoolPosition,
   XtoolMeasure,
 ].map((feature) => [feature.type, feature]));
 const FEATURE_TAGS = Object.keys(FEATURES);
@@ -3503,6 +3526,7 @@ function glassReflections(tone, pattern) {
 const FLAT = { champagne: "#cdae94", graphite: "#2d3136" };
 // The same keys and values as the SVS and Lampster cards
 const FEATURES_STYLES = [["match", "Match style"], ["flat", "Flat"], ["console", "Console"]];
+const DEFAULT_FEATURES_STYLE = "console";
 const BADGES = [
   ["alarm", "Alarm or fire warning"],
   ["connection", "Not connected"],
@@ -3516,7 +3540,7 @@ const EDGES = [["none", "None"], ["top", "Top"], ["bottom", "Bottom"], ["left", 
 const DIRECTIONS = [["clockwise", "Clockwise"], ["counterclockwise", "Counterclockwise"]];
 const SHOW_WHILE = [["processing", "Processing"], ["paused", "Paused"], ["framing", "Framing"], ["finished", "Finished"], ["error", "Error"]];
 const PROGRESS_DEFAULTS = {
-  edge: "top", thickness: 4, start: 0, end: 100, direction: "clockwise", color: "state",
+  edge: "top", thickness: 4, starts_at: 0, ends_at: 100, direction: "clockwise", color: "state",
   show_percentage: false, show_while: ["processing", "paused"],
 };
 // Which way a bar fills, by edge and direction: clockwise runs around the card
@@ -3540,12 +3564,25 @@ const BADGE_PATHS = {
 };
 
 // Options this card adds to the tile card's
-const OWN_KEYS = ["style", "features_style", "pattern", "badges", "status_light", "progress", "collapsible", "expanded", "auto_collapse", "auto_expand"];
+const OWN_KEYS = ["style", "features_style", "pattern", "badges", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_off", "expand_when_on"];
 
-/** The tile card's own options (as its editor shows them). */
-function tileConfig(config) {
+// The card's defaults for the tile card's options it sets otherwise
+const DEFAULT_FEATURES_POSITION = "inline";
+
+/**
+ * The State content shown unless one is chosen: the state, the engraving
+ * lens (for a laser that has one) and the time the job has run.
+ */
+function defaultStateContent(hass, entity) {
+  return ["state", ...(deviceOf(hass, entity).roles.engraving_lens ? ["engraving_lens"] : []), "elapsed"];
+}
+
+/** The tile card's own options (as its editor shows them), with the card's defaults. */
+function tileConfig(config, hass) {
   const tile = { ...config, type: "tile", show_entity_picture: true };
   for (const key of OWN_KEYS) delete tile[key];
+  tile.features_position ??= DEFAULT_FEATURES_POSITION;
+  tile.state_content ??= defaultStateContent(hass, config.entity);
   return tile;
 }
 
@@ -3554,18 +3591,18 @@ function tileConfig(config) {
  * or hides the features instead of its Tap behavior, and the features below
  * the title are left out while they are hidden.
  */
-function innerTileConfig(config, open) {
-  const tile = tileConfig(config);
+function innerTileConfig(config, open, hass) {
+  const tile = tileConfig(config, hass);
   if (config.collapsible) {
     tile.tap_action = { action: "fire-dom-event", xtool_card: "toggle" };
     // Collapsed, the card keeps what a tile card shows in its title row:
     // with features position "inline", the first feature, beside the title
-    if (!open) tile.features = config.features_position === "inline" ? (config.features ?? []).slice(0, 1) : [];
+    if (!open) tile.features = tile.features_position === "inline" ? (config.features ?? []).slice(0, 1) : [];
   }
   return tile;
 }
 
-const progressOptions = (config) => ({ ...PROGRESS_DEFAULTS, ...(config?.progress ?? {}) });
+const progressOptions = (config) => ({ ...PROGRESS_DEFAULTS, ...(config?.progress_edge ?? {}) });
 
 // Whether each laser's card is expanded in the editor's preview, while the
 // editor is open: Home Assistant can make the preview card anew for a
@@ -3729,19 +3766,17 @@ class XtoolCard extends HTMLElement {
     });
   }
 
+  /**
+   * A new card: the first xTool laser in Home Assistant, in its model's
+   * style, with Job and Controls where the laser has controls for them;
+   * every other option at its default (see minimal).
+   */
   static getStubConfig(hass) {
-    const status = Object.values(hass?.entities ?? {}).find((e) => e.platform === DOMAIN && e.translation_key === "status");
-    const entity = status?.entity_id ?? "";
-    const features = [{ type: "custom:xtool-job" }];
-    if (entity && XtoolPeripherals.supports(deviceOf(hass, entity), hass)) features.push({ type: "custom:xtool-peripherals" });
-    return {
-      entity,
-      style: entity ? deviceOf(hass, entity).profile.style : "none",
-      features_style: "match",
-      state_content: ["state", "elapsed"],
-      features,
-      features_position: "bottom",
-    };
+    const entity = xtoolStatusSensors(hass)[0];
+    if (!entity) return { entity: "" };
+    const device = deviceOf(hass, entity);
+    const features = [XtoolJob, XtoolControls].filter((f) => f.supports(device, hass)).map((f) => ({ type: `custom:${f.type}` }));
+    return minimal({ entity, style: device.profile.style, ...(features.length ? { features } : {}) }, hass);
   }
 
   setConfig(config) {
@@ -3751,15 +3786,15 @@ class XtoolCard extends HTMLElement {
     if (config.features_style !== undefined && !FEATURES_STYLES.some(([id]) => id === config.features_style)) {
       throw new Error(`Unknown features_style: ${config.features_style}`);
     }
-    if (config.progress !== undefined && (typeof config.progress !== "object" || Array.isArray(config.progress))) {
-      throw new Error("progress must be a set of options, such as edge: top");
+    if (config.progress_edge !== undefined && (typeof config.progress_edge !== "object" || Array.isArray(config.progress_edge))) {
+      throw new Error("progress_edge must be a set of options, such as edge: top");
     }
     const edge = progressOptions(config).edge;
     if (!EDGES.some(([id]) => id === edge)) throw new Error(`Unknown progress edge: ${edge}`);
     this._config = { ...config, style };
-    this._open = !config.collapsible ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded !== false;
+    this._open = !config.collapsible ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded_at_load !== false;
     this._wasOff = undefined;
-    const tile = innerTileConfig(this._config, this._open);
+    const tile = innerTileConfig(this._config, this._open, this._hass);
     if (this._tile) {
       this._tile.setConfig(tile);
     } else if (customElements.get("hui-tile-card")) {
@@ -3769,7 +3804,7 @@ class XtoolCard extends HTMLElement {
       window.loadCardHelpers?.().then(async (helpers) => {
         helpers.createCardElement({ type: "tile", entity: tile.entity });
         await customElements.whenDefined("hui-tile-card");
-        if (!this._tile) this._createTile(innerTileConfig(this._config, this._open));
+        if (!this._tile) this._createTile(innerTileConfig(this._config, this._open, this._hass));
       });
     }
     this._picture = undefined;
@@ -3798,6 +3833,10 @@ class XtoolCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this._config) return;
+    // The default State content follows the laser's entities (see defaultStateContent)
+    const content = JSON.stringify(tileConfig(this._config, hass).state_content);
+    if (this._tile && content !== this._content) this._tile.setConfig(innerTileConfig(this._config, this._open, hass));
+    this._content = content;
     this._job = this._jobState(hass);
     this._frame.classList.toggle("off", this._job.phase === "off");
     this._followPower(this._job.phase === "off");
@@ -3833,15 +3872,20 @@ class XtoolCard extends HTMLElement {
     return 1 + (this._open === false ? 0 : rows);
   }
 
-  // The height follows the content: features such as the camera are taller
-  // than the rows the tile card allows for, and would run off the card
+  /**
+   * The tile card's grid size, so a taller cell is shared out as on a tile
+   * card. The height follows the content (rows: auto) when it can change:
+   * a camera's picture is taller than a row and grows with the width, and a
+   * collapsible card's features come and go.
+   */
   getGridOptions() {
-    const { columns, min_columns, max_columns } = this._tile?.getGridOptions?.() ?? {};
-    return {
-      columns: columns ?? 6, rows: "auto",
-      ...(min_columns !== undefined ? { min_columns } : {}),
-      ...(max_columns !== undefined ? { max_columns } : {}),
-    };
+    const options = { ...(this._tile?.getGridOptions?.() ?? { columns: 6 }) };
+    const camera = (this._config?.features ?? []).some((f) => f?.type === `custom:${XtoolCamera.type}`);
+    if (camera || this._config?.collapsible) {
+      options.rows = "auto";
+      delete options.min_rows;
+    }
+    return options;
   }
 
   connectedCallback() {
@@ -3870,9 +3914,9 @@ class XtoolCard extends HTMLElement {
 
   /**
    * A collapsible card follows the machine's power, each option on its own:
-   * - Collapse when powered off (auto_collapse): the card collapses when
+   * - Collapse when powered off (collapse_when_off): the card collapses when
    *   the machine turns off (or is off as the card loads).
-   * - Expand when powered on (auto_expand): the card expands when the
+   * - Expand when powered on (expand_when_on): the card expands when the
    *   machine turns on.
    * An option that is off leaves the card as it is. The browser keeps the
    * choice made by a tap, not these.
@@ -3881,8 +3925,8 @@ class XtoolCard extends HTMLElement {
     const was = this._wasOff;
     this._wasOff = off;
     if (!this._config.collapsible || off === was || this._preview) return;
-    if (off && this._config.auto_collapse !== false && this._open) this._setOpen(false, false);
-    else if (!off && was === true && this._config.auto_expand !== false && !this._open) this._setOpen(true, false);
+    if (off && this._config.collapse_when_off !== false && this._open) this._setOpen(false, false);
+    else if (!off && was === true && this._config.expand_when_on !== false && !this._open) this._setOpen(true, false);
   }
 
   _setOpen(open, remember = true) {
@@ -3893,7 +3937,7 @@ class XtoolCard extends HTMLElement {
     } catch (err) {
       // Storage can be unavailable (private windows); the card still works
     }
-    if (this._tile) this._tile.setConfig(innerTileConfig(this._config, open));
+    if (this._tile) this._tile.setConfig(innerTileConfig(this._config, open, this._hass));
     this._areasKey = undefined;
     this._layout();
   }
@@ -4092,7 +4136,7 @@ class XtoolCard extends HTMLElement {
     const color = this._edgeColor(p.color, job, value);
     const thickness = Math.max(1, Math.min(24, Number(p.thickness) || PROGRESS_DEFAULTS.thickness));
     const clamp = (v, d) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : d);
-    let start = clamp(p.start, 0), end = clamp(p.end, 100);
+    let start = clamp(p.starts_at, 0), end = clamp(p.ends_at, 100);
     if (start > end) [start, end] = [end, start];
     const counter = p.direction === "counterclockwise";
     edge.classList.add("on");
@@ -4157,7 +4201,7 @@ class XtoolCard extends HTMLElement {
       this._tile.classList.toggle("dark", tone === "dark");
       this._tile.classList.toggle("light", tone === "light");
       this._tile.classList.toggle("champagne", style === "champagne");
-      this._tile.classList.toggle("solid", !!tone && (this._config.features_style ?? "match") !== "match");
+      this._tile.classList.toggle("solid", !!tone && (this._config.features_style ?? DEFAULT_FEATURES_STYLE) !== "match");
       this._styleWindowText();
     }
     this._removeDividers();
@@ -4179,8 +4223,6 @@ class XtoolCard extends HTMLElement {
     if (!XtoolCard._windowSheet) {
       XtoolCard._windowSheet = new CSSStyleSheet();
       XtoolCard._windowSheet.replaceSync(`
-        /* The features below the title, moved down to keep their gap under the window (see _drawWindow) */
-        hui-card-features[slot="features"] { margin-top: var(--xtool-header-gap, 0px); }
         :host(.champagne) ha-tile-info {
           --primary-text-color: rgba(255, 248, 240, .97); --secondary-text-color: rgba(255, 236, 220, .86);
           text-shadow: 0 1px 2px rgba(90, 30, 0, .55);
@@ -4205,65 +4247,55 @@ class XtoolCard extends HTMLElement {
   }
 
   /**
-   * The window covers the title (and any feature beside it); the body shows
-   * below, behind the features. Read from the tile card's rendered layout;
-   * if it ever changes, the window covers the whole card.
+   * The tile card's title row (Home Assistant's ha-tile-container content):
+   * its height when nothing stretches it (its minimum, one row), and the
+   * middle of its icon, in the card's own pixels. A card taller than its
+   * content (a taller grid cell) stretches that row, as Home Assistant's
+   * tile card does, and the icon stays in its middle.
+   */
+  _titleRow() {
+    const root = this._tile?.shadowRoot;
+    const content = root && findDeep(root, "ha-tile-container")?.shadowRoot?.querySelector(".content");
+    const icon = root && findDeep(root, "ha-tile-icon");
+    const box = icon && this._box(icon);
+    const height = content && parseFloat(getComputedStyle(content).minHeight);
+    if (!box || !Number.isFinite(height) || !height) return null;
+    return { height, middle: box.y + box.h / 2 };
+  }
+
+  /**
+   * The window covers the title row (and any feature beside it); the body
+   * shows below, behind the features. It is one row tall whatever the
+   * card's height, 4 px inside the row's edges. Read from the tile card's
+   * rendered layout; if it ever changes, the window covers the whole card.
    */
   _drawWindow() {
-    if (!TONE[this._config.style]) {
-      this._tile?.style.removeProperty("--xtool-header-gap");
-      return;
-    }
+    if (!TONE[this._config.style]) return;
     const W = this._frame.offsetWidth, H = this._frame.offsetHeight;
     if (!W || !H) return;
-    // The window's edge is 4 px in; the controls in the header have 10 px
-    // of the tile card's padding, less 3 px for a Console channel around them
     const margin = 4;
-    let bottom = H - margin;
-    const root = this._tile?.shadowRoot;
-    const info = root && findDeep(root, "ha-tile-info");
-    const icon = root && findDeep(root, "ha-tile-icon");
-    const infoBox = info && this._box(info), iconBox = icon && this._box(icon);
-    const shift = parseFloat(this._tile.style.getPropertyValue("--xtool-header-gap")) || 0;
-    if (infoBox && iconBox) {
-      const groups = findAllDeep(root, "hui-card-features").map((el) => this._box(el)).filter(Boolean);
-      const infoBottom = infoBox.y + infoBox.h;
-      const below = groups.filter((b) => b.y >= infoBottom - 1);
-      // Expanded, the window keeps the height it has collapsed (the title
-      // row: the icon, with the same space above and below), and the
-      // features below the title start where that row ends, as a tile
-      // card's first feature does under its title. (The box of the group
-      // beside the title is taller than its controls, so it does not set
-      // the window's height.)
-      if (below.length) {
-        const header = 2 * iconBox.y + iconBox.h;
-        bottom = header - margin;
-        const top = Math.min(...below.map((b) => b.y)) - shift;
-        const gap = Math.max(0, Math.round(header - top));
-        if (gap !== shift) this._tile.style.setProperty("--xtool-header-gap", `${gap}px`);
-      } else if (shift) {
-        this._tile.style.removeProperty("--xtool-header-gap");
-      }
+    let top = margin, bottom = H - margin;
+    const row = this._titleRow();
+    if (row) {
+      top = Math.max(margin, row.middle - row.height / 2 + margin);
+      bottom = Math.min(H - margin, row.middle + row.height / 2 - margin);
     }
     Object.assign(this._window.style, {
-      left: `${margin}px`, top: `${margin}px`, width: `${W - 2 * margin}px`, height: `${Math.max(0, bottom - margin)}px`,
+      left: `${margin}px`, top: `${top}px`, width: `${W - 2 * margin}px`, height: `${Math.max(0, bottom - top)}px`,
     });
   }
 
   /**
-   * The card's corners: the theme's, but never rounder than the collapsed
-   * card's, where the browser limits them to half its height. Expanding the
-   * card then keeps the corners it shows collapsed. The collapsed card is
-   * its title row: the tile card's icon, with the same space above and below.
+   * The card's corners: the theme's, but never rounder than half the title
+   * row (one row of the tile card), so the card keeps the corners it shows
+   * collapsed, however tall it is.
    */
   _clampCorners() {
-    const root = this._tile?.shadowRoot;
-    const icon = root && findDeep(root, "ha-tile-icon");
-    const box = icon && this._box(icon);
+    const row = this._titleRow();
     this._frame.style.removeProperty("--ha-card-border-radius");
-    if (!box) return;
+    if (!row) return;
     const themed = parseFloat(getComputedStyle(this._frame).borderTopLeftRadius);
-    const half = (2 * box.y + box.h) / 2;
+    const half = row.height / 2;
     if (Number.isFinite(themed) && themed > half) this._frame.style.setProperty("--ha-card-border-radius", `${half}px`);
   }
 
@@ -4354,7 +4386,7 @@ class XtoolCard extends HTMLElement {
   }
 
   _drawAreas() {
-    const style = TONE[this._config?.style] ? this._config.features_style ?? "match" : "match";
+    const style = TONE[this._config?.style] ? this._config.features_style ?? DEFAULT_FEATURES_STYLE : "match";
     this._styleControls(style === "console");
     if (style === "match") {
       this._areas.replaceChildren();
@@ -4434,7 +4466,12 @@ class XtoolFeatureEditor extends HTMLElement {
       this._formElement.addEventListener("value-changed", (ev) => {
         ev.stopPropagation();
         const changed = this._form();
-        const value = changed?.save ? changed.save(ev.detail.value) : ev.detail.value;
+        const saved = (data) => (changed?.save ? changed.save(data) : data);
+        const value = saved(ev.detail.value);
+        // Only what differs from the feature's defaults is written: the
+        // feature applies its defaults to every option left out
+        const defaults = saved(changed.data({ type: this._config.type }));
+        for (const [key, option] of Object.entries(value)) if (key in defaults && same(option, defaults[key])) delete value[key];
         const config = { type: this._config.type, ...value };
         this._config = config;
         fire(this, "config-changed", { config });
@@ -4582,11 +4619,11 @@ class XtoolCardEditor extends HTMLElement {
       features_style: v.features_style,
       badges: v.badges ?? [],
       status_light: v.status_light !== false,
-      progress: { ...PROGRESS_DEFAULTS, ...(v.progress ?? {}) },
+      progress_edge: { ...PROGRESS_DEFAULTS, ...(v.progress_edge ?? {}) },
       collapsible: !!v.collapsible,
-      expanded: v.expanded !== false,
-      auto_collapse: v.auto_collapse !== false,
-      auto_expand: v.auto_expand !== false,
+      expanded_at_load: v.expanded_at_load !== false,
+      collapse_when_off: v.collapse_when_off !== false,
+      expand_when_on: v.expand_when_on !== false,
     });
   }
 
@@ -4614,7 +4651,7 @@ class XtoolCardEditor extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = explicit(config);
+    this._config = minimal(config, this._hass);
     this._render();
     this._setTileEditorHass(this._config.entity);
     this._setTileEditorConfig();
@@ -4636,10 +4673,10 @@ class XtoolCardEditor extends HTMLElement {
           const own = Object.fromEntries(OWN_KEYS.filter((k) => k in this._config).map((k) => [k, this._config[k]]));
           const next = { ...ev.detail.config, ...own, type: this._config.type };
           delete next.show_entity_picture;  // always on: the state picture is shown there
-          this._config = next;
+          this._config = minimal(next, this._hass);
           this._fire();
           // The tile editor shows a change only once its configuration is handed back
-          editor.setConfig(ev.detail.config);
+          editor.setConfig(tileConfig(this._config, this._hass));
           if (ev.detail.config.entity) this._setTileEditorHass(ev.detail.config.entity);
         });
         editor.xtoolEntities = xtoolStatusSensors(this._hass);
@@ -4650,12 +4687,12 @@ class XtoolCardEditor extends HTMLElement {
       })();
       await this._loading;
     }
-    this._tileEditor.setConfig(tileConfig(this._config));
+    this._tileEditor.setConfig(tileConfig(this._config, this._hass));
   }
 
   _render() {
     const c = this._config;
-    const styled = c.style !== "none";
+    const styled = !!TONE[c.style];
     this._laserForm.schema = [{
       name: "device", label: "Laser", required: true,
       selector: { device: { integration: DOMAIN, entity: [{ integration: DOMAIN, domain: "sensor", device_class: "enum" }] } },
@@ -4680,9 +4717,9 @@ class XtoolCardEditor extends HTMLElement {
         selector: { boolean: {} },
       },
       ...(c.collapsible ? [
-        { name: "expanded", label: "Expanded at load", selector: { boolean: {} } },
-        { name: "auto_collapse", label: "Collapse when powered off", selector: { boolean: {} } },
-        { name: "auto_expand", label: "Expand when powered on", selector: { boolean: {} } },
+        { name: "expanded_at_load", label: "Expanded at load", selector: { boolean: {} } },
+        { name: "collapse_when_off", label: "Collapse when powered off", selector: { boolean: {} } },
+        { name: "expand_when_on", label: "Expand when powered on", selector: { boolean: {} } },
       ] : []),
       {
         name: "badges", label: "Badges (in priority order)",
@@ -4695,14 +4732,14 @@ class XtoolCardEditor extends HTMLElement {
         selector: { boolean: {} },
       },
       {
-        type: "expandable", name: "progress", title: "Progress edge",
+        type: "expandable", name: "progress_edge", title: "Progress edge",
         schema: [
           { name: "edge", label: "Edge", selector: select(EDGES) },
           {
             type: "grid", name: "", schema: [
               { name: "thickness", label: "Thickness (px)", selector: { number: { mode: "box", min: 1, max: 24, step: 1 } } },
-              { name: "start", label: "Starts at (%)", selector: { number: { mode: "box", min: 0, max: 100, step: 1 } } },
-              { name: "end", label: "Ends at (%)", selector: { number: { mode: "box", min: 0, max: 100, step: 1 } } },
+              { name: "starts_at", label: "Starts at (%)", selector: { number: { mode: "box", min: 0, max: 100, step: 1 } } },
+              { name: "ends_at", label: "Ends at (%)", selector: { number: { mode: "box", min: 0, max: 100, step: 1 } } },
             ],
           },
           { name: "direction", label: "Direction", selector: select(DIRECTIONS) },
@@ -4721,19 +4758,19 @@ class XtoolCardEditor extends HTMLElement {
       },
     ];
     this._form.data = {
-      features_style: c.features_style ?? "match",
+      features_style: c.features_style ?? DEFAULT_FEATURES_STYLE,
       badges: Array.isArray(c.badges) ? c.badges : DEFAULT_BADGES,
       status_light: c.status_light !== false,
-      progress: progressOptions(c),
+      progress_edge: progressOptions(c),
       collapsible: !!c.collapsible,
-      expanded: c.expanded !== false,
-      auto_collapse: c.auto_collapse !== false,
-      auto_expand: c.auto_expand !== false,
+      expanded_at_load: c.expanded_at_load !== false,
+      collapse_when_off: c.collapse_when_off !== false,
+      expand_when_on: c.expand_when_on !== false,
     };
   }
 
   _update(changes) {
-    this._config = explicit({ ...this._config, ...changes });
+    this._config = minimal({ ...this._config, ...changes }, this._hass);
     this._render();
     if ("entity" in changes) this._setTileEditorConfig();
     this._fire();
@@ -4744,33 +4781,34 @@ class XtoolCardEditor extends HTMLElement {
   }
 }
 
+/** Whether two option values are the same (lists and sets of options by their contents). */
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
 /**
- * The configuration as the editor saves it: the style written out, and the
- * features style and the reflections' pattern only for a style that has them.
+ * The configuration as the editor saves it: every option at its default left
+ * out (the card applies the default), and the options that matter only for
+ * a style or for a collapsible card left out without one.
  */
-function explicit(config) {
+function minimal(config, hass) {
   const c = { ...config };
-  c.style = STYLES.some(([id]) => id === c.style) ? c.style : "none";
-  if (c.style === "none") {
-    delete c.features_style;
-    delete c.pattern;
-  } else {
-    c.features_style = FEATURES_STYLES.some(([id]) => id === c.features_style) ? c.features_style : "match";
-    c.pattern = Number.isFinite(c.pattern) ? c.pattern : DEFAULT_PATTERN;
+  const styled = STYLES.some(([id]) => id === c.style) && c.style !== "none";
+  if (!styled) delete c.style;
+  if (!styled || c.features_style === DEFAULT_FEATURES_STYLE || !FEATURES_STYLES.some(([id]) => id === c.features_style)) delete c.features_style;
+  if (!styled || !Number.isFinite(c.pattern) || c.pattern === DEFAULT_PATTERN) delete c.pattern;
+  if (!Array.isArray(c.badges) || same(c.badges, DEFAULT_BADGES)) delete c.badges;
+  if (c.status_light !== false) delete c.status_light;
+  if (c.progress_edge && typeof c.progress_edge === "object") {
+    const edge = Object.fromEntries(Object.entries(c.progress_edge).filter(([key, value]) => !same(value, PROGRESS_DEFAULTS[key])));
+    if (Object.keys(edge).length) c.progress_edge = edge;
+    else delete c.progress_edge;
   }
-  c.status_light = c.status_light !== false;
   // Expanded at load, Collapse when powered off and Expand when powered on
   // matter only for a collapsible card
-  if (c.collapsible) {
-    c.expanded = c.expanded !== false;
-    c.auto_collapse = c.auto_collapse !== false;
-    c.auto_expand = c.auto_expand !== false;
-  } else {
-    delete c.collapsible;
-    delete c.expanded;
-    delete c.auto_collapse;
-    delete c.auto_expand;
-  }
+  if (!c.collapsible) delete c.collapsible;
+  for (const key of ["expanded_at_load", "collapse_when_off", "expand_when_on"]) if (!c.collapsible || c[key] !== false) delete c[key];
+  if (c.features_position === DEFAULT_FEATURES_POSITION) delete c.features_position;
+  if (hass && same(c.state_content, defaultStateContent(hass, c.entity))) delete c.state_content;
+  if (Array.isArray(c.features) && !c.features.length) delete c.features;
   return c;
 }
 
