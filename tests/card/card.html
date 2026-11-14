@@ -307,7 +307,7 @@
     expandOnly.hass = p2("idle");
     await wait(50);
     check("expand when powered on, collapse off", inner(expandOnly).config.features.length === 2, "and expands as it turns on");
-    // A tap while the machine is off: the card does not expand as it turns on
+    // A tap while the machine is off: Expand when powered on still expands it as it turns on
     autoCollapse.hass = p2("unavailable");
     await wait(50);
     tapCard(autoCollapse);
@@ -316,7 +316,7 @@
     await wait(30);
     autoCollapse.hass = p2("idle");
     await wait(50);
-    check("collapse when off", inner(autoCollapse).config.features.length === 0, "tapped while the machine was off, it stays as tapped when it turns on");
+    check("collapse when off", inner(autoCollapse).config.features.length === 2, "tapped while the machine was off, it still expands as it turns on");
     check("off at load", inner(offAtLoad).config.features.length === 0, "a card that loads while the machine is off is collapsed");
     const tapOff = () => inner(offAtLoad).shadowRoot.querySelector("ha-card").dispatchEvent(new CustomEvent("ll-custom", {
       bubbles: true, composed: true, detail: inner(offAtLoad).config.tap_action,

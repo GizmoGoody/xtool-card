@@ -214,7 +214,7 @@ const ROLES = {
   exhaust_running: roleSpec(["smoking_fan_running"], ["binary_sensor"]),
   exhaust_setting: roleSpec(["exhaust_fan_setting"], ["switch"]),
   cooling_fan: roleSpec(["cooling_fan"], ["switch"]),
-  fill_light: roleSpec(["fill_light"], ["light"]),
+  fill_light: roleSpec(["fill_light", "fill_light_1"], ["light"]),
   fill_light_front: roleSpec(["fill_light_front"], ["light"]),
   fill_light_back: roleSpec(["fill_light_back"], ["light"]),
   fill_light_left: roleSpec(["fill_light_3"], ["light"]),
@@ -228,6 +228,7 @@ const ROLES = {
   laser_y: roleSpec(["laser_position_y"], ["number"]),
   move_laser: roleSpec(["move_laser"], ["button"]),
   home_laser: roleSpec(["home_laser_head"], ["button"]),
+  wake: roleSpec(["wake"], ["button"]),
   measure: roleSpec(["measure_thickness_or_distance"], ["button"]),
   measure_height: roleSpec(["thickness_or_distance"], ["number"]),
   measured: roleSpec(["measured_thickness_or_distance"], ["sensor"]),
@@ -263,7 +264,7 @@ const ROLES = {
   crop_preset: roleSpec(["crop_preset"], ["select"], "camera"),
   exposure: roleSpec(["exposure"], ["number"], "camera"),
   mode: roleSpec(["processing_mode"], ["select"], "camera"),
-  close_light: roleSpec(["fill_light"], ["light"], "camera"),
+  close_light: roleSpec(["fill_light_1", "fill_light"], ["light"], "camera"),
 };
 const CROP_ROLES = ["crop_width", "crop_height", "crop_center_x", "crop_center_y"];
 
@@ -278,18 +279,15 @@ const CAMERAS = [
 // shown after them.
 const OVERLAY_PREFIX = "overlay_";
 const OVERLAY_ORDER = [
-  "overlay_work_bed", "overlay_process_on_slats", "overlay_honeycomb_panel", "overlay_slats_removed",
-  "overlay_close_camera_uncropped", "overlay_close_camera_studio", "overlay_close_camera_custom", "overlay_close_camera_image",
-  "overlay_studio", "overlay_custom", "overlay_overview_work_bed", "overlay_overview_process_on_slats",
-  "overlay_overview_honeycomb_panel", "overlay_overview_slats_removed", "overlay_laser_target", "overlay_slat_lines",
-  "overlay_red_dot_close", "overlay_red_dot_quick",
+  "overlay_mode_process_on_slats", "overlay_mode_honeycomb_panel", "overlay_mode_slats_removed", "overlay_close_camera",
+  "overlay_studio", "overlay_custom", "overlay_laser_target", "overlay_slat_lines", "overlay_red_dot_close", "overlay_red_dot_quick",
 ];
 
 // The overlays chosen by default (see XtoolOverlay.defaultsFor): where the
-// laser fires, where the red dots point, the slats, and the close camera's
-// picture and area on the overview
+// laser fires, the close camera's picture on the overview, where the two
+// red dots point, and the slats
 const DEFAULT_OVERLAYS = [
-  "overlay_laser_target", "overlay_red_dot_close", "overlay_slat_lines", "overlay_close_camera_image", "overlay_close_camera_studio",
+  "overlay_laser_target", "overlay_close_camera", "overlay_red_dot_close", "overlay_red_dot_quick", "overlay_slat_lines",
 ];
 
 /** An overlay's control: its switch, named by its entity and its camera. */
@@ -409,6 +407,8 @@ const CONTROLS = {
   // A move works while the laser sleeps, but not while it works or is off
   move_laser: { kind: "press", name: "Move", color: "primary", busy: true },
   home_laser: { kind: "press", name: "Home", color: "primary", busy: true },
+  // The P2's Wake: it takes a photo, which wakes the laser while it sleeps
+  wake: { kind: "press", name: "Wake", color: "primary" },
   // The material's thickness or the distance to it: sliding right or up raises it
   measure_height: { kind: "field", roles: ["measure_height"], keys: [{ key: "adjust", scrub: "xy", icon: "mdi:plus-minus" }] },
   // The key's title has the last reading
@@ -1945,7 +1945,7 @@ class XtoolJob extends XtoolFeature {
 // config entity category)
 const PARTS = [
   "power", "exhaust", "fill_light_front", "fill_light_back", "fill_light", "exhaust_setting", "fill_light_left", "fill_light_right",
-  "red_dot", "red_dot_close", "red_dot_quick", "cooling_fan", "cover_lock", "autofocus",
+  "red_dot", "red_dot_close", "red_dot_quick", "cooling_fan", "cover_lock", "autofocus", "wake",
   "buzzer", "flame_alarm_level", "if2_buzzer", "device_sleep",
 ];
 
@@ -3559,7 +3559,6 @@ class XtoolCard extends HTMLElement {
       const at = this._tapAt;
       this._tapAt = undefined;
       if (this._open && at && this._amongFeatures(at)) return;
-      this._tappedWhileOff = true;
       this._setOpen(!this._open);
     });
     this._resize.observe(this._frame);
@@ -3606,7 +3605,6 @@ class XtoolCard extends HTMLElement {
     if (!EDGES.some(([id]) => id === edge)) throw new Error(`Unknown progress edge: ${edge}`);
     this._config = { ...config, style };
     this._open = !config.collapsible ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded !== false;
-    this._tappedWhileOff = false;
     this._wasOff = undefined;
     const tile = innerTileConfig(this._config, this._open);
     if (this._tile) {
@@ -3718,24 +3716,20 @@ class XtoolCard extends HTMLElement {
   }
 
   /**
-   * A collapsible card follows the machine's power, on each change of its
-   * status between off and not off (and, for Collapse, when it is off as
-   * the card loads):
-   * - Collapse when powered off (auto_collapse): the card collapses.
-   * - Expand when powered on (auto_expand): the card expands, unless it
-   *   was tapped since the machine turned off.
-   * The browser keeps the choice made by a tap, not these.
+   * A collapsible card follows the machine's power, each option on its own:
+   * - Collapse when powered off (auto_collapse): the card collapses when
+   *   the machine turns off (or is off as the card loads).
+   * - Expand when powered on (auto_expand): the card expands when the
+   *   machine turns on.
+   * An option that is off leaves the card as it is. The browser keeps the
+   * choice made by a tap, not these.
    */
   _followPower(off) {
     const was = this._wasOff;
     this._wasOff = off;
     if (!this._config.collapsible || off === was || this._preview) return;
-    if (off) {
-      this._tappedWhileOff = false;
-      if (this._config.auto_collapse !== false && this._open) this._setOpen(false, false);
-    } else if (was === true && this._config.auto_expand !== false && !this._tappedWhileOff && !this._open) {
-      this._setOpen(true, false);
-    }
+    if (off && this._config.auto_collapse !== false && this._open) this._setOpen(false, false);
+    else if (!off && was === true && this._config.auto_expand !== false && !this._open) this._setOpen(true, false);
   }
 
   _setOpen(open, remember = true) {
@@ -4533,11 +4527,7 @@ class XtoolCardEditor extends HTMLElement {
       ...(c.collapsible ? [
         { name: "expanded", label: "Expanded at load", selector: { boolean: {} } },
         { name: "auto_collapse", label: "Collapse when powered off", selector: { boolean: {} } },
-        {
-          name: "auto_expand", label: "Expand when powered on",
-          helper: "Unless the card was tapped while the machine was off.",
-          selector: { boolean: {} },
-        },
+        { name: "auto_expand", label: "Expand when powered on", selector: { boolean: {} } },
       ] : []),
       {
         name: "badges", label: "Badges (in priority order)",

@@ -62,12 +62,12 @@ const NAMES = {
   autofocus: "Autofocus", focus_height: "Focus height", camera_main: "Main camera", camera_deep: "Deep camera",
   perspective: "Perspective", accessory_ductfanv3_buzzer: "Buzzer", cover_open: "Lid", camera_overview: "Overview camera",
   camera_closeup: "Close camera", crop_preset: "Crop preset", exposure: "Exposure", thumbnail_refresh: "Thumbnail refresh interval",
-  overlay_laser_target: "Laser target", overlay_slat_lines: "Slat lines", overlay_close_camera_studio: "Close camera (studio)",
-  overlay_close_camera_custom: "Close camera (custom)", exhaust_fan_setting: "Exhaust fan", flame_alarm_level: "Flame alarm",
+  overlay_laser_target: "Laser target", overlay_slat_lines: "Slat lines", overlay_studio: "Studio",
+  overlay_custom: "Custom", overlay_close_camera: "Close camera", wake: "Wake", exhaust_fan_setting: "Exhaust fan", flame_alarm_level: "Flame alarm",
   laser_position_x: "Laser position X", laser_position_y: "Laser position Y", move_laser: "Move laser", home_laser_head: "Home laser head",
   measure_thickness_or_distance: "Measure thickness or distance", measured_thickness_or_distance: "Measured thickness or distance",
   thickness_or_distance: "Thickness or distance", processing_mode: "Mode",
-  fill_light: "Fill light", fill_light_2: "Fill light (right)", fill_light_3: "Fill light (left)",
+  fill_light: "Fill light", fill_light_1: "Fill light close", fill_light_2: "Fill light right", fill_light_3: "Fill light left",
   crop_width: "Crop width", crop_height: "Crop height", crop_center_x: "Crop center X", crop_center_y: "Crop center Y",
 };
 
@@ -131,6 +131,7 @@ const P2 = [
   ["number.p2_laser_y", "laser_position_y", "50", { min: 0, max: 305, step: 0.1, unit_of_measurement: "mm", mode: "box" }],
   ["button.p2_move", "move_laser", "unknown"],
   ["button.p2_home", "home_laser_head", "unknown"],
+  ["button.p2_wake", "wake", "unknown"],
   ["button.p2_measure", "measure_thickness_or_distance", "unknown"],
   ["sensor.p2_measured", "measured_thickness_or_distance", "3.2", { unit_of_measurement: "mm" }],
   ["light.p2_fill_right", "fill_light_2", "on", { supported_color_modes: ["brightness"], brightness: 200 }],
@@ -138,7 +139,7 @@ const P2 = [
 ];
 const P2_OVERVIEW_CAMERA = [
   ["camera.p2_overview", "camera_overview", "idle", { entity_picture: "/api/camera_proxy/camera.p2_overview?token=c" }],
-  ["select.p2_overview_crop", "crop_preset", "uncropped", { options: ["uncropped", "sync_to_mode", "work_bed", "custom"] }],
+  ["select.p2_overview_crop", "crop_preset", "uncropped", { options: ["uncropped", "sync_to_mode", "process_on_slats", "custom"] }],
   ["number.p2_thickness", "thickness_or_distance", "3", { min: 0, max: 50, step: 0.1, unit_of_measurement: "mm", mode: "box" }],
   ["select.p2_mode", "processing_mode", "process_on_slats", { options: ["process_on_slats", "honeycomb_panel", "slats_removed"] }],
   ["number.p2_overview_crop_width", "crop_width", "610", { min: 0, max: 915, step: 1, unit_of_measurement: "mm" }],
@@ -149,6 +150,7 @@ const P2_OVERVIEW_CAMERA = [
   ["number.p2_overview_thumbnail", "thumbnail_refresh", "300", { min: 5, max: 600, step: 1, unit_of_measurement: "s" }],
   ["switch.p2_overview_target", "overlay_laser_target", "off"],
   ["switch.p2_overview_slats", "overlay_slat_lines", "on"],
+  ["switch.p2_overview_close", "overlay_close_camera", "off"],
 ];
 const P2_CLOSE_CAMERA = [
   ["camera.p2_close", "camera_closeup", "idle", { entity_picture: "/api/camera_proxy/camera.p2_close?token=d" }],
@@ -157,11 +159,11 @@ const P2_CLOSE_CAMERA = [
   ["number.p2_close_crop_height", "crop_height", "100", { min: 0, max: 100, step: 1, unit_of_measurement: "mm" }],
   ["number.p2_close_crop_center_x", "crop_center_x", "0", { min: -70, max: 70, step: 0.5, unit_of_measurement: "mm" }],
   ["number.p2_close_crop_center_y", "crop_center_y", "0", { min: -50, max: 50, step: 0.5, unit_of_measurement: "mm" }],
-  ["light.p2_close_light", "fill_light", "on", { supported_color_modes: ["brightness"], brightness: 90 }],
+  ["light.p2_close_light", "fill_light_1", "on", { supported_color_modes: ["brightness"], brightness: 90 }],
   ["number.p2_close_exposure", "exposure", "128", { min: 0, max: 255, step: 1 }],
   ["number.p2_close_thumbnail", "thumbnail_refresh", "300", { min: 5, max: 600, step: 1, unit_of_measurement: "s" }],
-  ["switch.p2_close_studio", "overlay_close_camera_studio", "off"],
-  ["switch.p2_close_custom", "overlay_close_camera_custom", "on"],
+  ["switch.p2_close_studio", "overlay_studio", "off"],
+  ["switch.p2_close_custom", "overlay_custom", "on"],
 ];
 
 /**
