@@ -340,9 +340,9 @@ const running = (phase) => phase === "processing" || phase === "framing";
  * - check: a safety check, green while it is safe and filled red while it
  *   is not: { problem: the state that is the problem, "on" or "off" (none:
  *   neither is), words: the words for on and off in its title },
- * - group and direction: a part the device can have several of (group),
- *   and where this one sits (left, right, front or back). When the device
- *   has more than one of the group, its key shows an arrow for the direction,
+ * - direction: where the part sits (left, right, front or back). Its key
+ *   shows a chevron for it only when another item in the same row has the
+ *   same icon (see needsDirection),
  * - key: its key's id, when it is not the control's id,
  * - pick(moment), picks: a key that stands for one of other controls
  *   (picks), chosen by the moment,
@@ -388,11 +388,11 @@ const CONTROLS = {
   // turning while it spins, faster at each of its four speeds
   if2_fan: { kind: "fan", name: "Fan", color: "blue", fan: true },
   cooling_fan: { kind: "toggle", name: "Cooling", color: "cyan", fan: true },
-  fill_light: { kind: "light", name: "Light", color: DAYLIGHT, group: "fill_light" },
-  fill_light_front: { kind: "light", name: "Light", color: DAYLIGHT, group: "fill_light", direction: "front" },
-  fill_light_back: { kind: "light", name: "Light", color: DAYLIGHT, group: "fill_light", direction: "back" },
-  fill_light_left: { kind: "light", name: "Light", color: DAYLIGHT, group: "fill_light", direction: "left" },
-  fill_light_right: { kind: "light", name: "Light", color: DAYLIGHT, group: "fill_light", direction: "right" },
+  fill_light: { kind: "light", name: "Light", color: DAYLIGHT },
+  fill_light_front: { kind: "light", name: "Light", color: DAYLIGHT, direction: "front" },
+  fill_light_back: { kind: "light", name: "Light", color: DAYLIGHT, direction: "back" },
+  fill_light_left: { kind: "light", name: "Light", color: DAYLIGHT, direction: "left" },
+  fill_light_right: { kind: "light", name: "Light", color: DAYLIGHT, direction: "right" },
   red_dot: { kind: "toggle", name: "Dot", color: "red" },
   red_dot_close: { kind: "toggle", name: "Aimed", color: "red" },
   red_dot_quick: { kind: "toggle", name: "Quick", color: "red" },
@@ -817,6 +817,14 @@ function displayOf(config, fallback = "icons") {
 }
 const displayField = (helper) => ({ name: "display", label: "Show", ...(helper ? { helper } : {}), selector: select(DISPLAYS) });
 
+/** What a key shows with Show (display): its icon, its text, or both. */
+function faceOf(b, display) {
+  const icon = !!(b.entity || b.icon), text = !!b.text;
+  const showIcon = icon && (display !== "names" || !text);
+  const showText = text && (display !== "icons" || !showIcon || !!b.alwaysText);
+  return { showIcon, showText };
+}
+
 // The chevron under a key's icon for where its part sits (see CONTROLS: direction)
 const DIRECTION_ICONS = {
   left: "mdi:chevron-left", right: "mdi:chevron-right", back: "mdi:chevron-up", up: "mdi:chevron-up", front: "mdi:chevron-down", down: "mdi:chevron-down",
@@ -993,17 +1001,58 @@ function blocked(control, moment) {
     || (!!control.allowed && !control.allowed(moment));
 }
 
-/** The arrow a control's key shows: its direction, when the device has more than one of its group. */
-function directionOf(control, device) {
-  if (!control.direction) return undefined;
-  const group = Object.keys(CONTROLS).filter((id) => CONTROLS[id].group === control.group && device.roles[id]);
-  return group.length > 1 ? control.direction : undefined;
+// Each integration's entity icons (its icon translations), loaded once
+// from Home Assistant as its frontend loads them: the icons, or the
+// promise of them while they load
+const PLATFORM_ICONS = new Map();
+
+/** An integration's entity icons, or undefined while they load (then runs once they have). */
+function platformIcons(hass, platform, then) {
+  if (!PLATFORM_ICONS.has(platform)) {
+    const loaded = (icons) => PLATFORM_ICONS.set(platform, icons ?? {});
+    PLATFORM_ICONS.set(platform, Promise.resolve(hass.callWS?.({ type: "frontend/get_icons", category: "entity", integration: platform }))
+      .then((result) => loaded(result?.resources?.[platform]), () => loaded({})));
+  }
+  const icons = PLATFORM_ICONS.get(platform);
+  if (!(icons instanceof Promise)) return icons;
+  icons.then(then);
+  return undefined;
+}
+
+/**
+ * The icon Home Assistant shows for an entity, in the order its state icon
+ * picks it: the icon set on the entity, the entity's own, its integration's
+ * icon for it, or else its domain's (by device class). Undefined while the
+ * integration's icons load (then runs once they have).
+ */
+function iconOf(hass, entityId, then) {
+  const entry = hass.entities?.[entityId], stateObj = hass.states?.[entityId];
+  const own = entry?.icon || stateObj?.attributes.icon;
+  if (own) return own;
+  const domain = domainOf(entityId);
+  if (entry?.platform && entry.translation_key) {
+    const icons = platformIcons(hass, entry.platform, then);
+    if (!icons) return undefined;
+    const icon = icons[domain]?.[entry.translation_key]?.default;
+    if (icon) return icon;
+  }
+  return `${domain}:${stateObj?.attributes.device_class ?? ""}`;
+}
+
+/**
+ * Whether item i of a row draws its chevron: only to tell it from another
+ * item in the row that looks the same (faces: what each item shows, as
+ * iconOf and its text; undefined while unknown).
+ */
+function needsDirection(faces, i) {
+  return faces[i] !== undefined && faces.some((face, j) => j !== i && face === faces[i]);
 }
 
 /**
  * What every key made from a control has: its id, its entity (whose icon
  * it shows), its one-word name (text), its title (label: the entity's name
- * unless the control gives one), its color and its direction.
+ * unless the control gives one), its color and its direction (drawn as
+ * needsDirection says).
  */
 function keyBase(control, entityId, moment) {
   const name = valueOf(control.name, moment) ?? entityName(moment.hass, entityId);
@@ -1011,7 +1060,7 @@ function keyBase(control, entityId, moment) {
   const detail = valueOf(control.detail, moment);
   return {
     key: control.key ?? control.id, entity: entityId, text: name, color: control.color,
-    label: detail ? `${title}. ${detail}` : title, direction: directionOf(control, moment.device),
+    label: detail ? `${title}. ${detail}` : title, direction: control.direction,
   };
 }
 
@@ -1469,15 +1518,15 @@ const dimmable = (hass, light) => (hass?.states[light]?.attributes.supported_col
 
 /**
  * A light as a light's tile card shows it: Home Assistant's tile icon with
- * the light's own icon (and the chevron for where it sits, see
- * directionOf), where a tap turns the light on or off, and Home Assistant's
+ * the light's own icon (and the chevron for where it sits, when update is
+ * given one, see needsDirection), where a tap turns the light on or off, and Home Assistant's
  * light brightness feature (for a light with a brightness). el holds both,
  * side by side; icon and slide are each on its own. The feature's
  * off_at_minimum option turns the light off when its slider is set to the
  * minimum (1 %).
  */
 class LightRow {
-  constructor(feature, entityId, direction) {
+  constructor(feature, entityId) {
     this._feature = feature;
     this._entityId = entityId;
     this.el = document.createElement("div");
@@ -1487,19 +1536,6 @@ class LightRow {
     this._icon.interactive = true;
     this._icon.actionHandlerOptions = { hasHold: false, hasDoubleClick: false };
     this._state = document.createElement("ha-state-icon");
-    if (direction) {
-      const glyph = document.createElement("span");
-      glyph.className = "glyph";
-      glyph.slot = "icon";
-      const arrow = document.createElement("ha-icon");
-      arrow.className = "arrow";
-      arrow.icon = DIRECTION_ICONS[direction];
-      glyph.append(this._state, arrow);
-      this._icon.append(glyph);
-    } else {
-      this._state.slot = "icon";
-      this._icon.append(this._state);
-    }
     this.icon = this._icon;
     // Home Assistant's action handler on the tile icon sends an action event for a tap
     this._icon.addEventListener("action", (ev) => {
@@ -1521,7 +1557,9 @@ class LightRow {
     this.el.append(this._icon, this._slide);
   }
 
-  update() {
+  /** The light as it is now, with the chevron for direction (none: without one). */
+  update(direction) {
+    if (!this._drawn || direction !== this._direction) this._drawIcon(direction);
     const hass = this._feature._hass, stateObj = hass.states[this._entityId];
     const rgb = stateObj?.attributes.rgb_color;
     const color = stateObj?.state === "on" ? (Array.isArray(rgb) ? `rgb(${rgb.join(", ")})` : DAYLIGHT) : LIGHT_OFF;
@@ -1536,6 +1574,27 @@ class LightRow {
     this._slide.firstChild.color = color;
     this._slide.firstChild.hass = hass;
     return this.el;
+  }
+
+  /** The tile icon's content: the light's icon, with the chevron under it for direction. */
+  _drawIcon(direction) {
+    this._drawn = true;
+    this._direction = direction;
+    this._icon.replaceChildren();
+    if (direction) {
+      const glyph = document.createElement("span");
+      glyph.className = "glyph";
+      glyph.slot = "icon";
+      const arrow = document.createElement("ha-icon");
+      arrow.className = "arrow";
+      arrow.icon = DIRECTION_ICONS[direction];
+      this._state.removeAttribute("slot");
+      glyph.append(this._state, arrow);
+      this._icon.append(glyph);
+    } else {
+      this._state.slot = "icon";
+      this._icon.append(this._state);
+    }
   }
 }
 
@@ -1768,7 +1827,7 @@ class XtoolElement extends HTMLElement {
  * keys of its own lists them in _buttons(): { key, label, entity (whose
  * icon it shows) or icon, text, color, pressed, disabled, action, fill
  * (filled in its color though not on), spin (seconds per turn of the
- * icon), direction (see directionOf), alwaysText (its text shows with Show:
+ * icon), direction (drawn as needsDirection says), alwaysText (its text shows with Show:
  * Icons too, as the IF2's speed number does) }. static keyOptions changes every
  * key the feature makes from a control.
  */
@@ -1799,6 +1858,19 @@ class XtoolFeature extends XtoolElement {
   _render() {
     if (!this._ready()) return;
     const buttons = this._buttons();
+    // A chevron only tells apart keys that look the same
+    const display = this._display();
+    const faces = buttons.map((b) => {
+      const { showIcon, showText } = faceOf(b, display);
+      if (showIcon && b.entity) {
+        const icon = iconOf(this._hass, b.entity, () => this._render());
+        return icon === undefined ? undefined : `${icon}|${showText ? b.text : ""}`;
+      }
+      return `${showIcon ? b.icon : ""}|${showText ? b.text : ""}`;
+    });
+    buttons.forEach((b, i) => {
+      if (b.direction && !needsDirection(faces, i)) delete b.direction;
+    });
     const colors = buttons.map((b) => (b.color ? textOn(this, cssColor(b.color)) : ""));
     if (colors.includes(null)) {
       // Not on the page yet: the button text colors are found once it is
@@ -1890,8 +1962,7 @@ class XtoolFeature extends XtoolElement {
       text = document.createElement("span");
       text.textContent = b.text;
     }
-    const showIcon = icon && (display !== "names" || !text);
-    const showText = text && (display !== "icons" || !showIcon || b.alwaysText);
+    const { showIcon, showText } = faceOf(b, display);
     // The arrow goes under the icon, or under the name without one
     const first = showIcon ? icon : showText ? text : undefined;
     if (first && b.direction) {
@@ -2729,12 +2800,17 @@ class XtoolLights extends XtoolElement {
     if (!this._ready()) return;
     const device = this._device;
     this._box.setAttribute("aria-label", this.constructor.label);
-    const items = this._chosen().map((id) => ({ id, ...this.constructor.controlFor(id, device) }))
-      .filter(({ control, entityId }) => control && entityId)
+    const chosen = this._chosen().map((id) => ({ id, ...this.constructor.controlFor(id, device) }))
+      .filter(({ control, entityId }) => control && entityId);
+    // A chevron only tells apart light icons that are the same
+    const icons = chosen.filter(({ control }) => control.part === "icon");
+    const faces = icons.map(({ entityId }) => iconOf(this._hass, entityId, () => this._render()));
+    const items = chosen
       .map(({ control, entityId }) => {
-        if (!this._rows.has(entityId)) this._rows.set(entityId, new LightRow(this, entityId, directionOf(control, device)));
+        if (!this._rows.has(entityId)) this._rows.set(entityId, new LightRow(this, entityId));
         const row = this._rows.get(entityId);
-        row.update();
+        const i = icons.findIndex((item) => item.entityId === entityId);
+        row.update(i >= 0 && control.direction && needsDirection(faces, i) ? control.direction : undefined);
         return control.part === "icon" ? row.icon : row.slide;
       })
       // A light without a brightness has no slider
