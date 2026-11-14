@@ -137,8 +137,15 @@
     check("lights", [...reordered.shadowRoot.querySelector(".row").children].map((el) => el.localName === "ha-tile-icon"
       ? `icon:${el.querySelector("ha-state-icon").stateObj.entity_id}` : `slider:${el.querySelector("hui-card-feature").context.entity_id}`).join()
       === "slider:light.f2_fill_back,icon:light.f2_fill_front,icon:light.f2_fill_back", "each icon and slider in the order chosen");
-    check("lights", frontIcon.querySelector(".glyph .arrow")?.icon === "mdi:chevron-down" && lightItems[2].querySelector(".glyph .arrow")?.icon === "mdi:chevron-up",
-      "the chevron for where each light sits, as in Controls");
+    check("lights", !lightsRow.querySelector(".arrow") && frontIcon.querySelector(":scope > ha-state-icon[slot=icon]"),
+      "no chevrons: each light's own icon shows where it sits");
+    const sameHass = makeHass();
+    sameHass.entities["light.f2_fill_front"].icon = sameHass.entities["light.f2_fill_back"].icon = "mdi:lightbulb";
+    const sameLights = addFeature({ type: "custom:xtool-lights" }, { hass: sameHass });
+    await wait(50);
+    const sameIcons = [...sameLights.shadowRoot.querySelectorAll(".row > ha-tile-icon")];
+    check("lights", sameIcons.map((el) => el.querySelector(".glyph .arrow")?.icon).join() === "mdi:chevron-down,mdi:chevron-up",
+      "the chevron for where each light sits when their icons are the same, as in Controls");
     check("lights", frontIcon.style.getPropertyValue("--tile-icon-color") === "rgb(214, 228, 255)"
       && lightItems[2].style.getPropertyValue("--tile-icon-color").includes("--state-light-inactive-color")
       && lightItems[1].style.getPropertyValue("--feature-color") === "rgb(214, 228, 255)",
@@ -189,8 +196,8 @@
     await wait(50);
     const p2LightIcons = [...p2Lights.shadowRoot.querySelectorAll(".row > ha-tile-icon")];
     check("lights, P2", [...p2Lights.shadowRoot.querySelectorAll(".slide hui-card-feature")].map((f) => f.context.entity_id).join() === "light.p2_fill_left,light.p2_fill_right"
-      && p2LightIcons.map((el) => el.querySelector(".arrow")?.icon).join() === "mdi:chevron-left,mdi:chevron-right",
-      "the P2's left and right fill lights, four choices, with their chevrons (the close camera's light is in the camera)");
+      && p2LightIcons.length === 2 && !p2Lights.shadowRoot.querySelector(".arrow"),
+      "the P2's left and right fill lights, four choices, by their own icons without chevrons (the close camera's light is in the camera)");
 
     // Animate fan: the exhaust's icon turns while it runs
     row = addFeature({ type: "custom:xtool-peripherals" }, { hass: makeHass() });
@@ -206,9 +213,8 @@
 
     row = addFeature({ type: "custom:xtool-peripherals" }, { hass: makeHass(), entityId: "sensor.p2_status" });
     await wait(50);
-    check("direction, P2", keyNamed(row, "fill_light_left")?.querySelector(".arrow").icon === "mdi:chevron-left"
-      && keyNamed(row, "fill_light_right")?.querySelector(".arrow").icon === "mdi:chevron-right" && !keyNamed(row, "fill_light").querySelector(".arrow"),
-      "the P2's left and right fill lights: left and right chevrons");
+    check("direction, P2", keyNamed(row, "fill_light_left") && keyNamed(row, "fill_light_right") && keyNamed(row, "fill_light") && !row.shadowRoot.querySelector(".arrow"),
+      "the P2's fill lights: their own icons, which differ, so no chevrons");
     hass = makeHass();
     row = addFeature({ type: "custom:xtool-peripherals", controls: ["wake"] }, { hass, entityId: "sensor.p2_status" });
     await wait(50);
@@ -1001,15 +1007,18 @@
       return Object.keys(h.states).filter((id) => id.startsWith("switch.") && h.entities[id]?.translation_key?.startsWith("overlay_"));
     }
 
-    // Several of one kind: a chevron under the icon for where each sits
-    const frontKey = keyNamed(allControls, "fill_light_front"), backKey = keyNamed(allControls, "fill_light_back");
+    // A chevron only tells apart keys that look the same
+    check("direction", !allControls.shadowRoot.querySelector(".arrow"), "no chevrons when each light's own icon differs");
     const arrowOf = (key) => key.querySelector(".glyph > ha-state-icon + ha-icon.arrow")?.icon;
-    check("direction", arrowOf(frontKey) === "mdi:chevron-down" && arrowOf(backKey) === "mdi:chevron-up" && !keyNamed(allControls, "power").querySelector(".arrow")
-      && frontKey.querySelectorAll("ha-state-icon").length === 1, "front: down, back: up, under the light's one icon; none for a part there is one of");
-    const named = addFeature({ type: "custom:xtool-peripherals", controls: ["fill_light_front"], display: "names" }, { hass });
+    const sameControls = addFeature({ type: "custom:xtool-peripherals" }, { hass: sameHass });
+    await wait(50);
+    const frontKey = keyNamed(sameControls, "fill_light_front"), backKey = keyNamed(sameControls, "fill_light_back");
+    check("direction", arrowOf(frontKey) === "mdi:chevron-down" && arrowOf(backKey) === "mdi:chevron-up" && !keyNamed(sameControls, "power").querySelector(".arrow")
+      && frontKey.querySelectorAll("ha-state-icon").length === 1, "the same icon on both lights: front down, back up, under the light's one icon; none for other keys");
+    const named = addFeature({ type: "custom:xtool-peripherals", controls: ["fill_light_front", "fill_light_back"], display: "names" }, { hass });
     await wait(50);
     check("direction", keyNamed(named, "fill_light_front").querySelector(".glyph > span + ha-icon.arrow") && keyNamed(named, "fill_light_front").textContent === "Light",
-      "Show: Names: the arrow under the name");
+      "Show: Names: both named Light, so the arrow under the name");
     const oneLight = makeHass();
     delete oneLight.entities["light.f2_fill_back"];
     const single = addFeature({ type: "custom:xtool-peripherals" }, { hass: oneLight });

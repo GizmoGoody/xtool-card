@@ -80,8 +80,8 @@ const F2 = [
   ["switch.f2_power", "power_switch", "on"],
   ["switch.f2_exhaust", "smoking_fan", "on"],
   ["binary_sensor.f2_exhaust_running", "smoking_fan_running", "on"],
-  ["light.f2_fill_front", "fill_light_front", "on", { supported_color_modes: ["brightness"], brightness: 128 }],
-  ["light.f2_fill_back", "fill_light_back", "off", { supported_color_modes: ["brightness"] }],
+  ["light.f2_fill_front", "fill_light_front", "on", { supported_color_modes: ["brightness"], brightness: 128, icon: "mdi:page-layout-footer" }],
+  ["light.f2_fill_back", "fill_light_back", "off", { supported_color_modes: ["brightness"], icon: "mdi:page-layout-header" }],
   ["switch.f2_red_dot", "ir_led", "off"],
   ["switch.f2_flame", "flame_alarm_v2", "on"],
   ["switch.f2_gap", "gap_check", "on"],
@@ -170,6 +170,15 @@ const P2_CLOSE_CAMERA = [
  * A hass object. changes: { entity_id: state or { state, attributes } }.
  * Like Home Assistant's, the controls carry it and it refers back to itself.
  */
+// The integration's entity icons (its icons.json) for the stand-in entities
+const ICONS = {
+  light: {
+    fill_light_1: { default: "mdi:light-recessed" },
+    fill_light_2: { default: "mdi:page-layout-sidebar-right" },
+    fill_light_3: { default: "mdi:page-layout-sidebar-left" },
+  },
+};
+
 window.makeHass = (changes = {}) => {
   const hass = {
     states: {},
@@ -193,6 +202,13 @@ window.makeHass = (changes = {}) => {
     formatEntityName(stateObj, item) {
       if (item?.type !== "entity") throw new Error(`formatEntityName stand-in: ${JSON.stringify(item)}`);
       return NAMES[hass.entities[stateObj.entity_id]?.translation_key] ?? "";
+    },
+    // The integration's icon translations, as Home Assistant sends them to its frontend
+    callWS(message) {
+      if (message.type === "frontend/get_icons" && message.category === "entity" && message.integration === "xtool") {
+        return Promise.resolve({ resources: { xtool: ICONS } });
+      }
+      return Promise.reject(new Error(`callWS stand-in: ${JSON.stringify(message)}`));
     },
     // A call's target is recorded with its data, as one entity_id
     callService(domain, service, data, target) {
