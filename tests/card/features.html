@@ -426,13 +426,13 @@
     camera.addEventListener("hass-more-info", (ev) => (opened = ev.detail.entityId));
     camera.shadowRoot.querySelector(".shot").click();
     check("camera", opened === "camera.f2_deep", "a tap opens the camera");
-    const live = addFeature({ type: "custom:xtool-camera", show: "names", camera: "Deep", camera_view: "live", controls: ["crop", "perspective"] }, { hass });
+    const live = addFeature({ type: "custom:xtool-camera", show: "names", camera: "deep", camera_view: "live", controls: ["crop", "perspective"] }, { hass });
     await wait(80);
     check("camera, live", live.shadowRoot.querySelector("hui-image").cameraView === "live" && live.shadowRoot.querySelector("hui-image").cameraImage === "camera.f2_deep"
       && topKeys(live).map((k) => k.dataset.key).join() === "perspective", "the chosen camera, live, without camera buttons (its perspective stays)");
 
     const p2Hass = makeHass();
-    const p2Camera = addFeature({ type: "custom:xtool-camera", show: "names", camera: "Overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const p2Camera = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     const inputsOf = (feature) => [...feature.shadowRoot.querySelectorAll(".inputs > .slide hui-card-feature")]
       .map((f) => `${f.feature.type}${f.feature.style ? `:${f.feature.style}` : ""}=${f.context.entity_id}`).join();
@@ -495,7 +495,7 @@
     await wait(60);
     check("P2 camera, options", keysOf(onlyMode).length === 0
       && inputsOf(onlyMode) === "numeric-input:slider=number.p2_overview_exposure,select-options=select.p2_mode", "only the controls chosen, in the order chosen");
-    const onlyIcon = addFeature({ type: "custom:xtool-camera", show: "names", camera: "Close", controls: ["close_light_icon"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const onlyIcon = addFeature({ type: "custom:xtool-camera", show: "names", camera: "close", controls: ["close_light_icon"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", closeIcon(onlyIcon) && inputsOf(onlyIcon) === "", "the close fill light's icon alone, without its slider");
 
@@ -521,7 +521,7 @@
     };
     for (const kind of ["touch", "mouse"]) {
       const tapHass = makeHass();
-      const tapper = addFeature({ type: "custom:xtool-camera", show: "names", camera: "Overview" }, { hass: tapHass, entityId: "sensor.p2_status" });
+      const tapper = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: tapHass, entityId: "sensor.p2_status" });
       await wait(80);
       const shot = tapper.shadowRoot.querySelector(".shot");
       let infos = 0;
@@ -566,7 +566,7 @@
 
     // The target: while the position is slid, and the Laser target overlay is on
     const targetHass = makeHass({ "switch.p2_overview_target": "on" });
-    const targetCamera = addFeature({ type: "custom:xtool-camera", show: "names", camera: "Overview" }, { hass: targetHass, entityId: "sensor.p2_status" });
+    const targetCamera = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: targetHass, entityId: "sensor.p2_status" });
     const targetPosition = addFeature({ type: "custom:xtool-position", show: "names" }, { hass: targetHass, entityId: "sensor.p2_status" });
     await wait(80);
     const target = targetCamera.shadowRoot.querySelector(".shot svg.target");
@@ -593,7 +593,7 @@
     check("target", target.style.display === "none", "not while the Laser target overlay is off");
 
     // P2 crop: tap two corners on the overview picture; the work area measured from its back left corner
-    const p2Crop = addFeature({ type: "custom:xtool-camera", show: "names", camera: "Overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const p2Crop = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(80);
     const p2Shot = p2Crop.shadowRoot.querySelector(".shot");
     const p2Img = p2Crop.shadowRoot.querySelector(".shot hui-image:not([hidden])").shadowRoot.querySelector("img");
@@ -620,7 +620,7 @@
     p2Crop.hass = makeHass({ "number.p2_overview_crop_width": "400", "select.p2_overview_crop": "process_on_slats" });
     await wait(20);
     check("P2 crop", keyNamed(p2Crop, "crop").getAttribute("aria-pressed") === "false", "a crop preset chosen leaves Crop off");
-    const customAtLoad = addFeature({ type: "custom:xtool-camera", show: "names", camera: "Overview" },
+    const customAtLoad = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" },
       { hass: makeHass({ "number.p2_overview_crop_width": "300", "select.p2_overview_crop": "custom" }), entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 crop", keyNamed(customAtLoad, "crop").getAttribute("aria-pressed") === "true", "a crop of its own (Custom) at load: Crop is on");
@@ -634,18 +634,18 @@
     // Overlays: a key for each overlay switch chosen, of every camera
     const overlays = addFeature({ type: "custom:xtool-overlays", show: "names" }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(50);
-    check("overlays", keysOf(overlays).map((k) => k.dataset.key).join() === "switch.p2_overview_target,switch.p2_overview_close,switch.p2_overview_slats,switch.p2_close_studio,switch.p2_close_custom"
+    check("overlays", keysOf(overlays).map((k) => k.dataset.key).join() === "overview_laser_target,overview_close_camera,overview_slat_lines,close_studio,close_custom"
       && keysOf(overlays).map((k) => k.textContent).join() === "Laser target,Close camera,Slat lines,Studio,Custom",
       "each camera's overlay switches, by name");
-    check("overlays", keyNamed(overlays, "switch.p2_overview_target").getAttribute("aria-pressed") === "false"
-      && keyNamed(overlays, "switch.p2_overview_slats").getAttribute("aria-pressed") === "true"
-      && keyNamed(overlays, "switch.p2_overview_target").title === "Laser target (Overview camera)", "on and off shown; the title has the camera");
-    keyNamed(overlays, "switch.p2_overview_target").click();
+    check("overlays", keyNamed(overlays, "overview_laser_target").getAttribute("aria-pressed") === "false"
+      && keyNamed(overlays, "overview_slat_lines").getAttribute("aria-pressed") === "true"
+      && keyNamed(overlays, "overview_laser_target").title === "Laser target (Overview camera)", "on and off shown; the title has the camera");
+    keyNamed(overlays, "overview_laser_target").click();
     check("overlays", JSON.stringify(lastCall(p2Hass)) === JSON.stringify({ domain: "switch", service: "turn_on", data: { entity_id: "switch.p2_overview_target" } }),
       "a tap turns the overlay on");
-    const someOverlays = addFeature({ type: "custom:xtool-overlays", show: "names", controls: ["switch.p2_close_custom", "switch.p2_overview_target"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const someOverlays = addFeature({ type: "custom:xtool-overlays", show: "names", controls: ["close_custom", "overview_laser_target"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(50);
-    check("overlays", keysOf(someOverlays).map((k) => k.dataset.key).join() === "switch.p2_close_custom,switch.p2_overview_target", "only those chosen, in order");
+    check("overlays", keysOf(someOverlays).map((k) => k.dataset.key).join() === "close_custom,overview_laser_target", "only those chosen, in order, by their control ids");
     const overlayOptions = document.createElement("xtool-feature-editor");
     overlayOptions.hass = p2Hass;
     overlayOptions.context = { entity_id: "sensor.p2_status" };
@@ -798,17 +798,20 @@
     const mainAfter = cropped.shadowRoot.querySelector(".shot hui-image:not([hidden])");
     check("camera, switch", mainAfter === mainBefore && mainAfter.loads === mainLoads + 1 && cropped.shadowRoot.querySelectorAll(".shot hui-image").length === 2,
       "and then a new photo, fetched once, in the same image");
-    const iconCamera = addFeature({ type: "custom:xtool-camera", camera: "Deep", show: "icons" }, { hass });
+    const iconCamera = addFeature({ type: "custom:xtool-camera", camera: "deep", show: "icons" }, { hass });
     await wait(60);
     check("camera, show", keysOf(iconCamera).length === 3 && keyNamed(iconCamera, "perspective").querySelector("ha-state-icon").stateObj.entity_id === "select.f2_deep_perspective"
       && keysOf(iconCamera).every((k) => k.querySelector("ha-state-icon"))
       && keysOf(iconCamera).every((k) => !k.querySelector("span")),
       "Show: Icons, for the camera buttons and the perspective (its entity's icon), as for every other key");
-    const namedCamera = addFeature({ type: "custom:xtool-camera", camera: "Deep", show: "names" }, { hass });
+    const namedCamera = addFeature({ type: "custom:xtool-camera", camera: "deep", show: "names" }, { hass });
     await wait(60);
     check("camera, show", keysOf(namedCamera).map((k) => k.textContent).slice(0, 2).join() === "Main,Deep" && keysOf(namedCamera).slice(0, 2).every((k) => !k.querySelector("ha-state-icon")),
       "Show: Names, for the camera buttons too");
     cameraOptions.setConfig({ type: "custom:xtool-camera" });
+    const cameraChoices = cameraOptions.querySelector("ha-form").schema.find((f) => f.name === "camera").selector.select.options.map((o) => o.value);
+    check("camera, options", cameraChoices.join() === "main,deep" && cameraOptions.querySelector("ha-form").data.camera === "main",
+      `the camera by its id, not its name (${cameraChoices.join(", ")})`);
     const cameraNames = cameraOptions.querySelector("ha-form").schema.map((s) => s.name);
     const f2Controls = cameraOptions.querySelector("ha-form").schema.find((f) => f.name === "controls");
     check("camera, options", cameraNames.join() === "camera,camera_view,controls,show,show_last_updated" && f2Controls.selector.select.reorder
@@ -842,56 +845,56 @@
     hass = makeHass();
     let fan = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "names" }, { hass });
     await wait(60);
-    check("IF2 fan", keysOf(fan).map((k) => k.textContent).join() === "Off,A,2" && keyNamed(fan, "speed").getAttribute("aria-pressed") === "true"
-      && keyNamed(fan, "auto").title === "Auto" && keyNamed(fan, "speed").title === "Speed 2. Tap for 3", "keys: Off, A and the speed, with names; at speed 2");
-    keyNamed(fan, "auto").click();
+    check("IF2 fan", keysOf(fan).map((k) => k.textContent).join() === "Off,A,2" && keyNamed(fan, "fan_speed").getAttribute("aria-pressed") === "true"
+      && keyNamed(fan, "fan_auto").title === "Auto" && keyNamed(fan, "fan_speed").title === "Speed 2. Tap for 3", "keys: Off, A and the speed, with names; at speed 2");
+    keyNamed(fan, "fan_auto").click();
     check("IF2 fan", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "fan", service: "set_preset_mode", data: { entity_id: "fan.if2_fan", preset_mode: "Auto" } }),
       "A sets Auto: each job sets the speed");
-    keyNamed(fan, "speed").click();
+    keyNamed(fan, "fan_speed").click();
     check("IF2 fan", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "fan", service: "set_percentage", data: { entity_id: "fan.if2_fan", percentage: 75 } }),
       "a tap on the speed steps from 2 to 3 (75 %)");
-    keyNamed(fan, "off").click();
+    keyNamed(fan, "fan_off").click();
     check("IF2 fan", lastCall(hass).service === "turn_off", "Off turns the fan off");
     let fanHass = makeHass({ "fan.if2_fan": { attributes: { percentage: 100 } } });
     fan = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "names" }, { hass: fanHass });
     await wait(60);
-    keyNamed(fan, "speed").click();
+    keyNamed(fan, "fan_speed").click();
     check("IF2 fan", lastCall(fanHass).data.percentage === 25, "after 4, back to 1");
     fanHass = makeHass({ "fan.if2_fan": { state: "off", attributes: { percentage: 0 } } });
     fan = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "names" }, { hass: fanHass });
     await wait(60);
-    keyNamed(fan, "speed").click();
-    check("IF2 fan", keyNamed(fan, "speed").getAttribute("aria-pressed") === "false" && lastCall(fanHass).data.percentage === 25,
+    keyNamed(fan, "fan_speed").click();
+    check("IF2 fan", keyNamed(fan, "fan_speed").getAttribute("aria-pressed") === "false" && lastCall(fanHass).data.percentage === 25,
       "while off, the speed key starts the speed it shows (1 at first)");
     fan = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "names", show: "icons" }, { hass: makeHass({ "fan.if2_fan": { attributes: { preset_mode: "Auto" } } }) });
     await wait(60);
-    check("IF2 fan", keyNamed(fan, "auto").getAttribute("aria-pressed") === "true" && keysOf(fan).every((k) => k.querySelector("ha-icon"))
-      && !keyNamed(fan, "off").querySelector("span") && keyNamed(fan, "speed").querySelector("ha-icon").icon === "mdi:fan"
-      && keyNamed(fan, "speed").querySelector("span")?.textContent === "1",
+    check("IF2 fan", keyNamed(fan, "fan_auto").getAttribute("aria-pressed") === "true" && keysOf(fan).every((k) => k.querySelector("ha-icon"))
+      && !keyNamed(fan, "fan_off").querySelector("span") && keyNamed(fan, "fan_speed").querySelector("ha-icon").icon === "mdi:fan"
+      && keyNamed(fan, "fan_speed").querySelector("span")?.textContent === "1",
       "in Auto: A pressed; Show: Icons, with the speed's number beside its fan icon");
-    const autoKey = keyNamed(fan, "auto"), spinOf = (key) => key.querySelector("ha-icon.spin")?.style.getPropertyValue("--spin");
+    const autoKey = keyNamed(fan, "fan_auto"), spinOf = (key) => key.querySelector("ha-icon.spin")?.style.getPropertyValue("--spin");
     check("IF2 fan", autoKey.querySelector("ha-icon").icon === "mdi:fan" && autoKey.querySelector("span")?.textContent === "A"
-      && spinOf(autoKey) === "1.6s" && autoKey.style.getPropertyValue("--c").includes("blue") && !spinOf(keyNamed(fan, "speed")),
+      && spinOf(autoKey) === "1.6s" && autoKey.style.getPropertyValue("--c").includes("blue") && !spinOf(keyNamed(fan, "fan_speed")),
       `Auto, spinning at speed 2: its fan icon with A beside it, blue, turning once in 1.6 s; the speed key still (${spinOf(autoKey)})`);
     fan = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "names", show: "icons" }, { hass: makeHass({ "fan.if2_fan": { attributes: { percentage: 100 } } }) });
     await wait(60);
-    check("IF2 fan", spinOf(keyNamed(fan, "speed")) === "0.6s" && keyNamed(fan, "speed").style.getPropertyValue("--c").includes("blue"),
-      `at speed 4: the speed key blue, turning faster (${spinOf(keyNamed(fan, "speed"))})`);
+    check("IF2 fan", spinOf(keyNamed(fan, "fan_speed")) === "0.6s" && keyNamed(fan, "fan_speed").style.getPropertyValue("--c").includes("blue"),
+      `at speed 4: the speed key blue, turning faster (${spinOf(keyNamed(fan, "fan_speed"))})`);
     fan = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "names", show: "icons" }, { hass: makeHass({ "fan.if2_fan": { state: "off", attributes: { preset_mode: "Auto", percentage: 0 } } }) });
     await wait(60);
-    check("IF2 fan", keyNamed(fan, "auto").getAttribute("aria-pressed") === "true" && !spinOf(keyNamed(fan, "auto"))
-      && !keyNamed(fan, "auto").style.getPropertyValue("--c").includes("blue"), "Auto while the fan stands still: pressed, not blue, not turning");
+    check("IF2 fan", keyNamed(fan, "fan_auto").getAttribute("aria-pressed") === "true" && !spinOf(keyNamed(fan, "fan_auto"))
+      && !keyNamed(fan, "fan_auto").style.getPropertyValue("--c").includes("blue"), "Auto while the fan stands still: pressed, not blue, not turning");
     const fanOptions = document.createElement("xtool-feature-editor");
     fanOptions.hass = hass;
     fanOptions.context = { entity_id: "sensor.f2_status" };
     fanOptions.setConfig({ type: "custom:xtool-safetypro-if2-fan" });
     const fanForm = fanOptions.querySelector("ha-form");
     check("IF2 fan, options", fanForm.schema.map((s) => s.name).join() === "controls,show" && fanForm.data.show === "icons"
-      && fanForm.data.controls.join() === "off,auto,speed" && fanForm.schema[0].selector.select.reorder,
+      && fanForm.data.controls.join() === "fan_off,fan_auto,fan_speed" && fanForm.schema[0].selector.select.reorder,
       `Keys (all, in order, by default) and Show (${fanForm.schema.map((s) => s.name).join(", ")})`);
-    fan = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "names", controls: ["speed", "off"] }, { hass: makeHass() });
+    fan = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "names", controls: ["fan_speed", "fan_off"] }, { hass: makeHass() });
     await wait(60);
-    check("IF2 fan, keys", keysOf(fan).map((k) => k.dataset.key).join() === "speed,off", "only the keys chosen, in the order chosen");
+    check("IF2 fan, keys", keysOf(fan).map((k) => k.dataset.key).join() === "fan_speed,fan_off", "only the keys chosen, in the order chosen");
 
     // The first IF2: its gear select, in the same control
     const firstIf2 = () => {
@@ -1068,7 +1071,7 @@
     const manyIds = XtoolOverlayIds(manyHass);
     const manyOverlays = addFeature({ type: "custom:xtool-overlays", show: "names", controls: manyIds }, { hass: manyHass, entityId: "sensor.p2_status" });
     await wait(50);
-    check("overlays", keysOf(fiveOverlays).map((k) => k.dataset.key).join() === "switch.p2_overview_target,switch.p2_overview_close,switch.p2_overview_slats,switch.p2_extra_1,switch.p2_extra_2",
+    check("overlays", keysOf(fiveOverlays).map((k) => k.dataset.key).join() === "overview_laser_target,overview_close_camera,overview_slat_lines,overview_extra_1,overview_extra_2",
       `five by default: the laser target, the close camera and the slat lines first, then the others in order (${keysOf(fiveOverlays).map((k) => k.dataset.key).join(", ")})`);
     const manyShown = keysOf(manyOverlays).filter((k) => k.offsetWidth);
     check("keys", manyShown.length < 12 && manyShown.length > 4 && fills(manyOverlays) && manyShown.every((k, i) => k === keysOf(manyOverlays)[i]),
@@ -1087,7 +1090,12 @@
     check("keys", keptLimit?.length === 13, "and keeps all chosen");
 
     function XtoolOverlayIds(h) {
-      return Object.keys(h.states).filter((id) => id.startsWith("switch.") && h.entities[id]?.translation_key?.startsWith("overlay_"));
+      // Every overlay's control id, as the editor offers them
+      const editor = document.createElement("xtool-feature-editor");
+      editor.hass = h;
+      editor.context = { entity_id: "sensor.p2_status" };
+      editor.setConfig({ type: "custom:xtool-overlays" });
+      return editor.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.value);
     }
 
     // A chevron only tells apart keys that look the same
@@ -1242,7 +1250,7 @@
 
     // Camera: everything chosen, in the order chosen, line by line
     const orderHass = makeHass();
-    const ordered = addFeature({ type: "custom:xtool-camera", camera: "Overview", controls: ["mode", "cameras", "exposure", "crop"] }, { hass: orderHass, entityId: "sensor.p2_status" });
+    const ordered = addFeature({ type: "custom:xtool-camera", camera: "overview", controls: ["mode", "cameras", "exposure", "crop"] }, { hass: orderHass, entityId: "sensor.p2_status" });
     await wait(60);
     const orderOf = (feature) => [...feature.shadowRoot.querySelector(".row").children]
       .map((el) => el.dataset.control ?? el.querySelector(":scope > hui-card-feature")?.context.entity_id).join();
@@ -1251,7 +1259,7 @@
     const boxes = [...ordered.shadowRoot.querySelector(".row").children].map((el) => el.getBoundingClientRect());
     check("camera, order", boxes.every((b, i) => i === 0 || b.top > boxes[i - 1].top + 1 || b.left > boxes[i - 1].left),
       "left to right, then on the next line");
-    const toggled = addFeature({ type: "custom:xtool-camera", camera: "Overview", show: "names", controls: ["camera_toggle"] }, { hass: orderHass, entityId: "sensor.p2_status" });
+    const toggled = addFeature({ type: "custom:xtool-camera", camera: "overview", show: "names", controls: ["camera_toggle"] }, { hass: orderHass, entityId: "sensor.p2_status" });
     await wait(60);
     const toggleKey = () => keyNamed(toggled, "camera_toggle");
     check("camera toggle", keysOf(toggled).length === 1 && toggleKey().textContent === "Overview" && toggleKey().title === "Overview camera. Tap for Close camera",

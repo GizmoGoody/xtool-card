@@ -296,10 +296,10 @@ const DEFAULT_OVERLAYS = [
   "overlay_laser_target", "overlay_close_camera", "overlay_red_dot_close", "overlay_red_dot_quick", "overlay_slat_lines",
 ];
 
-/** An overlay's control: its switch, named by its entity and its camera. */
-function overlayControl(entityId, camera, hass) {
+/** An overlay's control (id: see cameraModel): its switch, named by its entity and its camera. */
+function overlayControl(id, entityId, camera, hass) {
   const name = `${entityName(hass, entityId) ?? entityId} (${entityName(hass, camera.entityId) ?? camera.label})`;
-  return { id: entityId, kind: "toggle", color: "primary", option: name, title: name };
+  return { id, kind: "toggle", color: "primary", option: name, title: name };
 }
 
 // ---------------------------------------------------------------------------
@@ -523,7 +523,14 @@ function findRole(candidates, { keys, domains }) {
   return undefined;
 }
 
-/** A camera: its entity, key and name, its settings ({ role: entity_id }) and its overlay switches. */
+/**
+ * A camera's id in the card's options: its short name in CAMERAS, in snake
+ * case (Main: main, Close: close, Fire record: fire_record), so it stays the
+ * same whatever Home Assistant calls the camera.
+ */
+const cameraId = (label) => label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+/** A camera: its entity, key, id and name, its settings ({ role: entity_id }) and its overlay switches. */
 function cameraModel(hass, entityId, key, label) {
   const device = hass.entities[entityId].device_id;
   const entities = deviceEntities(hass, device);
@@ -537,11 +544,12 @@ function cameraModel(hass, entityId, key, label) {
   for (const e of entities) {
     const overlay = e.translation_key;
     if (!overlay?.startsWith(OVERLAY_PREFIX) || domainOf(e.entity_id) !== "switch" || overlays.some((o) => o.key === overlay)) continue;
-    overlays.push({ key: overlay, entityId: e.entity_id });
+    // Its control id: the camera's id and the overlay's key (overview_laser_target)
+    overlays.push({ key: overlay, id: `${cameraId(label)}_${overlay.slice(OVERLAY_PREFIX.length)}`, entityId: e.entity_id });
   }
   const rank = (o) => (OVERLAY_ORDER.includes(o.key) ? OVERLAY_ORDER.indexOf(o.key) : OVERLAY_ORDER.length);
   overlays.sort((a, b) => rank(a) - rank(b));
-  return { entityId, key, label, device, settings, overlays };
+  return { entityId, key, id: cameraId(label), label, device, settings, overlays };
 }
 
 /** The model of a device, from Home Assistant's registries (see deviceOf). */
@@ -2191,13 +2199,13 @@ class XtoolCamera extends XtoolFeature {
 
   static editor(hass, entityId) {
     const { cameras } = deviceOf(hass, entityId);
-    const labels = cameras.map((camera) => camera.label);
+    const ids = cameras.map((camera) => camera.id);
     const base = super.editor(hass, entityId);
     return {
       schema: [
         {
           name: "camera", label: "Camera",
-          selector: { select: { mode: "dropdown", options: cameras.map((camera) => ({ value: camera.label, label: entityName(hass, camera.entityId) ?? camera.label })) } },
+          selector: { select: { mode: "dropdown", options: cameras.map((camera) => ({ value: camera.id, label: entityName(hass, camera.entityId) ?? camera.label })) } },
         },
         {
           name: "camera_view", label: "Camera view",
@@ -2213,7 +2221,7 @@ class XtoolCamera extends XtoolFeature {
         },
       ],
       data: (c) => ({
-        camera: labels.includes(c.camera) ? c.camera : labels[0], camera_view: c.camera_view === "live" ? "live" : "auto",
+        camera: ids.includes(c.camera) ? c.camera : ids[0], camera_view: c.camera_view === "live" ? "live" : "auto",
         ...base.data(c), show_last_updated: c.show_last_updated !== false,
       }),
       save: base.save,
@@ -2770,7 +2778,7 @@ class XtoolCamera extends XtoolFeature {
   _currentCamera(cameras) {
     const ids = cameras.map((camera) => camera.entityId);
     if (this._picked && ids.includes(this._picked)) return this._picked;
-    const configured = cameras.find((camera) => camera.label === this._config.camera)?.entityId;
+    const configured = cameras.find((camera) => camera.id === this._config.camera)?.entityId;
     return configured ?? ids[0];
   }
 
@@ -2938,21 +2946,22 @@ class XtoolOverlays extends XtoolFeature {
   static pickerName = "xTool overlays";
   static form = { label: "Controls" };
 
-  /** Each camera's overlay switches, by entity_id, camera by camera. */
+  /** Each camera's overlay switches, by their control ids (overview_laser_target), camera by camera. */
   static controlIds(device) {
-    return device.cameras.flatMap((camera) => camera.overlays.map((overlay) => overlay.entityId));
+    return device.cameras.flatMap((camera) => camera.overlays.map((overlay) => overlay.id));
   }
 
   static controlFor(id, device, hass) {
-    const camera = device.cameras.find((c) => c.overlays.some((overlay) => overlay.entityId === id));
-    return { control: camera && overlayControl(id, camera, hass), entityId: camera && id };
+    const camera = device.cameras.find((c) => c.overlays.some((overlay) => overlay.id === id));
+    const overlay = camera?.overlays.find((o) => o.id === id);
+    return { control: overlay && overlayControl(id, overlay.entityId, camera, hass), entityId: overlay?.entityId };
   }
 
   /** Five by default: the overlays in DEFAULT_OVERLAYS, each of the first camera that has it, then others in order. */
   static defaultsFor(device) {
     const all = device.cameras.flatMap((camera) => camera.overlays);
-    const picked = DEFAULT_OVERLAYS.map((key) => all.find((o) => o.key === key)?.entityId).filter(Boolean);
-    return [...picked, ...all.map((o) => o.entityId).filter((id) => !picked.includes(id))].slice(0, 5);
+    const picked = DEFAULT_OVERLAYS.map((key) => all.find((o) => o.key === key)?.id).filter(Boolean);
+    return [...picked, ...all.map((o) => o.id).filter((id) => !picked.includes(id))].slice(0, 5);
   }
 }
 
@@ -2990,7 +2999,8 @@ class XtoolMeasure extends XtoolFeature {
 const NUMBER_ON = "var(--state-number-active-color, var(--state-active-color, var(--primary-color, #03a9f4)))";
 // The IF2 2.0's keys: Off, Auto and the speed. They are this feature's own:
 // they set the fan entity's modes, not an entity each
-const IF2_KEYS = [["off", "Off"], ["auto", "Auto"], ["speed", "Speed"]];
+// Each key's id starts with fan_, so none is a word YAML reads as true or false (off)
+const IF2_KEYS = [["fan_off", "Off"], ["fan_auto", "Auto"], ["fan_speed", "Speed"]];
 const IF2_ICONS = { off: "mdi:fan-off", auto: "mdi:fan", speed: "mdi:fan", 1: "mdi:fan-speed-1", 2: "mdi:fan-speed-2", 3: "mdi:fan-speed-3" };
 
 class XtoolSafetyproIf2Fan extends XtoolFeature {
@@ -3061,18 +3071,18 @@ class XtoolSafetyproIf2Fan extends XtoolFeature {
       const sensed = Math.round((fanState.attributes.percentage ?? 0) / step);
       const look = (key) => (key === value ? fanLook(CONTROLS.if2_fan, spinning, this._config, sensed) : {});
       const buttons = [{
-        key: "off", label: "Off", text: "Off", icon: IF2_ICONS.off, color: "primary", pressed: value === "off", disabled,
+        key: "fan_off", label: "Off", text: "Off", icon: IF2_ICONS.off, color: "primary", pressed: value === "off", disabled,
         action: () => value !== "off" && hass.callService("fan", "turn_off", { entity_id: fan }),
       }];
       if (preset) {
         buttons.push({
-          key: "auto", label: "Auto", text: "A", alwaysText: true, icon: IF2_ICONS.auto, color: "primary", pressed: value === "auto", disabled,
+          key: "fan_auto", label: "Auto", text: "A", alwaysText: true, icon: IF2_ICONS.auto, color: "primary", pressed: value === "auto", disabled,
           ...look("auto"),
           action: () => value !== "auto" && hass.callService("fan", "set_preset_mode", { entity_id: fan, preset_mode: preset }),
         });
       }
       buttons.push({
-        key: "speed", label: value === "speed" ? `Speed ${speed}. Tap for ${nextSpeed}` : `Speed ${speed}`,
+        key: "fan_speed", label: value === "speed" ? `Speed ${speed}. Tap for ${nextSpeed}` : `Speed ${speed}`,
         text: String(speed), alwaysText: true, icon: IF2_ICONS.speed, color: "primary", pressed: value === "speed", disabled,
         ...look("speed"),
         action: () => {
