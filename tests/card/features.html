@@ -209,6 +209,13 @@
     check("direction, P2", keyNamed(row, "fill_light_left")?.querySelector(".arrow").icon === "mdi:chevron-left"
       && keyNamed(row, "fill_light_right")?.querySelector(".arrow").icon === "mdi:chevron-right" && !keyNamed(row, "fill_light").querySelector(".arrow"),
       "the P2's left and right fill lights: left and right chevrons");
+    hass = makeHass();
+    row = addFeature({ type: "custom:xtool-peripherals", controls: ["wake"] }, { hass, entityId: "sensor.p2_status" });
+    await wait(50);
+    check("wake, P2", keysOf(row).map((k) => k.dataset.key).join() === "wake", "the P2's Wake button, in Controls");
+    keyNamed(row, "wake")?.click();
+    check("wake, P2", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "button", service: "press", data: { entity_id: "button.p2_wake" } }),
+      "a tap presses it");
 
     // Safety checks
     hass = makeHass({ "switch.f2_moved": "off" });
@@ -411,7 +418,7 @@
     p2Options.setConfig({ type: "custom:xtool-camera" });
     const p2Form = p2Options.querySelector("ha-form");
     const p2Controls = p2Form.schema.find((f) => f.name === "controls");
-    check("P2 camera, options", p2Controls.selector.select.options.map((o) => o.label).join() === "Buttons to switch cameras,Crop by tapping,Mode,Crop preset,Exposure,Fill light icon,Fill light slider"
+    check("P2 camera, options", p2Controls.selector.select.options.map((o) => o.label).join() === "Buttons to switch cameras,Crop by tapping,Mode,Crop preset,Exposure,Fill light close icon,Fill light close slider"
       && p2Controls.selector.select.reorder && p2Form.data.controls.join() === "cameras,crop,mode,crop_preset,exposure,close_light_icon,close_light_slider"
       && p2Form.schema.find((f) => f.name === "camera").selector.select.options.map((o) => o.label).join() === "Overview camera,Close camera",
       `the controls to choose and order, by their entities' names (${p2Controls.selector.select.options.map((o) => o.label).join(", ")})`);
@@ -541,7 +548,7 @@
       && keyNamed(p2Crop, "crop").getAttribute("aria-pressed") === "false",
       `turning Crop off goes back to the last crop preset (${JSON.stringify(lastCall(p2Cropped))})`);
     // A crop preset chosen does not turn Crop on; a crop of its own at load does
-    p2Crop.hass = makeHass({ "number.p2_overview_crop_width": "400", "select.p2_overview_crop": "work_bed" });
+    p2Crop.hass = makeHass({ "number.p2_overview_crop_width": "400", "select.p2_overview_crop": "process_on_slats" });
     await wait(20);
     check("P2 crop", keyNamed(p2Crop, "crop").getAttribute("aria-pressed") === "false", "a crop preset chosen leaves Crop off");
     const customAtLoad = addFeature({ type: "custom:xtool-camera", camera: "Overview" },
@@ -558,8 +565,8 @@
     // Overlays: a key for each overlay switch chosen, of every camera
     const overlays = addFeature({ type: "custom:xtool-overlay" }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(50);
-    check("overlays", keysOf(overlays).map((k) => k.dataset.key).join() === "switch.p2_overview_target,switch.p2_overview_slats,switch.p2_close_studio,switch.p2_close_custom"
-      && keysOf(overlays).map((k) => k.textContent).join() === "Laser target,Slat lines,Close camera (studio),Close camera (custom)",
+    check("overlays", keysOf(overlays).map((k) => k.dataset.key).join() === "switch.p2_overview_target,switch.p2_overview_close,switch.p2_overview_slats,switch.p2_close_studio,switch.p2_close_custom"
+      && keysOf(overlays).map((k) => k.textContent).join() === "Laser target,Close camera,Slat lines,Studio,Custom",
       "each camera's overlay switches, by name");
     check("overlays", keyNamed(overlays, "switch.p2_overview_target").getAttribute("aria-pressed") === "false"
       && keyNamed(overlays, "switch.p2_overview_slats").getAttribute("aria-pressed") === "true"
@@ -575,7 +582,7 @@
     overlayOptions.context = { entity_id: "sensor.p2_status" };
     overlayOptions.setConfig({ type: "custom:xtool-overlay" });
     check("overlays, options", overlayOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join()
-      === "Laser target (Overview camera),Slat lines (Overview camera),Close camera (studio) (Close camera),Close camera (custom) (Close camera)"
+      === "Close camera (Overview camera),Laser target (Overview camera),Slat lines (Overview camera),Studio (Close camera),Custom (Close camera)"
       && overlayOptions.querySelector("ha-form").schema[0].selector.select.reorder, "chosen and ordered in the editor, each with its camera");
     check("overlays", window.customCardFeatures.find((f) => f.type === "xtool-overlay")?.name === "xTool overlays"
       && window.customCardFeatures.find((f) => f.type === "xtool-overlay").isSupported(p2Hass, { entity_id: "sensor.p2_status" })
@@ -972,8 +979,8 @@
     const manyIds = XtoolOverlayIds(manyHass);
     const manyOverlays = addFeature({ type: "custom:xtool-overlay", controls: manyIds }, { hass: manyHass, entityId: "sensor.p2_status" });
     await wait(50);
-    check("overlays", keysOf(fiveOverlays).map((k) => k.dataset.key).join() === "switch.p2_overview_target,switch.p2_overview_slats,switch.p2_close_studio,switch.p2_extra_1,switch.p2_extra_2",
-      `five by default: the laser target, slat lines and close camera (studio) first, then the others in order (${keysOf(fiveOverlays).map((k) => k.dataset.key).join(", ")})`);
+    check("overlays", keysOf(fiveOverlays).map((k) => k.dataset.key).join() === "switch.p2_overview_target,switch.p2_overview_close,switch.p2_overview_slats,switch.p2_extra_1,switch.p2_extra_2",
+      `five by default: the laser target, the close camera and the slat lines first, then the others in order (${keysOf(fiveOverlays).map((k) => k.dataset.key).join(", ")})`);
     const manyShown = keysOf(manyOverlays).filter((k) => k.offsetWidth);
     check("keys", manyShown.length < 12 && manyShown.length > 4 && fills(manyOverlays) && manyShown.every((k, i) => k === keysOf(manyOverlays)[i]),
       `as many as fit, the first chosen, filling the row (${manyShown.length} of 12)`);
@@ -985,10 +992,10 @@
     limitOptions.addEventListener("config-changed", (ev) => (keptLimit = ev.detail.config.controls));
     const limitForm = limitOptions.querySelector("ha-form");
     const allLimit = limitForm.schema[0].selector.select.options.map((o) => o.value);
-    check("keys", allLimit.length === 12 && limitForm.data.controls.length === 5,
+    check("keys", allLimit.length === 13 && limitForm.data.controls.length === 5,
       `the editor offers every overlay and chooses five (${allLimit.length} offered)`);
     limitForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...limitForm.data, controls: allLimit.slice().reverse() } } }));
-    check("keys", keptLimit?.length === 12, "and keeps all chosen");
+    check("keys", keptLimit?.length === 13, "and keeps all chosen");
 
     function XtoolOverlayIds(h) {
       return Object.keys(h.states).filter((id) => id.startsWith("switch.") && h.entities[id]?.translation_key?.startsWith("overlay_"));
