@@ -176,8 +176,8 @@
     const collapsedHeight = parseFloat(windowBox(styles.titleOnly).style.height);
     const firstBelow = styles.champagne.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector('hui-card-features[slot="features"]').getBoundingClientRect().top;
     const windowBottom = windowBox(styles.champagne).getBoundingClientRect().bottom;
-    check("champagne, match", Math.abs(wh - collapsedHeight) < 0.5 && Math.abs(firstBelow - windowBottom - 6) < 1,
-      `expanded, the window keeps its collapsed height (${wh} and ${collapsedHeight} px), 6 px above the features (${Math.round(firstBelow - windowBottom)} px)`);
+    check("champagne, match", Math.abs(wh - collapsedHeight) < 0.5 && Math.abs(firstBelow - windowBottom - 4) < 1,
+      `expanded, the window keeps its collapsed height (${wh} and ${collapsedHeight} px), and the features start where the title row ends, as under a tile card's title (${Math.round(firstBelow - windowBottom)} px below the window, its 4 px margin)`);
     check("champagne, match", wh > 30 && wh < fh / 2, `the window covers the title only (${Math.round(wh)} of ${fh} px)`);
     check("champagne, match", styles.champagne.shadowRoot.querySelectorAll(".area").length === 0, "Match draws no areas");
     await wait(100);
