@@ -8,16 +8,16 @@
  *                             and other parts; a fan's icon turns while it runs
  * - custom:xtool-lights       each light's icon (a tap turns it on or off) and brightness slider, as a light's
  *                             tile card shows them, chosen and ordered one by one
- * - custom:xtool-safety       the safety checks and the flame alarm level, the safety key, lid and baseplate
+ * - custom:xtool-safety       the safety checks (the P2's flame alarm level), the safety key, lid and baseplate
  *                             (read-outs), and Access control; turning a check off asks first
  * - custom:xtool-configuration the Configuration settings: buzzer, exhaust fan, the IF2 buzzer, device sleep
  * - custom:xtool-camera       a camera, shown by Home Assistant's own image element, with keys to switch;
  *                             tap two corners on the picture to crop it; the deep camera's perspective; the
- *                             P2's mode, crop preset, exposure and close light (Home Assistant's own features)
+ *                             P2's mode, crop, exposure and close light (Home Assistant's own features), and
+ *                             its overview camera's thickness or distance (a field) and Measure
  * - custom:xtool-overlays     a key for each overlay switch chosen, of the cameras' pictures
  * - custom:xtool-safetypro-if2-fan the SafetyPro IF2 inline fan: Off, A (Auto) and a speed key that steps 1 to 4
  * - custom:xtool-position     the laser's position X,Y in a field (press and drag on it to slide both), Move and Home
- * - custom:xtool-measure      Measure, and the thickness or distance in a field (typed, or slid on)
  * - custom:xtool-focus        Autofocus, and the thickness to focus on in a field (typed, or slid on)
  * Each finds its entities on the same device as the card's entity, or on
  * the devices connected to it (the cameras' devices, the IF2's). Every
@@ -204,6 +204,8 @@ class StatesProvider {
  *   such as the SafetyPro IF2 and IF2 2.0),
  * - "camera": each camera's own device (a laser with several cameras gives
  *   each its own device), or the laser's, with the camera's name in front.
+ * A camera's settings are its "camera" roles and the laser's roles whose
+ * entity is on the camera's own device (see cameraModel).
  */
 const roleSpec = (keys, domains, on = "laser") => ({ keys, domains, on });
 const ROLES = {
@@ -216,11 +218,13 @@ const ROLES = {
   cancel: roleSpec(["cancel_job"], ["button"]),
   // Parts
   power: roleSpec(["power_switch"], ["switch"]),
-  exhaust: roleSpec(["smoking_fan"], ["switch"]),
+  // The fan itself (the F2's) or the setting that runs it after a job (the P2's)
+  exhaust_fan: roleSpec(["smoking_fan", "exhaust_fan_setting"], ["switch"]),
   exhaust_running: roleSpec(["smoking_fan_running"], ["binary_sensor"]),
-  exhaust_setting: roleSpec(["exhaust_fan_setting"], ["switch"]),
   cooling_fan: roleSpec(["cooling_fan"], ["switch"]),
-  fill_light: roleSpec(["fill_light", "fill_light_1"], ["light"]),
+  fill_light: roleSpec(["fill_light"], ["light"]),
+  // The P2's close camera's fill light, on that camera's device
+  fill_light_close: roleSpec(["fill_light_1"], ["light"]),
   fill_light_front: roleSpec(["fill_light_front"], ["light"]),
   fill_light_back: roleSpec(["fill_light_back"], ["light"]),
   fill_light_left: roleSpec(["fill_light_3"], ["light"]),
@@ -228,32 +232,33 @@ const ROLES = {
   red_dot: roleSpec(["ir_led", "ir_led_global"], ["switch"]),
   red_dot_close: roleSpec(["aimed_measure_light"], ["switch"]),
   red_dot_quick: roleSpec(["quick_measure_light"], ["switch"]),
-  cover_lock: roleSpec(["digital_lock", "safety_lock"], ["switch", "lock"]),
+  safety_lock: roleSpec(["safety_lock", "digital_lock"], ["lock", "switch"]),
   // Moving the laser, measuring and focusing
   laser_x: roleSpec(["laser_position_x"], ["number"]),
   laser_y: roleSpec(["laser_position_y"], ["number"]),
   move_laser: roleSpec(["move_laser"], ["button"]),
   home_laser: roleSpec(["home_laser_head"], ["button"]),
   wake: roleSpec(["wake"], ["button"]),
-  measure: roleSpec(["measure_thickness_or_distance"], ["button"]),
-  measure_height: roleSpec(["thickness_or_distance"], ["number"]),
+  // The P2's, on its overview camera's device
+  measure_thickness_or_distance: roleSpec(["measure_thickness_or_distance"], ["button"]),
+  thickness_or_distance: roleSpec(["thickness_or_distance"], ["number"]),
   measured: roleSpec(["measured_thickness_or_distance"], ["sensor"]),
   focus_height: roleSpec(["focus_height"], ["number"]),
   engraving_lens: roleSpec(["engraving_lens"], ["sensor"]),
   autofocus: roleSpec(["autofocus"], ["button"]),
   // Safety
-  flame_alarm: roleSpec(["flame_alarm_v2", "flame_alarm"], ["switch"]),
-  enclosure_stop: roleSpec(["gap_check"], ["switch"]),
-  moved_stop: roleSpec(["stops_when_moved", "move_stop"], ["switch"]),
+  // A switch, or the P2's select of its level
+  flame_alarm: roleSpec(["flame_alarm_v2", "flame_alarm", "flame_alarm_level"], ["switch", "select"]),
+  stops_when_enclosure_opened: roleSpec(["gap_check"], ["switch"]),
+  stops_when_moved: roleSpec(["stops_when_moved", "move_stop"], ["switch"]),
   access_control: roleSpec(["md_mode"], ["switch"]),
   alarm: roleSpec(["alarm"], ["binary_sensor"]),
-  cover_open: roleSpec(["cover_open", "lid"], ["binary_sensor"]),
+  lid: roleSpec(["lid", "cover_open"], ["binary_sensor"]),
   baseplate: roleSpec(["baseplate"], ["binary_sensor"]),
   safety_key: roleSpec(["machine_lock"], ["binary_sensor"]),
   // Configuration
   firmware: roleSpec(["firmware"], ["update"]),
   buzzer: roleSpec(["beep_enable", "buzzer"], ["switch"]),
-  flame_alarm_level: roleSpec(["flame_alarm_level"], ["select"]),
   device_sleep: roleSpec(["device_sleep"], ["switch"]),
   // The SafetyPro IF2 and IF2 2.0
   if2_fan_entity: roleSpec(["accessory_ductfanv3_fan"], ["fan"], "children"),
@@ -265,12 +270,11 @@ const ROLES = {
   crop_center_x: roleSpec(["crop_center_x", "camera_main_crop_center_x"], ["number"], "camera"),
   crop_center_y: roleSpec(["crop_center_y", "camera_main_crop_center_y"], ["number"], "camera"),
   perspective: roleSpec(["perspective", "camera_deep_perspective"], ["select"], "camera"),
-  // The P2's: each camera's crop preset and exposure, the overview
-  // camera's processing mode, and the close camera's fill light
-  crop_preset: roleSpec(["crop_preset"], ["select"], "camera"),
+  // The P2's: each camera's crop preset and exposure, and the overview
+  // camera's processing mode
+  crop: roleSpec(["crop_preset"], ["select"], "camera"),
   exposure: roleSpec(["exposure"], ["number"], "camera"),
   mode: roleSpec(["processing_mode"], ["select"], "camera"),
-  close_light: roleSpec(["fill_light_1", "fill_light"], ["light"], "camera"),
 };
 const CROP_ROLES = ["crop_width", "crop_height", "crop_center_x", "crop_center_y"];
 
@@ -318,6 +322,8 @@ const running = (phase) => phase === "processing" || phase === "framing";
 /**
  * Every control a feature can show, by id. The id is the role of the entity
  * it acts on, unless role names another. Each control declares:
+ * - domains: for a control whose entity can be in more than one domain,
+ *   what changes with each ({ domain: { kind, ... } }, see resolved),
  * - kind: how it works (see KINDS): toggle (a switch, fan or lock: on and
  *   off), light (on and off, and its brightness as an input), press (a
  *   button entity), number and select (Home Assistant's own feature as an
@@ -396,7 +402,9 @@ const CONTROLS = {
     // Asked only while a job runs: cutting the power stops it at once
     confirm: { off: "A job is running. Turning the power off stops it at once and it cannot be resumed.", while: ["processing", "paused"] },
   },
-  exhaust: { kind: "toggle", name: "Exhaust", color: "blue", fan: true },
+  // The F2's fan, or the P2's setting that runs it after a job (a setting
+  // does not turn: see fanLook)
+  exhaust_fan: { kind: "toggle", name: "Exhaust", color: "blue", fan: true },
   // The IF2 2.0's fan, as three keys for its modes (see fanModeKey): the one
   // in use blue and turning while it spins, faster at each of its four speeds
   fan_off: { kind: "fan_mode", role: "if2_fan_entity", mode: "off", option: "Off", title: "Off", name: "Off", icon: "mdi:fan-off", color: "primary" },
@@ -410,6 +418,7 @@ const CONTROLS = {
   },
   cooling_fan: { kind: "toggle", name: "Cooling", color: "cyan", fan: true },
   fill_light: { kind: "light", name: "Light", color: DAYLIGHT },
+  fill_light_close: { kind: "light", name: "Light", color: DAYLIGHT },
   fill_light_front: { kind: "light", name: "Light", color: DAYLIGHT, direction: "front" },
   fill_light_back: { kind: "light", name: "Light", color: DAYLIGHT, direction: "back" },
   fill_light_left: { kind: "light", name: "Light", color: DAYLIGHT, direction: "left" },
@@ -417,12 +426,12 @@ const CONTROLS = {
   red_dot: { kind: "toggle", name: "Dot", color: "red" },
   red_dot_close: { kind: "toggle", name: "Aimed", color: "red" },
   red_dot_quick: { kind: "toggle", name: "Quick", color: "red" },
-  cover_lock: { kind: "toggle", name: "Lock", color: "indigo" },
+  safety_lock: { kind: "toggle", name: "Lock", color: "indigo" },
 
   // Moving the laser, measuring and focusing
   // Where the laser goes: X,Y in whole millimeters; a drag on the field
   // slides X left and right, Y up and down
-  position: {
+  laser_position: {
     kind: "field", role: "laser_x", roles: ["laser_x", "laser_y"], decimals: 0, drag: ["x", "y"],
   },
   // A move works while the laser sleeps, but not while it works or is off
@@ -430,10 +439,11 @@ const CONTROLS = {
   home_laser: { kind: "press", name: "Home", color: "primary", busy: true },
   // The P2's Wake: it takes a photo, which wakes the laser while it sleeps
   wake: { kind: "press", name: "Wake", color: "primary" },
-  // The material's thickness or the distance to it: sliding right or up raises it
-  measure_height: { kind: "field", roles: ["measure_height"], drag: ["xy"] },
-  // The key's title has the last reading
-  measure: {
+  // The P2's (its overview camera's): the material's thickness or the
+  // distance to it, sliding right or up raises it; and measuring it, the
+  // key's title with the last reading
+  thickness_or_distance: { kind: "field", roles: ["thickness_or_distance"], drag: ["xy"] },
+  measure_thickness_or_distance: {
     kind: "press", name: "Measure", color: "primary", busy: true,
     detail: (moment) => (lastReading(moment) ? `Last reading: ${lastReading(moment)}` : undefined),
   },
@@ -445,21 +455,29 @@ const CONTROLS = {
   focus_height: { kind: "field", roles: ["focus_height"], decimals: 1, drag: ["xy"] },
 
   // Safety: the checks (turning one off asks first), and the states that can only be shown
+  // A switch (a check), or the P2's select of its level, a setting that
+  // belongs with the checks: a tap steps to the next
   flame_alarm: {
-    kind: "toggle", name: "Flame", check: { problem: "off" }, feature: "xtool-safety",
-    confirm: { off: "No flame alarm will be triggered while it is off. Fires may cause serious injuries and property damage." },
+    name: "Flame", feature: "xtool-safety",
+    domains: {
+      switch: {
+        kind: "toggle", check: { problem: "off" },
+        confirm: { off: "No flame alarm will be triggered while it is off. Fires may cause serious injuries and property damage." },
+      },
+      select: { kind: "select", cycle: true, brief: true, color: "red" },
+    },
   },
-  enclosure_stop: {
+  stops_when_enclosure_opened: {
     kind: "toggle", name: "Enclosure", check: { problem: "off" },
     confirm: { off: "The laser keeps working when the enclosure is opened. Laser light can injure eyes and skin." },
   },
-  moved_stop: {
+  stops_when_moved: {
     kind: "toggle", name: "Motion", check: { problem: "off" },
     confirm: { off: "The laser keeps working if the machine is moved or tilted during a job." },
   },
   safety_key: { kind: "display", name: "Key", check: { problem: "off", words: ["in", "removed"] } },
   // The P2's lid (on: open, a problem) and baseplate (on: in place)
-  cover_open: { kind: "display", name: "Lid", check: { problem: "on", words: ["open", "closed"] } },
+  lid: { kind: "display", name: "Lid", check: { problem: "on", words: ["open", "closed"] } },
   baseplate: { kind: "display", name: "Baseplate", check: { problem: "off", words: ["in", "out"] } },
   // Optional: off is not a problem
   access_control: {
@@ -472,28 +490,26 @@ const CONTROLS = {
 
   // Configuration: the settings in the Configuration section of the laser's and its accessories' device pages
   buzzer: { kind: "toggle", name: "Buzzer", color: "teal" },
-  exhaust_setting: { kind: "toggle", name: "Exhaust", color: "blue" },
-  // The P2's flame alarm level, a setting that belongs with the checks: a tap steps to the next
-  flame_alarm_level: { kind: "select", cycle: true, brief: true, name: "Flame", color: "red", feature: "xtool-safety" },
   if2_buzzer: { kind: "toggle", name: "IF2", color: "teal" },
   device_sleep: { kind: "toggle", name: "Sleep", color: "indigo" },
 
   // A camera's settings
   // A camera with crop presets (the P2's): the key shows the preset, and a
   // tap opens Home Assistant's own dialog for the select to choose another
-  crop_preset: { kind: "select", name: "Crop", color: "primary" },
+  crop: { kind: "select", name: "Crop", color: "primary" },
   // The deep camera's perspective: as the camera sees it (skewed), turned
   // square to the work area, and straightened flat; a tap steps to the next
   perspective: { kind: "select", cycle: true, name: "Perspective", color: "primary" },
   exposure: { kind: "number", name: "Exposure", color: "primary", input: { style: "slider" } },
   // The P2's processing mode, which its crop presets follow
   mode: { kind: "select", name: "Mode", color: "primary" },
-  // The close camera's fill light
-  close_light: { kind: "light", name: "Light", color: DAYLIGHT },
 };
 
 /** The safety checks that are switches (a badge shows when one is off). */
-const SAFETY_CHECKS = Object.keys(CONTROLS).filter((id) => CONTROLS[id].kind === "toggle" && CONTROLS[id].check?.problem === "off");
+const SAFETY_CHECKS = Object.keys(CONTROLS).filter((id) => {
+  const toggle = CONTROLS[id].domains?.switch ?? CONTROLS[id];
+  return toggle.kind === "toggle" && toggle.check?.problem === "off";
+});
 
 /** The last thickness or distance measured, with its unit, or undefined. */
 function lastReading({ hass, device }) {
@@ -540,8 +556,13 @@ function findRole(candidates, { keys, domains }) {
  */
 const cameraId = (label) => label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
-/** A camera: its entity, key, id and name, its settings ({ role: entity_id }) and its overlay switches. */
-function cameraModel(hass, entityId, key, label) {
+/**
+ * A camera: its entity, key, id and name, its settings ({ role: entity_id }:
+ * its "camera" roles, and the laser's roles (roles) whose entity is on the
+ * camera's own device, when it has one apart from the laser's) and its
+ * overlay switches.
+ */
+function cameraModel(hass, entityId, key, label, laser, roles) {
   const device = hass.entities[entityId].device_id;
   const entities = deviceEntities(hass, device);
   const settings = {};
@@ -549,6 +570,9 @@ function cameraModel(hass, entityId, key, label) {
     if (spec.on !== "camera") continue;
     const found = findRole(entities, spec);
     if (found) settings[role] = found;
+  }
+  if (device !== laser) {
+    for (const [role, found] of Object.entries(roles)) if (hass.entities[found]?.device_id === device) settings[role] ??= found;
   }
   const overlays = [];
   for (const e of entities) {
@@ -580,7 +604,7 @@ function buildDevice(hass, id) {
   const all = near.flatMap((d) => deviceEntities(hass, d));
   const cameras = CAMERAS.map(([key, label]) => {
     const camera = all.find((e) => e.translation_key === key && domainOf(e.entity_id) === "camera");
-    return camera && cameraModel(hass, camera.entity_id, key, label);
+    return camera && cameraModel(hass, camera.entity_id, key, label, id, roles);
   }).filter(Boolean);
   return {
     id, device: hass.devices?.[id], entities: deviceEntities(hass, id), children, roles, cameras,
@@ -1013,6 +1037,12 @@ function controlOf(id, profile) {
   return { id, role: id, ...control, ...(name ? { name } : {}) };
 }
 
+/** A control as it works for its entity: with what its entity's domain changes (see CONTROLS: domains). */
+function resolved(control, entityId) {
+  const variant = control?.domains && entityId ? control.domains[domainOf(entityId)] : undefined;
+  return variant ? { ...control, ...variant } : control;
+}
+
 /** A control's value: as given, or worked out for the moment. */
 const valueOf = (value, moment) => (typeof value === "function" ? value(moment) : value);
 
@@ -1180,7 +1210,9 @@ function switchKey(feature, control, entityId, moment) {
       readout: control.kind === "display",
     };
   }
-  return { ...base, pressed: on, disabled, ...fanLook(control, on, moment.config), action, readout: control.kind === "display" };
+  // A setting (see categoryOf) only runs the part at other times: it does not turn
+  const setting = categoryOf(moment.hass, entityId) === "config";
+  return { ...base, pressed: on, disabled, ...(setting ? {} : fanLook(control, on, moment.config)), action, readout: control.kind === "display" };
 }
 
 /**
@@ -1432,14 +1464,20 @@ const PULLS = { x: (dx) => dx, y: (dx, dy) => dy, xy: (dx, dy) => dx - dy };
  * while the feature shows it, so typing and sliding go on while Home
  * Assistant's states change.
  */
+// A field is in the number color, as Home Assistant's number features are
+const NUMBER_ON = "var(--state-number-active-color, var(--state-active-color, var(--primary-color, #03a9f4)))";
+
 class FieldGroup {
   constructor(feature, control) {
     this._feature = feature;
     this._control = control;
     this.el = document.createElement("div");
     this.el.className = "group";
+    // Its control, for the order chosen (see XtoolCamera._showInputs)
+    this.el.dataset.control = control.id;
     this._field = document.createElement("label");
     this._field.className = "field";
+    this._field.style.setProperty("--feature-color", NUMBER_ON);
     this._field.dataset.min = ITEM_MIN.field;
     this._field.innerHTML = `<input type="text" enterkeyhint="done">`;
     this._input = this._field.querySelector("input");
@@ -1606,14 +1644,22 @@ const inputOf = (control) => ({ ...KINDS[control.kind].input, ...(control.input 
 // otherwise; Home Assistant's color for a light that is off
 const LIGHT_OFF = "var(--state-light-inactive-color, var(--state-inactive-color, var(--disabled-color, #bdbdbd)))";
 
-// A light's two parts, each chosen on its own: "<light>_icon", "<light>_slider"
-const LIGHT_PARTS = ["icon", "slider"];
+// A light's two parts, each chosen on its own: its icon (a tap turns it on
+// or off), whose id is the light's control id, and its brightness slider,
+// "<light>_brightness"
+const BRIGHTNESS = "_brightness";
+const lightParts = (light) => [light, `${light}${BRIGHTNESS}`];
 
-/** A light part's id: { light (its control id), part }, or undefined for another id. */
+/** A light part's id: { light (its control id), part: "icon" or "brightness" }, or undefined for another id. */
 function lightPart(id) {
-  const match = /^(.+)_(icon|slider)$/.exec(id ?? "");
-  return match && CONTROLS[match[1]]?.kind === "light" ? { light: match[1], part: match[2] } : undefined;
+  const isLight = (light) => CONTROLS[light]?.kind === "light";
+  if (isLight(id)) return { light: id, part: "icon" };
+  const light = id?.endsWith(BRIGHTNESS) ? id.slice(0, -BRIGHTNESS.length) : undefined;
+  return isLight(light) ? { light, part: "brightness" } : undefined;
 }
+
+/** A light part's name in the editor: the light's name, and for its slider "<name> brightness". */
+const lightPartName = (name, part) => (part === "brightness" ? `${name} brightness` : name);
 
 /** Whether a light has a brightness. */
 const dimmable = (hass, light) => (hass?.states[light]?.attributes.supported_color_modes ?? []).some((mode) => mode !== "onoff");
@@ -1825,7 +1871,7 @@ class XtoolElement extends HTMLElement {
     const control = controlOf(id, device.profile);
     const entityId = control && device.roles[control.role];
     if (entityId && this.category && categoryOf(hass, entityId) !== this.category) return { control, entityId: undefined };
-    return { control, entityId };
+    return { control: resolved(control, entityId), entityId };
   }
 
   /**
@@ -2029,10 +2075,7 @@ class XtoolFeature extends XtoolElement {
         });
       }
     }
-    // A feature with a field (shown or not) is in the number color, as Home Assistant's number features
     const fields = buttons.some((b) => b.field);
-    if (this._chosen().some((id) => controlOf(id, this._device.profile)?.kind === "field")) this.style.setProperty("--feature-color", NUMBER_ON);
-    else this.style.removeProperty("--feature-color");
     this._row.classList.toggle("flow", fields);
     // Nothing: no control chosen that the device has, or the feature does
     // not apply to the device as it is now
@@ -2186,12 +2229,12 @@ class XtoolJob extends XtoolFeature {
 // integration does not class as settings, Configuration the settings (its
 // config entity category)
 const PARTS = [
-  "power", "exhaust", "fill_light_front", "fill_light_back", "fill_light", "exhaust_setting", "fill_light_left", "fill_light_right",
-  "red_dot", "red_dot_close", "red_dot_quick", "cooling_fan", "cover_lock", "autofocus", "wake",
+  "power", "exhaust_fan", "fill_light_front", "fill_light_back", "fill_light", "fill_light_close", "fill_light_left", "fill_light_right",
+  "red_dot", "red_dot_close", "red_dot_quick", "cooling_fan", "safety_lock", "autofocus", "wake",
   "buzzer", "if2_buzzer", "device_sleep",
 ];
 
-// Controls: power, the fans, the fill lights, the red dots and the cover
+// Controls: power, the fans, the fill lights, the red dots and the safety
 // lock, on and off, and Autofocus
 class XtoolControls extends XtoolFeature {
   static label = "Controls";
@@ -2218,7 +2261,7 @@ class XtoolConfiguration extends XtoolFeature {
 class XtoolSafety extends XtoolFeature {
   static label = "Safety";
   static pickerName = "xTool safety";
-  static controls = ["flame_alarm", "flame_alarm_level", "enclosure_stop", "moved_stop", "safety_key", "cover_open", "baseplate", "access_control"];
+  static controls = ["flame_alarm", "stops_when_enclosure_opened", "stops_when_moved", "safety_key", "lid", "baseplate", "access_control"];
   static form = {
     label: "Controls",
     helper: "Turning a check off always asks first. The safety key, lid and baseplate are only shown: a tap opens them.",
@@ -2243,21 +2286,26 @@ const CAMERA_VIEWS = [["auto", "Auto"], ["live", "Live"]];
 const CUSTOM_CROP = "custom";
 
 // The camera's controls that are Home Assistant's own features (and the
-// close camera's light), below its keys: each only for a camera that has
+// close camera's light), among its keys: each only for a camera that has
 // it, while that camera is shown
-const CAMERA_INPUTS = ["mode", "crop_preset", "exposure", "close_light_icon", "close_light_slider"];
+const CAMERA_INPUTS = ["mode", "crop", "exposure", ...lightParts("fill_light_close")];
+// The camera's settings that are keys or fields (see XtoolCamera._buttons),
+// each only for a camera that has it, while that camera is shown: the deep
+// camera's perspective, and the overview camera's thickness or distance
+// and Measure (the P2's)
+const CAMERA_SETTINGS = ["perspective", "thickness_or_distance", "measure_thickness_or_distance"];
 
 class XtoolCamera extends XtoolFeature {
   static label = "Camera";
   static pickerName = "xTool camera";
   // The keys to switch cameras (one for each, or one that steps to the next),
-  // Crop and the deep camera's perspective, and the inputs; all but the
-  // camera toggle by default
-  static controls = ["cameras", "camera_toggle", "crop", "perspective", ...CAMERA_INPUTS];
-  static defaults = ["cameras", "crop", "perspective", ...CAMERA_INPUTS];
+  // Custom crop, the camera's settings and its inputs; all but the camera
+  // toggle by default
+  static controls = ["camera_buttons", "camera_toggle", "custom_crop", ...CAMERA_SETTINGS, ...CAMERA_INPUTS];
+  static defaults = ["camera_buttons", "custom_crop", ...CAMERA_SETTINGS, ...CAMERA_INPUTS];
   static form = {
     label: "Controls",
-    helper: "Crop: tap it, then tap two opposite corners on the picture.",
+    helper: "Custom crop: tap it, then tap two opposite corners on the picture.",
   };
 
   static supports(device) {
@@ -2268,16 +2316,16 @@ class XtoolCamera extends XtoolFeature {
   static offered(device, hass) {
     const { cameras, profile } = device;
     const offered = [];
-    if (cameras.length > 1) offered.push({ value: "cameras", label: "Camera buttons" }, { value: "camera_toggle", label: "Camera toggle" });
+    if (cameras.length > 1) offered.push({ value: "camera_buttons", label: "Camera buttons" }, { value: "camera_toggle", label: "Camera toggle" });
     if (cameras.some((camera) => profile.cropReset[camera.key] && CROP_ROLES.every((role) => camera.settings[role]))) {
-      offered.push({ value: "crop", label: "Crop by tapping" });
+      offered.push({ value: "custom_crop", label: "Custom crop" });
     }
-    for (const id of ["perspective", ...CAMERA_INPUTS]) {
+    for (const id of [...CAMERA_SETTINGS, ...CAMERA_INPUTS]) {
       const { light, part } = lightPart(id) ?? {};
       const entityId = cameras.map((camera) => camera.settings[light ?? id]).find(Boolean);
-      if (!entityId || (part === "slider" && !dimmable(hass, entityId))) continue;
+      if (!entityId || (part === "brightness" && !dimmable(hass, entityId))) continue;
       const name = entityName(hass, entityId) ?? CONTROLS[light ?? id].name;
-      offered.push({ value: id, label: part ? `${name} ${part}` : name });
+      offered.push({ value: id, label: lightPartName(name, part) });
     }
     return offered;
   }
@@ -2605,7 +2653,7 @@ class XtoolCamera extends XtoolFeature {
     const nameOf = ({ entityId, label }) => entityName(moment.hass, entityId) ?? `${label} camera`;
     const keys = {
       // A key for each camera
-      cameras: () => (cameras.length < 2 ? [] : cameras.map((c) => ({
+      camera_buttons: () => (cameras.length < 2 ? [] : cameras.map((c) => ({
         key: c.entityId, entity: c.entityId, label: nameOf(c), text: c.label, color: "primary",
         pressed: c.entityId === current, disabled: !this._usable(c.entityId), action: () => this._pick(c.entityId),
       }))),
@@ -2625,12 +2673,12 @@ class XtoolCamera extends XtoolFeature {
       // turned off or another camera is shown. Off: the camera's crop
       // returns to its preset (see _toggleCropping)
       // (off while the crop numbers are not known)
-      crop: () => {
+      custom_crop: () => {
         if (!this._cropReset || !camera || !CROP_ROLES.every((role) => camera.settings[role])) return [];
         const usable = this._usable(current) && !!this._crop();
         const on = usable && !!this._cropping;
         return [{
-          key: "crop", label: on ? "Crop: on. Tap two corners on the picture; tap Crop to go back" : "Crop by tapping",
+          key: "custom_crop", label: on ? "Custom crop: on. Tap two corners on the picture; tap again to go back" : "Custom crop",
           text: "Crop", icon: "mdi:crop", color: "primary",
           pressed: on, disabled: !usable, action: () => this._toggleCropping(),
         }];
@@ -2643,6 +2691,16 @@ class XtoolCamera extends XtoolFeature {
         if (!key) return [];
         const shownCamera = this._camera;
         return [{ ...key, action: () => key.action().then(() => this._reloadImage(shownCamera), () => {}) }];
+      },
+      // The overview camera's thickness or distance, in a field, and Measure
+      thickness_or_distance: () => {
+        const entityId = camera?.settings.thickness_or_distance;
+        return entityId ? [{ key: "thickness_or_distance", field: "thickness_or_distance", entities: [entityId] }] : [];
+      },
+      measure_thickness_or_distance: () => {
+        const entityId = camera?.settings.measure_thickness_or_distance;
+        const key = entityId && keyOf(this, controlOf("measure_thickness_or_distance", moment.device.profile), entityId, moment);
+        return key ? [key] : [];
       },
     };
     // Each key knows its control, for the order chosen (see _showInputs)
@@ -2660,7 +2718,7 @@ class XtoolCamera extends XtoolFeature {
    * the crop numbers and a crop area.
    */
   _crop() {
-    if (!this._cropReset || !this._chosen().includes("crop")) return undefined;
+    if (!this._cropReset || !this._chosen().includes("custom_crop")) return undefined;
     return this._cropNow();
   }
 
@@ -2690,7 +2748,7 @@ class XtoolCamera extends XtoolFeature {
    * UV's), its crop is not its whole area.
    */
   _ownCrop() {
-    const preset = this._shownCamera?.settings.crop_preset;
+    const preset = this._shownCamera?.settings.crop;
     if (preset) return this._hass.states[preset]?.state === CUSTOM_CROP;
     const crop = this._crop();
     return !!crop && this._cropped(crop);
@@ -2700,8 +2758,8 @@ class XtoolCamera extends XtoolFeature {
   _notePreset() {
     this._presets ??= new Map();
     for (const camera of this._device.cameras) {
-      const state = this._hass.states[camera.settings.crop_preset]?.state;
-      if (state && state !== CUSTOM_CROP && shows(this._hass.states[camera.settings.crop_preset])) this._presets.set(camera.entityId, state);
+      const state = this._hass.states[camera.settings.crop]?.state;
+      if (state && state !== CUSTOM_CROP && shows(this._hass.states[camera.settings.crop])) this._presets.set(camera.entityId, state);
     }
   }
 
@@ -2774,7 +2832,7 @@ class XtoolCamera extends XtoolFeature {
       return;
     }
     this._stopCropping();
-    const preset = this._shownCamera?.settings.crop_preset;
+    const preset = this._shownCamera?.settings.crop;
     if (preset) {
       const stateObj = this._hass.states[preset];
       const option = this._presets?.get(this._camera) ?? stateObj?.attributes.options?.find((o) => o !== CUSTOM_CROP);
@@ -2965,13 +3023,13 @@ class XtoolLights extends XtoolElement {
     }],
   };
 
-  /** Each light's icon and slider: "<light>_icon" and "<light>_slider". */
+  /** Each light's icon and slider: "<light>" and "<light>_brightness" (see lightParts). */
   static controlIds() {
-    return LIGHTS.flatMap((id) => LIGHT_PARTS.map((part) => `${id}_${part}`));
+    return LIGHTS.flatMap(lightParts);
   }
 
   /**
-   * The light's control (part: icon or slider), and its entity; a camera's
+   * The light's control (part: icon or brightness), and its entity; a camera's
    * own light is in the camera feature, not here.
    */
   static controlFor(id, device) {
@@ -2982,11 +3040,11 @@ class XtoolLights extends XtoolElement {
     return { control: { ...controlOf(light, device.profile), part }, entityId: cameras ? undefined : entityId };
   }
 
-  /** Each light's icon and slider, by the light's name. */
+  /** Each light's icon and slider, by the light's name (see lightPartName). */
   static offered(device, hass) {
     return this.controlIds().map((id) => ({ id, ...this.controlFor(id, device) }))
-      .filter(({ control, entityId }) => control && entityId && (control.part !== "slider" || dimmable(hass, entityId)))
-      .map(({ id, control, entityId }) => ({ value: id, label: `${entityName(hass, entityId) ?? control.name} ${control.part}` }));
+      .filter(({ control, entityId }) => control && entityId && (control.part !== "brightness" || dimmable(hass, entityId)))
+      .map(({ id, control, entityId }) => ({ value: id, label: lightPartName(entityName(hass, entityId) ?? control.name, control.part) }));
   }
 
   constructor() {
@@ -3062,17 +3120,7 @@ class XtoolOverlays extends XtoolFeature {
 class XtoolPosition extends XtoolFeature {
   static label = "Position";
   static pickerName = "xTool position";
-  static controls = ["position", "move_laser", "home_laser"];
-  static form = { label: "Controls" };
-}
-
-// Measuring the material's thickness or the distance to it, and the number
-// the laser works with (typed, or slid on: right or up raises it). The Measure
-// key's title has the last reading
-class XtoolMeasure extends XtoolFeature {
-  static label = "Measure";
-  static pickerName = "xTool measure";
-  static controls = ["measure", "measure_height"];
+  static controls = ["laser_position", "move_laser", "home_laser"];
   static form = { label: "Controls" };
 }
 
@@ -3084,7 +3132,6 @@ class XtoolMeasure extends XtoolFeature {
 // - The first IF2 (its gear select): the select's options.
 // Shown disabled while the laser does not see the IF2, as Home Assistant's are.
 // ---------------------------------------------------------------------------
-const NUMBER_ON = "var(--state-number-active-color, var(--state-active-color, var(--primary-color, #03a9f4)))";
 // The first IF2's gears' icons
 const IF2_ICONS = { off: "mdi:fan-off", 1: "mdi:fan-speed-1", 2: "mdi:fan-speed-2", 3: "mdi:fan-speed-3" };
 
@@ -3183,7 +3230,6 @@ class XtoolFocus extends XtoolFeature {
 // The features, in the order Home Assistant's feature picker lists them
 const FEATURES = Object.fromEntries([
   XtoolJob, XtoolControls, XtoolLights, XtoolSafety, XtoolConfiguration, XtoolCamera, XtoolOverlays, XtoolSafetyproIf2Fan, XtoolFocus, XtoolPosition,
-  XtoolMeasure,
 ].map((feature) => [feature.type, feature]));
 const FEATURE_TAGS = Object.keys(FEATURES);
 
@@ -3195,7 +3241,7 @@ const FEATURE_TAGS = Object.keys(FEATURES);
 // content: [attribute, role, text when on, text when off, the role read
 // when the device does not have the first]
 const PART_ATTRIBUTES = [
-  ["exhaust", "exhaust_running", "Exhaust running", "Exhaust off", "exhaust"],
+  ["exhaust", "exhaust_running", "Exhaust running", "Exhaust off", "exhaust_fan"],
   ["red_dot", "red_dot", "Red dot on", "Red dot off"],
   ["power", "power", "Power on", "Power off"],
   ["buzzer_reminders", "buzzer", "Buzzer on", "Buzzer off"],
@@ -4099,7 +4145,7 @@ class XtoolCard extends HTMLElement {
       ],
       connection: [[!status || hass.states[status]?.state === "unavailable", "connection", "#616161", "Not connected"]],
       safety_key: [[stateOf("safety_key") === "off", "safety_key", warning, "Safety key removed"]],
-      lid: [[stateOf("cover_open") === "on", "lid", warning, "Lid open"]],
+      lid: [[stateOf("lid") === "on", "lid", warning, "Lid open"]],
       safety_off: [[SAFETY_CHECKS.some((role) => stateOf(role) === "off"),
         "safety_off", warning, "A safety check is off"]],
       firmware: [[stateOf("firmware") === "on", "firmware", "var(--info-color, #039be5)", "Firmware update available"]],

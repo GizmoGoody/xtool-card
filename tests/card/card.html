@@ -119,7 +119,7 @@
 
   // Home Assistant's own features inside the card's, in Console: one channel each, fitted to the control
   const haInside = addCard("console, Home Assistant features inside", { style: "champagne", features_style: "console", features_position: "bottom",
-    features: [{ type: "custom:xtool-lights", controls: ["fill_light_front_icon", "fill_light_front_slider"] }, { type: "custom:xtool-safetypro-if2-fan" }] }, { hass: f2("idle"), height: 200 });
+    features: [{ type: "custom:xtool-lights", controls: ["fill_light_front", "fill_light_front_brightness"] }, { type: "custom:xtool-safetypro-if2-fan" }] }, { hass: f2("idle"), height: 200 });
 
   // State content attributes
   const content = addCard("state content", { state_content: ["state", "elapsed", "exhaust", "red_dot"] }, { hass: f2("processing") });

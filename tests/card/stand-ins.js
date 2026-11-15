@@ -51,17 +51,18 @@ const CATEGORIES = {
   "switch.f2_flame": "config", "switch.f2_gap": "config", "switch.f2_moved": "config", "switch.f2_access_control": "config",
   "switch.f2_beep": "config", "switch.f2_sleep": "config", "switch.if2_buzzer": "config",
   "switch.p2_buzzer": "config", "switch.p2_exhaust_setting": "config", "select.p2_flame_level": "config",
+  "update.p2_firmware": "diagnostic",
 };
 
 // The entities' own names, by translation key, as the integration's translations give them
 const NAMES = {
-  status: "Status", pause_job: "Pause job", resume_job: "Resume job", cancel_job: "Cancel job", power_switch: "Power",
+  status: "Status", pause_job: "Pause", resume_job: "Resume job", cancel_job: "Cancel", power_switch: "Power",
   smoking_fan: "Exhaust fan", fill_light_front: "Fill light (front)", fill_light_back: "Fill light (back)", ir_led: "Red dot",
   ir_led_global: "Red dot", flame_alarm_v2: "Flame alarm", gap_check: "Stops when enclosure opened", stops_when_moved: "Stops when moved",
   md_mode: "Access control", beep_enable: "Buzzer reminders", buzzer: "Buzzer", device_sleep: "Device sleep", machine_lock: "Safety key",
   autofocus: "Autofocus", focus_height: "Focus height", camera_main: "Main camera", camera_deep: "Deep camera",
-  perspective: "Perspective", accessory_ductfanv3_buzzer: "Buzzer", cover_open: "Lid", camera_overview: "Overview camera",
-  camera_closeup: "Close camera", crop_preset: "Crop preset", exposure: "Exposure", thumbnail_refresh: "Thumbnail refresh interval",
+  perspective: "Perspective", accessory_ductfanv3_buzzer: "Buzzer", lid: "Lid", camera_overview: "Overview camera",
+  camera_closeup: "Close camera", crop_preset: "Crop", firmware: "Firmware", exposure: "Exposure", thumbnail_refresh: "Thumbnail refresh interval",
   overlay_laser_target: "Laser target", overlay_slat_lines: "Slat lines", overlay_studio: "Studio",
   overlay_custom: "Custom", overlay_close_camera: "Close camera", wake: "Wake", exhaust_fan_setting: "Exhaust fan", flame_alarm_level: "Flame alarm",
   laser_position_x: "Laser position X", laser_position_y: "Laser position Y", move_laser: "Move laser", home_laser_head: "Home laser head",
@@ -121,8 +122,7 @@ const P2 = [
   ["button.p2_pause", "pause_job", "unknown"],
   ["button.p2_resume", "resume_job", "unknown"],
   ["button.p2_cancel", "cancel_job", "unknown"],
-  ["switch.p2_exhaust", "smoking_fan", "off"],
-  ["binary_sensor.p2_cover", "cover_open", "off"],
+  ["binary_sensor.p2_cover", "lid", "off"],
   ["switch.p2_red_dot", "ir_led_global", "off"],
   ["switch.p2_buzzer", "buzzer", "on"],
   ["switch.p2_exhaust_setting", "exhaust_fan_setting", "on"],
@@ -132,8 +132,7 @@ const P2 = [
   ["button.p2_move", "move_laser", "unknown"],
   ["button.p2_home", "home_laser_head", "unknown"],
   ["button.p2_wake", "wake", "unknown"],
-  ["button.p2_measure", "measure_thickness_or_distance", "unknown"],
-  ["sensor.p2_measured", "measured_thickness_or_distance", "3.2", { unit_of_measurement: "mm" }],
+  ["update.p2_firmware", "firmware", "off"],
   ["light.p2_fill_right", "fill_light_2", "on", { supported_color_modes: ["brightness"], brightness: 200 }],
   ["light.p2_fill_left", "fill_light_3", "off", { supported_color_modes: ["brightness"] }],
 ];
@@ -141,6 +140,9 @@ const P2_OVERVIEW_CAMERA = [
   ["camera.p2_overview", "camera_overview", "idle", { entity_picture: "/api/camera_proxy/camera.p2_overview?token=c" }],
   ["select.p2_overview_crop", "crop_preset", "uncropped", { options: ["uncropped", "sync_to_mode", "process_on_slats", "custom"] }],
   ["number.p2_thickness", "thickness_or_distance", "3", { min: 0, max: 50, step: 0.1, unit_of_measurement: "mm", mode: "box" }],
+  // Measure and Measured are on the overview camera's device, as the integration has them
+  ["button.p2_measure", "measure_thickness_or_distance", "unknown"],
+  ["sensor.p2_measured", "measured_thickness_or_distance", "3.2", { unit_of_measurement: "mm" }],
   ["select.p2_mode", "processing_mode", "process_on_slats", { options: ["process_on_slats", "honeycomb_panel", "slats_removed"] }],
   ["number.p2_overview_crop_width", "crop_width", "610", { min: 0, max: 915, step: 1, unit_of_measurement: "mm" }],
   ["number.p2_overview_crop_height", "crop_height", "305", { min: 0, max: 460, step: 1, unit_of_measurement: "mm" }],
