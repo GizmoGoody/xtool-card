@@ -61,22 +61,22 @@
 
   // The xTool styles and features styles
   const styles = {
-    champagne: addCard("champagne, match", { style: "champagne", features_style: "match", ...jobFeatures }, { hass: f2("processing"), height: 220 }),
-    timeFormat: addCard("camera time, card's Time format total", { style: "champagne", time_format: "total",
+    f2UltraUv: addCard("f2_ultra_uv, match", { style: "f2_ultra_uv", features_style: "match", collapsible: false, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
+    timeFormat: addCard("camera time, card's Time format total", { style: "f2_ultra_uv", time_format: "total",
       features: [{ type: "custom:xtool-camera", show_last_updated: true }] }, { hass: f2("idle"), height: 360 }),
-    samePattern: addCard("champagne, pattern 4242", { style: "champagne", features_style: "match", pattern: 4242, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
-    otherPattern: addCard("champagne, pattern 17", { style: "champagne", features_style: "match", pattern: 17, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
-    flat: addCard("champagne, flat", { style: "champagne", features_style: "flat", ...jobFeatures }, { hass: f2("processing"), height: 220 }),
-    console: addCard("graphite, console", { style: "graphite", features_style: "console", features: [...jobFeatures.features, { type: "toggle" }] }, { hass: f2("processing"), height: 280 }),
+    samePattern: addCard("f2_ultra_uv, pattern 4242", { style: "f2_ultra_uv", features_style: "match", pattern: 4242, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
+    otherPattern: addCard("f2_ultra_uv, pattern 17", { style: "f2_ultra_uv", features_style: "match", pattern: 17, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
+    flat: addCard("f2_ultra_uv, flat", { style: "f2_ultra_uv", features_style: "flat", ...jobFeatures }, { hass: f2("processing"), height: 220 }),
+    console: addCard("p2, console", { style: "p2", features_style: "console", features: [...jobFeatures.features, { type: "toggle" }] }, { hass: f2("processing"), height: 280 }),
     plain: addCard("no style", { ...jobFeatures }, { hass: f2("processing"), height: 220 }),
-    titleOnly: addCard("champagne, title only", { style: "champagne" }, { hass: f2("processing"), height: 56 }),
+    titleOnly: addCard("f2_ultra_uv, title only", { style: "f2_ultra_uv" }, { hass: f2("processing"), height: 56 }),
   };
 
   // The space under the title, against Home Assistant's tile card fitted to
   // its content: in every style and features style, with the features below
   // the title or the first beside it, collapsible (rows: auto)
   const gapFeatures = [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }];
-  const gapLooks = [["none", "console"], ["champagne", "match"], ["champagne", "flat"], ["champagne", "console"], ["graphite", "match"], ["graphite", "flat"], ["graphite", "console"]];
+  const gapLooks = [["none", "console"], ["f2_ultra_uv", "match"], ["f2_ultra_uv", "flat"], ["f2_ultra_uv", "console"], ["p2", "match"], ["p2", "flat"], ["p2", "console"]];
   const gapCards = [];
   for (const position of ["bottom", "inline"]) {
     // Two rows below the title in either position
@@ -92,33 +92,34 @@
   }
 
   // The defaults: Console, the first feature beside the title, the laser's own State content
-  const defaultCard = addCard("defaults", { style: "graphite", features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] },
+  const defaultCard = addCard("defaults", { style: "p2", features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] },
     { hass: f2("idle"), height: rowsHeight(2) });
 
   // Collapsing to the title
   try { localStorage.clear(); } catch (err) { /* no storage: the card still works */ }
-  const collapsible = addCard("tap shows or hides the features", { style: "graphite", collapsible: true, ...jobFeatures }, { hass: f2("idle"), height: 220 });
+  const collapsible = addCard("tap shows or hides the features", { style: "p2", collapsible: true, ...jobFeatures }, { hass: f2("idle"), height: 220 });
   const closedAtLoad = addCard("hidden at load", { entity: "sensor.p2_status", collapsible: true, expanded_at_load: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
   const closedInline = addCard("hidden at load, inline", { collapsible: true, expanded_at_load: false, features_position: "inline",
     features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }] }, { hass: f2("idle"), height: 160 });
   const autoCollapse = addCard("collapse when off", { entity: "sensor.p2_status", collapsible: true, ...jobFeatures }, { hass: p2("idle"), height: 220 });
-  const keepOpen = addCard("collapse when off: off", { entity: "sensor.p2_status", collapsible: true, collapse_when_off: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
-  const noExpand = addCard("expand when powered on: off", { entity: "sensor.p2_status", collapsible: true, expand_when_on: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
-  const expandOnly = addCard("expand when powered on, collapse off", { entity: "sensor.p2_status", collapsible: true, collapse_when_off: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
+  const keepOpen = addCard("collapse when off: off", { entity: "sensor.p2_status", collapsible: true, collapse_when_powered_off: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
+  const noExpand = addCard("expand when powered on: off", { entity: "sensor.p2_status", collapsible: true, expand_when_powered_on: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
+  const expandOnly = addCard("expand when powered on, collapse off", { entity: "sensor.p2_status", collapsible: true, collapse_when_powered_off: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
   const offAtLoad = addCard("off at load", { collapsible: true, ...jobFeatures }, { hass: f2("off"), height: 220 });
-  const offStyled = addCard("off, graphite", { style: "graphite", ...jobFeatures }, { hass: f2("off"), height: 220 });
+  const offStyled = addCard("off, p2", { style: "p2", ...jobFeatures }, { hass: f2("off"), height: 220 });
+  const offOrange = addCard("off, f2_ultra_uv", { style: "f2_ultra_uv", ...jobFeatures }, { hass: f2("off"), height: 220 });
   const noLight = addCard("no status light", { status_light: false }, { hass: f2("idle"), height: 80 });
   // Collapsed, with the P2's controls beside the title
   const collapsedControls = addCard("collapsed, controls inline", { entity: "sensor.p2_status", collapsible: true, expanded_at_load: false, features_position: "inline",
     features: [{ type: "custom:xtool-controls" }, { type: "custom:xtool-job" }] }, { hass: p2("idle"), height: 120 });
 
   // A feature beside the title (features position: inline), and two columns of features
-  const inlineCard = addCard("inline job, champagne", { style: "champagne", features_style: "console", features_position: "inline",
+  const inlineCard = addCard("inline job, f2_ultra_uv", { style: "f2_ultra_uv", features_style: "console", features_position: "inline", collapsible: false,
     features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }] }, { hass: f2("idle"), height: 280 });
   const camera = addCard("camera", { features: [{ type: "custom:xtool-camera" }, { type: "custom:xtool-safetypro-if2-fan" }] }, { hass: f2("idle"), height: 120 });
 
   // Home Assistant's own features inside the card's, in Console: one channel each, fitted to the control
-  const haInside = addCard("console, Home Assistant features inside", { style: "champagne", features_style: "console", features_position: "bottom",
+  const haInside = addCard("console, Home Assistant features inside", { style: "f2_ultra_uv", features_style: "console", features_position: "bottom",
     features: [{ type: "custom:xtool-lights", controls: ["fill_light_front", "fill_light_front_brightness"] }, { type: "custom:xtool-safetypro-if2-fan" }] }, { hass: f2("idle"), height: 200 });
 
   // State content attributes
@@ -202,13 +203,13 @@
     // Styles
     const frame = (card) => card.shadowRoot.querySelector(".frame");
     const windowBox = (card) => card.shadowRoot.getElementById("window");
-    check("champagne, match", frame(styles.champagne).classList.contains("styled") && frame(styles.champagne).classList.contains("champagne"),
-      "the champagne style is drawn");
-    const wh = parseFloat(windowBox(styles.champagne).style.height), fh = frame(styles.champagne).offsetHeight;
+    check("f2_ultra_uv, match", frame(styles.f2UltraUv).classList.contains("styled") && frame(styles.f2UltraUv).classList.contains("f2_ultra_uv"),
+      "the F2 Ultra UV style is drawn");
+    const wh = parseFloat(windowBox(styles.f2UltraUv).style.height), fh = frame(styles.f2UltraUv).offsetHeight;
     const collapsedHeight = parseFloat(windowBox(styles.titleOnly).style.height);
-    check("champagne, match", Math.abs(wh - collapsedHeight) < 0.5 && Math.abs(wh - 48) < 0.5,
+    check("f2_ultra_uv, match", Math.abs(wh - collapsedHeight) < 0.5 && Math.abs(wh - 48) < 0.5,
       `expanded, the window keeps its collapsed height, one row less its 4 px margins (${wh} and ${collapsedHeight} px)`);
-    check("champagne, match", wh > 30 && wh < fh / 2, `the window covers the title only (${Math.round(wh)} of ${fh} px)`);
+    check("f2_ultra_uv, match", wh > 30 && wh < fh / 2, `the window covers the title only (${Math.round(wh)} of ${fh} px)`);
 
     // The space from the bottom of the title's text to the first feature below, as on Home Assistant's tile card
     const textToFeature = (tile) => {
@@ -247,23 +248,23 @@
       check(`gap: ${name}`, Math.abs(win.height - 48) < 0.5 && Math.abs((win.top + win.bottom) / 2 - (icon.top + icon.bottom) / 2) < 0.5,
         `the window is one row, centered on the icon (${Math.round(win.height)} px)`);
     }
-    check("champagne, match", styles.champagne.shadowRoot.querySelectorAll(".area").length === 0, "Match draws no areas");
+    check("f2_ultra_uv, match", styles.f2UltraUv.shadowRoot.querySelectorAll(".area").length === 0, "Match draws no areas");
     await wait(100);
     const timedCamera = deep(styles.timeFormat, "xtool-camera")[0];
     timedCamera?.shadowRoot.querySelector("hui-image")?.shadowRoot.querySelector("img").dispatchEvent(new Event("load"));
     check("camera time", timedCamera?.shadowRoot.querySelector(".time hui-timestamp-display")?.format === "total", "the camera's time follows the card's Time format");
     const gloss = (card) => windowBox(card).style.getPropertyValue("--xtool-gloss");
-    check("reflections", (gloss(styles.champagne).match(/linear-gradient/g) ?? []).length >= 3, "the window has a sheen and reflections");
-    check("reflections", gloss(styles.champagne) === gloss(styles.samePattern), "the default pattern is 4242: the same reflections");
-    check("reflections", gloss(styles.otherPattern) !== gloss(styles.champagne), "another pattern gives other reflections");
+    check("reflections", (gloss(styles.f2UltraUv).match(/linear-gradient/g) ?? []).length >= 3, "the window has a sheen and reflections");
+    check("reflections", gloss(styles.f2UltraUv) === gloss(styles.samePattern), "the default pattern is 4242: the same reflections");
+    check("reflections", gloss(styles.otherPattern) !== gloss(styles.f2UltraUv), "another pattern gives other reflections");
     const keys = deep(styles.flat, ".key").filter((key) => key.offsetWidth).length;
-    check("champagne, flat", keys > 0 && styles.flat.shadowRoot.querySelectorAll(".area.flat").length === keys,
+    check("f2_ultra_uv, flat", keys > 0 && styles.flat.shadowRoot.querySelectorAll(".area.flat").length === keys,
       `a flat patch behind each button shown (${keys})`);
-    check("champagne, flat", styles.flat.shadowRoot.querySelector("hui-tile-card").classList.contains("solid"), "the buttons get a solid backing");
-    check("graphite, console", deep(styles.console, "xtool-job, xtool-controls").every((el) => el.hasAttribute("xtool-console")),
+    check("f2_ultra_uv, flat", styles.flat.shadowRoot.querySelector("hui-tile-card").classList.contains("solid"), "the buttons get a solid backing");
+    check("p2, console", deep(styles.console, "xtool-job, xtool-controls").every((el) => el.hasAttribute("xtool-console")),
       "the buttons are keys");
-    check("graphite, console", deep(styles.console, "ha-control-switch").every((el) => el.hasAttribute("xtool-slide")), "the toggle is a slide");
-    check("graphite, console", !styles.console.shadowRoot.getElementById("stripe"), "no line below the title row");
+    check("p2, console", deep(styles.console, "ha-control-switch").every((el) => el.hasAttribute("xtool-slide")), "the toggle is a slide");
+    check("p2, console", !styles.console.shadowRoot.getElementById("stripe"), "no line below the title row");
     check("no style", !frame(styles.plain).classList.contains("styled"), "no style: the theme's card");
 
     // Collapsing
@@ -323,12 +324,12 @@
     check("editor preview", inner(preview).config.features.length === 3, "adding a feature, or the laser turning off, leaves it expanded");
     inner(preview).shadowRoot.querySelector("ha-card").dispatchEvent(new CustomEvent("ll-custom", { bubbles: true, composed: true, detail: inner(preview).config.tap_action }));
     await wait(50);
-    preview.setConfig({ ...previewConfig, style: "graphite" });
+    preview.setConfig({ ...previewConfig, style: "p2" });
     await wait(50);
     check("editor preview", inner(preview).config.features.length === 0 && localStorage.getItem("xtool-card:sensor.f2_status") === "0",
       "a tap collapses it, and another change keeps it collapsed; the dashboard's remembered state is not touched");
     const rebuilt = document.createElement("xtool-card");
-    rebuilt.setConfig({ ...previewConfig, style: "graphite" });
+    rebuilt.setConfig({ ...previewConfig, style: "p2" });
     rebuilt.hass = f2("idle");
     rebuilt.preview = true;
     document.getElementById("cards").append(rebuilt);
@@ -398,15 +399,24 @@
     check("off at load", inner(offAtLoad).config.features.length === 0, "turning off again collapses it");
     check("hidden at load, inline", inner(closedInline).config.features.map((f) => f.type).join() === "custom:xtool-job",
       "collapsed, the feature beside the title stays, as on a tile card");
-    check("champagne, match", !inner(styles.champagne).config.tap_action, "without the option, the Tap behavior is the card's own");
+    check("f2_ultra_uv, match", !inner(styles.f2UltraUv).config.tap_action, "with Collapsible off, the Tap behavior is the card's own");
+    check("defaults", inner(defaultCard).config.tap_action?.action === "fire-dom-event", "Collapsible is on by default: a tap shows or hides the features");
 
     // When off, only the window darkens
     const offFrame = frame(offStyled);
-    check("off, graphite", offFrame.classList.contains("off") && getComputedStyle(offStyled.shadowRoot.getElementById("window")).filter.includes("brightness"),
+    check("off, p2", offFrame.classList.contains("off") && getComputedStyle(offStyled.shadowRoot.getElementById("window")).filter.includes("brightness"),
       "the window darkens");
-    check("off, graphite", getComputedStyle(offStyled.shadowRoot.getElementById("body")).filter === "none" && getComputedStyle(offFrame).opacity === "1",
+    check("off, p2", getComputedStyle(offStyled.shadowRoot.getElementById("body")).filter === "none" && getComputedStyle(offFrame).opacity === "1",
       "the body and the card do not");
-    check("off, graphite", !frame(styles.champagne).classList.contains("off"), "a machine that is on is not darkened");
+    check("off, p2", !frame(styles.f2UltraUv).classList.contains("off"), "a machine that is on is not darkened");
+    // Dimmed a little, the same in every style: the F2 Ultra UV's window still reads orange, not brown
+    const dimOf = (card) => getComputedStyle(card.shadowRoot.getElementById("window")).filter;
+    const orange = [0xf5, 0xa2, 0x1a].map((c) => c * 0.8);
+    const grey = orange.reduce((a, b) => a + b) / 3;
+    const dimmed = orange.map((c) => grey + (c - grey) * 0.9);
+    check("off, f2_ultra_uv", dimOf(offOrange) === "brightness(0.8) saturate(0.9)" && dimOf(offOrange) === dimOf(offStyled)
+      && dimmed[0] > 180 && dimmed[0] - dimmed[2] > 150,
+      `the window dims only slightly, as in the other style (${dimOf(offOrange)}: the top of the glass ${dimmed.map(Math.round).join(", ")})`);
 
     // No dividers between features side by side
     check("no style", getComputedStyle(inner(styles.plain)).getPropertyValue("--ha-card-feature-divider").trim() === "none",

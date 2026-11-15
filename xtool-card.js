@@ -721,7 +721,7 @@ const P2_CROP = {
  *   UV in it is UV, with CO2 in it CO2, unless the entry says otherwise),
  * - galvo: true for a galvo (the F-series: random strokes in the state
  *   picture), false for a machine that moves a gantry (a raster),
- * - style: the xTool style a new card gets ("champagne", "graphite" or "none"),
+ * - style: the xTool style a new card gets ("f2_ultra_uv", "p2" or "none"),
  * - light: its status light table (none: no ring),
  * - cropReset: the area each camera's Crop key returns to, by camera key
  *   (a camera without one has no Crop key),
@@ -733,11 +733,11 @@ const DEFAULT_PROFILE = { name: "", galvo: false, style: "none", light: undefine
 // device's model name gives its profile
 const MODELS = [
   // F2 Ultra, F2 Ultra (Single), F2 Ultra UV
-  { name: "F2 Ultra", match: /\bF2 Ultra\b/i, galvo: true, style: "champagne", light: ULTRA_LIGHT, cropReset: F2_CROP },
-  { name: "F1 Ultra", match: /\bF1 Ultra\b/i, galvo: true, style: "champagne", light: ULTRA_LIGHT },
+  { name: "F2 Ultra", match: /\bF2 Ultra\b/i, galvo: true, style: "f2_ultra_uv", light: ULTRA_LIGHT, cropReset: F2_CROP },
+  { name: "F1 Ultra", match: /\bF1 Ultra\b/i, galvo: true, style: "f2_ultra_uv", light: ULTRA_LIGHT },
   // F1, F1 Lite and F2: the knob light (guides 1955, 2013)
   {
-    name: "F1, F2", match: /\bF[12]\b/i, galvo: true, style: "champagne",
+    name: "F1, F2", match: /\bF[12]\b/i, galvo: true, style: "f2_ultra_uv",
     light: {
       idle: [BLUE, "solid"], processing: [BLUE, "solid"], finished: [GREEN, "solid"], firmware: [PURPLE, "solid"],
       setup: [YELLOW, "solid"], error: [RED, "solid"], fire: [RED, "solid"], overheat: [RED, "solid"], sleeping: [WHITE, "slow"],
@@ -745,7 +745,7 @@ const MODELS = [
   },
   // P2 and P2S: the ring light (guide 222)
   {
-    name: "P2", match: /\bP2S?\b/i, laser: "co2", style: "graphite",
+    name: "P2", match: /\bP2S?\b/i, laser: "co2", style: "p2",
     light: {
       idle: [WHITE, "solid"], processing: [BLUE, "solid"], paused: [BLUE, "solid"], framing: [BLUE, "breathe"],
       focusing: [BLUE, "breathe"], finished: [GREEN, "solid"], sleeping: [GREEN, "breathe"], firmware: [PURPLE, "solid"],
@@ -755,14 +755,14 @@ const MODELS = [
   },
   // P3: the ring light (guide 2004)
   {
-    name: "P3", match: /\bP3\b/i, laser: "co2", style: "graphite",
+    name: "P3", match: /\bP3\b/i, laser: "co2", style: "p2",
     light: {
       idle: [BLUE, "solid"], ready: [BLUE, "slow"], finished: [GREEN, "solid"], firmware: [PURPLE, "solid"],
       setup: [YELLOW, "solid"], error: [RED, "solid"], fire: [RED, "solid"],
     },
   },
   // The other P-series machines (P1, P3S): no light table
-  { name: "P-series", match: /\bP[123]S?\b/i, laser: "co2", style: "graphite" },
+  { name: "P-series", match: /\bP[123]S?\b/i, laser: "co2", style: "p2" },
   // M1 Ultra: the light on the carriage (guide 1396)
   {
     name: "M1 Ultra", match: /\bM1 Ultra\b/i,
@@ -3590,15 +3590,15 @@ function findDeep(root, selector, depth = 5) {
 
 // The xTool styles: a body and a window, light or dark (for the text on the
 // body), and the body's base color without grain (for Flat)
-const STYLES = [["none", "None (the theme's card)"], ["champagne", "xTool Champagne"], ["graphite", "xTool Graphite"]];
-const TONE = { champagne: "light", graphite: "dark" };
+const STYLES = [["none", "None (the theme's card)"], ["f2_ultra_uv", "F2 Ultra UV"], ["p2", "P2"]];
+const TONE = { f2_ultra_uv: "light", p2: "dark" };
 const DEFAULT_PATTERN = 4242;
 
 /**
  * The window's glass: a sheen along the top and two to four reflections
  * falling across it at an angle, their places from the pattern (Randomize
  * reflections in the editor picks a new pattern). Stronger on the
- * champagne's orange glass than on the graphite's dark glass.
+ * F2 Ultra UV style's orange glass than on the P2 style's dark glass.
  */
 function glassReflections(tone, pattern) {
   const r = seeded(pattern);
@@ -3617,7 +3617,7 @@ function glassReflections(tone, pattern) {
   }
   return layers.join(", ");
 }
-const FLAT = { champagne: "#cdae94", graphite: "#2d3136" };
+const FLAT = { f2_ultra_uv: "#cdae94", p2: "#2d3136" };
 // The same keys and values as the SVS and Lampster cards
 const FEATURES_STYLES = [["match", "Match style"], ["flat", "Flat"], ["console", "Console"]];
 // How far a features style's patch or channel reaches around each control (px)
@@ -3674,7 +3674,7 @@ const BADGE_PATHS = {
 };
 
 // Options this card adds to the tile card's
-const OWN_KEYS = ["style", "features_style", "pattern", "badges", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_off", "expand_when_on"];
+const OWN_KEYS = ["style", "features_style", "pattern", "badges", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on"];
 
 // The card's defaults for the tile card's options it sets otherwise
 const DEFAULT_FEATURES_POSITION = "inline";
@@ -3703,7 +3703,7 @@ function tileConfig(config, hass) {
  */
 function innerTileConfig(config, open, hass) {
   const tile = tileConfig(config, hass);
-  if (config.collapsible) {
+  if (config.collapsible !== false) {
     tile.tap_action = { action: "fire-dom-event", xtool_card: "toggle" };
     // Collapsed, the card keeps what a tile card shows in its title row:
     // with features position "inline", the first feature, beside the title
@@ -3744,20 +3744,20 @@ class XtoolCard extends HTMLElement {
         .styled #body { display: block; inset: 0; }
         .styled #window { display: block; overflow: hidden; border-radius: max(4px, calc(var(--ha-card-border-radius, 12px) - 5px)); }
         #window::after { content: ""; position: absolute; inset: 0; background: var(--xtool-gloss); }
-        /* A machine that is off: its window darkens; the body does not */
+        /* A machine that is off: its window dims a little, so it still reads in its own color; the body does not */
         #window { transition: filter 400ms ease-in-out; }
-        .off #window { filter: brightness(.55) saturate(.55); }
-        .champagne #body {
+        .off #window { filter: brightness(.8) saturate(.9); }
+        .f2_ultra_uv #body {
           background: radial-gradient(rgba(255, 255, 255, .07) .6px, transparent .7px) 0 0 / 3px 3px,
             linear-gradient(160deg, #dcc1aa 0%, #cdae94 45%, #b8977c 100%);
         }
-        .champagne #window {
+        .f2_ultra_uv #window {
           background: radial-gradient(90% 120% at 50% 110%, rgba(245, 162, 26, .55) 0%, rgba(245, 162, 26, 0) 70%),
             linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%);
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 0 0 1px rgba(90, 30, 0, .35), inset 0 3px 8px rgba(90, 30, 0, .3);
         }
-        .graphite #body { background: linear-gradient(170deg, #3a3f45 0%, #2d3136 40%, #24272b 100%); }
-        .graphite #window {
+        .p2 #body { background: linear-gradient(170deg, #3a3f45 0%, #2d3136 40%, #24272b 100%); }
+        .p2 #window {
           background: radial-gradient(120% 90% at 50% 120%, rgba(214, 140, 60, .28) 0%, rgba(214, 140, 60, 0) 60%),
             linear-gradient(175deg, #1d2024 0%, #141619 60%, #0f1113 100%);
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(255, 255, 255, .06), inset 0 3px 8px rgba(0, 0, 0, .6);
@@ -3902,7 +3902,7 @@ class XtoolCard extends HTMLElement {
     const edge = progressOptions(config).edge;
     if (!EDGES.some(([id]) => id === edge)) throw new Error(`Unknown progress edge: ${edge}`);
     this._config = { ...config, style };
-    this._open = !config.collapsible ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded_at_load !== false;
+    this._open = config.collapsible === false ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded_at_load !== false;
     this._wasOff = undefined;
     const tile = innerTileConfig(this._config, this._open, this._hass);
     if (this._tile) {
@@ -3967,7 +3967,7 @@ class XtoolCard extends HTMLElement {
     const was = this._preview;
     this._preview = value;
     if (this._tile) this._tile.preview = value;
-    if (value && !was && this._config?.collapsible) this._setOpen(PREVIEW_OPEN.get(this._config.entity) ?? true, false);
+    if (value && !was && this._config && this._config.collapsible !== false) this._setOpen(PREVIEW_OPEN.get(this._config.entity) ?? true, false);
   }
 
   set layout(value) {
@@ -3991,7 +3991,7 @@ class XtoolCard extends HTMLElement {
   getGridOptions() {
     const options = { ...(this._tile?.getGridOptions?.() ?? { columns: 6 }) };
     const camera = (this._config?.features ?? []).some((f) => f?.type === `custom:${XtoolCamera.type}`);
-    if (camera || this._config?.collapsible) {
+    if (camera || (this._config && this._config.collapsible !== false)) {
       options.rows = "auto";
       delete options.min_rows;
     }
@@ -4024,9 +4024,9 @@ class XtoolCard extends HTMLElement {
 
   /**
    * A collapsible card follows the machine's power, each option on its own:
-   * - Collapse when powered off (collapse_when_off): the card collapses when
+   * - Collapse when powered off (collapse_when_powered_off): the card collapses when
    *   the machine turns off (or is off as the card loads).
-   * - Expand when powered on (expand_when_on): the card expands when the
+   * - Expand when powered on (expand_when_powered_on): the card expands when the
    *   machine turns on.
    * An option that is off leaves the card as it is. The browser keeps the
    * choice made by a tap, not these.
@@ -4034,9 +4034,9 @@ class XtoolCard extends HTMLElement {
   _followPower(off) {
     const was = this._wasOff;
     this._wasOff = off;
-    if (!this._config.collapsible || off === was || this._preview) return;
-    if (off && this._config.collapse_when_off !== false && this._open) this._setOpen(false, false);
-    else if (!off && was === true && this._config.expand_when_on !== false && !this._open) this._setOpen(true, false);
+    if (this._config.collapsible === false || off === was || this._preview) return;
+    if (off && this._config.collapse_when_powered_off !== false && this._open) this._setOpen(false, false);
+    else if (!off && was === true && this._config.expand_when_powered_on !== false && !this._open) this._setOpen(true, false);
   }
 
   _setOpen(open, remember = true) {
@@ -4310,7 +4310,7 @@ class XtoolCard extends HTMLElement {
     if (this._tile) {
       this._tile.classList.toggle("dark", tone === "dark");
       this._tile.classList.toggle("light", tone === "light");
-      this._tile.classList.toggle("champagne", style === "champagne");
+      this._tile.classList.toggle("f2_ultra_uv", style === "f2_ultra_uv");
       this._tile.classList.toggle("solid", !!tone && (this._config.features_style ?? DEFAULT_FEATURES_STYLE) !== "match");
       // For the space under the title row (see _styleWindowText)
       this._tile.style.setProperty("--xtool-channel-pad", `${CHANNEL_PAD[this._featuresStyle()]}px`);
@@ -4325,7 +4325,7 @@ class XtoolCard extends HTMLElement {
   }
 
   /**
-   * On xTool Champagne the window is orange glass under a light body: the
+   * In the F2 Ultra UV style the window is orange glass under a light body: the
    * title's text on the window is light. This styles the tile card's title
    * from inside it; if Home Assistant renames that part, the title keeps the
    * body's text color.
@@ -4343,7 +4343,7 @@ class XtoolCard extends HTMLElement {
         hui-card-features[slot="features"] {
           margin-top: calc(var(--ha-card-feature-gap, 12px) - var(--xtool-window-margin, 0px) - var(--xtool-channel-pad, 0px));
         }
-        :host(.champagne) ha-tile-info {
+        :host(.f2_ultra_uv) ha-tile-info {
           --primary-text-color: rgba(255, 248, 240, .97); --secondary-text-color: rgba(255, 236, 220, .86);
           text-shadow: 0 1px 2px rgba(90, 30, 0, .55);
         }`);
@@ -4745,10 +4745,10 @@ class XtoolCardEditor extends HTMLElement {
       badges: v.badges ?? [],
       status_light: v.status_light !== false,
       progress_edge: { ...PROGRESS_DEFAULTS, ...(v.progress_edge ?? {}) },
-      collapsible: !!v.collapsible,
+      collapsible: v.collapsible !== false,
       expanded_at_load: v.expanded_at_load !== false,
-      collapse_when_off: v.collapse_when_off !== false,
-      expand_when_on: v.expand_when_on !== false,
+      collapse_when_powered_off: v.collapse_when_powered_off !== false,
+      expand_when_powered_on: v.expand_when_powered_on !== false,
     });
   }
 
@@ -4841,10 +4841,10 @@ class XtoolCardEditor extends HTMLElement {
         helper: "A tap on the card shows or hides the features, instead of its Tap behavior (under Interactions). Icon tap behavior still works.",
         selector: { boolean: {} },
       },
-      ...(c.collapsible ? [
+      ...(c.collapsible !== false ? [
         { name: "expanded_at_load", label: "Expanded at load", selector: { boolean: {} } },
-        { name: "collapse_when_off", label: "Collapse when powered off", selector: { boolean: {} } },
-        { name: "expand_when_on", label: "Expand when powered on", selector: { boolean: {} } },
+        { name: "collapse_when_powered_off", label: "Collapse when powered off", selector: { boolean: {} } },
+        { name: "expand_when_powered_on", label: "Expand when powered on", selector: { boolean: {} } },
       ] : []),
       {
         name: "badges", label: "Badges (in priority order)",
@@ -4887,10 +4887,10 @@ class XtoolCardEditor extends HTMLElement {
       badges: Array.isArray(c.badges) ? c.badges : defaultBadges(this._hass, c.entity),
       status_light: c.status_light !== false,
       progress_edge: progressOptions(c),
-      collapsible: !!c.collapsible,
+      collapsible: c.collapsible !== false,
       expanded_at_load: c.expanded_at_load !== false,
-      collapse_when_off: c.collapse_when_off !== false,
-      expand_when_on: c.expand_when_on !== false,
+      collapse_when_powered_off: c.collapse_when_powered_off !== false,
+      expand_when_powered_on: c.expand_when_powered_on !== false,
     };
   }
 
@@ -4929,8 +4929,8 @@ function minimal(config, hass) {
   }
   // Expanded at load, Collapse when powered off and Expand when powered on
   // matter only for a collapsible card
-  if (!c.collapsible) delete c.collapsible;
-  for (const key of ["expanded_at_load", "collapse_when_off", "expand_when_on"]) if (!c.collapsible || c[key] !== false) delete c[key];
+  if (c.collapsible !== false) delete c.collapsible;
+  for (const key of ["expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on"]) if (c.collapsible === false || c[key] !== false) delete c[key];
   if (c.features_position === DEFAULT_FEATURES_POSITION) delete c.features_position;
   if (hass && same(c.state_content, defaultStateContent(hass, c.entity))) delete c.state_content;
   if (Array.isArray(c.features) && !c.features.length) delete c.features;
