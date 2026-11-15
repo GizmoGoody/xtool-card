@@ -122,7 +122,9 @@
         helpers.push(...(editor.querySelector("ha-form")?.schema ?? []).map((f) => f.helper).filter(Boolean));
       }
     }
-    check("editor notes", helpers.length > 0 && !helpers.some((h) => /^In order/.test(h)), "no note that only says the controls are in order");
+    check("editor notes", helpers.length > 0 && !helpers.some((h) => /^In order\b/.test(h)), "no note that only says the controls are in order");
+    check("editor notes", !helpers.some((h) => /F2|P2|Ultra|deep camera/.test(h)), "no note names a model or its camera");
+    check("editor notes", helpers.includes("Crop: tap it, then tap two opposite corners on the picture."), "the camera's note is one short sentence");
 
     // Crop numbers not known (the laser off): no crop of its own, so Crop is off
     const unknownCrops = ["unknown", "unavailable"].map((state) => [state, addFeature({ type: "custom:xtool-camera" }, { hass: makeHass(Object.fromEntries(
@@ -136,6 +138,15 @@
     // A safety check that is unavailable says so, in Home Assistant's words
     const unseenCheck = addFeature({ type: "custom:xtool-safety" }, { hass: makeHass({ "switch.f2_moved": "unavailable" }) });
     check("safety", keyNamed(unseenCheck, "moved_stop").title.endsWith(": unavailable"), `an unavailable check is not called unknown (${keyNamed(unseenCheck, "moved_stop").title})`);
+    // Neither on nor off: dimmed, in no state's color (not green, not red)
+    for (const state of ["unavailable", "unknown"]) {
+      const dim = addFeature({ type: "custom:xtool-safety" }, { hass: makeHass({ "switch.f2_moved": state, "binary_sensor.f2_safety_key": state }) });
+      for (const id of ["moved_stop", "safety_key"]) {
+        const k = dim.shadowRoot.querySelector(`[data-key="${id}"]`);
+        const dimmed = id === "safety_key" ? k.classList.contains("disabled") : k.disabled;
+        check("safety", dimmed && !k.style.getPropertyValue("--c") && !k.classList.contains("fill"), `${id} ${state}: dimmed, in no state's color (${k.style.getPropertyValue("--c")})`);
+      }
+    }
 
     // A feature's editor writes only what differs from the feature's defaults
     const jobEditor = document.createElement("xtool-feature-editor");
@@ -306,8 +317,8 @@
       check("safety, flame alarm", !keyNamed(noLevel, "flame_alarm_level").querySelector("span"), `no letter while the level is ${state}`);
       const namedNoLevel = addFeature({ type: "custom:xtool-safety", show: "names" }, { hass: makeHass({ "sensor.p2_status": "off", "select.p2_flame_level": state }), entityId: "sensor.p2_status" });
       check("safety, flame alarm", keyNamed(namedNoLevel, "flame_alarm_level").textContent === "Flame", `with Names, its own name while the level is ${state}, not the state`);
-      check("safety, flame alarm", keyNamed(namedNoLevel, "flame_alarm_level").title.includes("Tap for") === (state !== "unavailable") && keyNamed(namedNoLevel, "flame_alarm_level").disabled === (state === "unavailable"),
-        `while ${state}: unavailable, the key is off and its title offers no next level; unknown, a tap sets the first`);
+      check("safety, flame alarm", !keyNamed(namedNoLevel, "flame_alarm_level").title.includes("Tap for") && keyNamed(namedNoLevel, "flame_alarm_level").disabled,
+        `while ${state}: the key is off and its title offers no next level`);
     }
     const namedLevel = addFeature({ type: "custom:xtool-safety", show: "both" }, { hass: makeHass(), entityId: "sensor.p2_status" });
     await wait(50);
@@ -383,6 +394,13 @@
     row = addFeature({ type: "custom:xtool-configuration" }, { hass });
     await wait(50);
     check("settings", keysOf(row).map((k) => k.dataset.key).join() === "buzzer,if2_buzzer,device_sleep", "buzzer reminders, the IF2 buzzer, device sleep");
+    const f2SettingsOptions = document.createElement("xtool-feature-editor");
+    f2SettingsOptions.hass = hass;
+    f2SettingsOptions.context = { entity_id: "sensor.f2_status" };
+    f2SettingsOptions.setConfig({ type: "custom:xtool-configuration" });
+    check("settings, accessory", f2SettingsOptions.querySelector("ha-form").schema[0].selector.select.options.map((o) => o.label).join() === "Buzzer reminders,IF2 Buzzer,Device sleep"
+      && keyNamed(row, "if2_buzzer").title.startsWith("IF2 Buzzer") && keyNamed(row, "buzzer").title.startsWith("Buzzer reminders"),
+      `an accessory's control named as a laser control in the list starts with the accessory, in the editor and the title (${keyNamed(row, "if2_buzzer").title})`);
     const p2Settings = addFeature({ type: "custom:xtool-configuration", show: "names" }, { hass, entityId: "sensor.p2_status" });
     await wait(50);
     check("settings, P2", keysOf(p2Settings).map((k) => k.dataset.key).join() === "exhaust_setting,buzzer"
@@ -957,6 +975,12 @@
     await wait(60);
     check("IF2 fan, unavailable", unseen.style.display === "" && keysOf(unseen).length > 0 && keysOf(unseen).every((k) => k.disabled),
       "kept in place, disabled, while the laser does not see the IF2");
+    check("IF2 fan, unavailable", keyNamed(unseen, "fan_speed").textContent === "Speed" && keyNamed(unseen, "fan_speed").title === "Speed", "with Names, the speed key's name and no speed");
+    for (const state of ["unavailable", "unknown"]) {
+      const iconsOnly = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "icons" }, { hass: makeHass({ "fan.if2_fan": state }) });
+      check("IF2 fan", !keyNamed(iconsOnly, "fan_speed").querySelector("span") && keyNamed(iconsOnly, "fan_speed").querySelector("ha-icon"),
+        `while the fan is ${state}, the speed key shows its icon and no speed`);
+    }
 
     // Focus: Autofocus, then the thickness in a field, typed or slid on, in one row
     const slideOn = async (el, dx, dy, ms) => {
@@ -1162,7 +1186,7 @@
     check("position", keyNamed(position, "move_laser").textContent === "Move" && position.style.getPropertyValue("--feature-color").includes("--state-number-active-color"),
       "in the number color");
     check("position", window.customCardFeatures.find((f) => f.type === "xtool-position").name === "xTool position", "named xTool position");
-    check("position", position.shadowRoot.querySelector(".field").title === "Laser position X, Laser position Y",
+    check("position", position.shadowRoot.querySelector(".field").title === "Laser position",
       `the field's name on hover (${position.shadowRoot.querySelector(".field").title})`);
     xy().value = "120, 60.4";
     xy().dispatchEvent(new Event("change"));

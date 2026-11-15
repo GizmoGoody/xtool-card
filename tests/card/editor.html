@@ -46,6 +46,11 @@
     const names = [...styleForm.schema, ...form.schema].map((s) => s.name);
     check("editor", ["style", "features_style", "badges", "status_light", "progress_edge"].every((n) => names.includes(n)), `the xTool options (${names.join(", ")})`);
     check("editor", [styleForm, form].some((f) => f.data.features_style === "console"), "the features style is Console by default");
+    const cardHelpers = [];
+    const collect = (schema) => (schema ?? []).forEach((f) => { if (f.helper) cardHelpers.push(f.helper); collect(f.schema); });
+    collect([...styleForm.schema, ...form.schema]);
+    check("editor notes", cardHelpers.some((h) => h.includes("progress sensor")) && !cardHelpers.some((h) => /F2|P2|Ultra|deep camera/.test(h)),
+      "no note names a model or its camera");
     check("status light", form.data.status_light === true, "the status light is on by default");
     form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "champagne", status_light: false } } }));
     check("status light", fired.status_light === false, "and can be turned off");

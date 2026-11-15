@@ -323,7 +323,8 @@ const running = (phase) => phase === "processing" || phase === "framing";
  *   button entity), number and select (Home Assistant's own feature as an
  *   input; as a key, the state and Home Assistant's dialog to change it),
  *   display (a state that is only shown, as a read-out, not a key; a tap
- *   opens it), or field (the numbers of its roles, in a field to type in
+ *   opens it), fan_mode (one mode of a fan: off, auto or speed, see
+ *   fanModeKey), or field (the numbers of its roles, in a field to type in
  *   and slide on: see FieldGroup),
  * - name: the one word on its key, or a function of the moment (see
  *   XtoolElement._moment) for a key that follows the state. A key shows its
@@ -343,6 +344,7 @@ const running = (phase) => phase === "processing" || phase === "framing";
  * - busy: unavailable in BUSY_PHASES; access: unavailable while Access
  *   control is on; allowed(moment): any other rule for when it is available,
  * - fan: its icon turns while it is on (the feature's animate_fan option),
+ *   in onColor when it gives one,
  * - cycle: a select whose key steps to the next option on a tap,
  * - brief: a select whose key shows the option chosen in brief beside its
  *   icon when its name does not show (High and Low: H and L, see briefOf),
@@ -395,9 +397,17 @@ const CONTROLS = {
     confirm: { off: "A job is running. Turning the power off stops it at once and it cannot be resumed.", while: ["processing", "paused"] },
   },
   exhaust: { kind: "toggle", name: "Exhaust", color: "blue", fan: true },
-  // The IF2 2.0's fan (its feature's own keys, see XtoolSafetyproIf2Fan): blue and
-  // turning while it spins, faster at each of its four speeds
-  if2_fan: { kind: "fan", name: "Fan", color: "blue", fan: true },
+  // The IF2 2.0's fan, as three keys for its modes (see fanModeKey): the one
+  // in use blue and turning while it spins, faster at each of its four speeds
+  fan_off: { kind: "fan_mode", role: "if2_fan_entity", mode: "off", option: "Off", title: "Off", name: "Off", icon: "mdi:fan-off", color: "primary" },
+  fan_auto: {
+    kind: "fan_mode", role: "if2_fan_entity", mode: "auto", option: "Auto", title: "Auto", name: "A", alwaysText: true,
+    icon: "mdi:fan", color: "primary", fan: true, onColor: "blue",
+  },
+  fan_speed: {
+    kind: "fan_mode", role: "if2_fan_entity", mode: "speed", option: "Speed", title: "Speed", name: "Speed",
+    icon: "mdi:fan", color: "primary", fan: true, onColor: "blue",
+  },
   cooling_fan: { kind: "toggle", name: "Cooling", color: "cyan", fan: true },
   fill_light: { kind: "light", name: "Light", color: DAYLIGHT },
   fill_light_front: { kind: "light", name: "Light", color: DAYLIGHT, direction: "front" },
@@ -1074,6 +1084,26 @@ function needsDirection(faces, i) {
 }
 
 /**
+ * The names that tell an accessory's controls from the laser's in one list
+ * (items: [{ id, control, entityId }]): an accessory's entity whose name is
+ * a laser control's name in the list, or the start of it or starts with it
+ * (Buzzer and Buzzer reminders), is named with its key's one word, which
+ * names the accessory, first (IF2 Buzzer). A Map of the control ids renamed.
+ */
+function accessoryNames(hass, device, items) {
+  const named = items.filter((i) => i.entityId).map((i) => ({ ...i, name: entityName(hass, i.entityId) })).filter((i) => i.name);
+  const own = (i) => hass.entities?.[i.entityId]?.device_id === device.id;
+  const collide = (a, b) => a === b || a.startsWith(`${b} `) || b.startsWith(`${a} `);
+  const names = new Map();
+  for (const item of named) {
+    if (own(item) || !named.some((other) => own(other) && collide(item.name, other.name))) continue;
+    const word = typeof item.control.name === "string" ? item.control.name : undefined;
+    if (word && !collide(item.name, word)) names.set(item.id, `${word} ${item.name}`);
+  }
+  return names;
+}
+
+/**
  * What every key made from a control has: its id, its entity (whose icon
  * it shows), its one-word name (text), its title (label: the entity's name
  * unless the control gives one), its color and its direction (drawn as
@@ -1081,7 +1111,7 @@ function needsDirection(faces, i) {
  */
 function keyBase(control, entityId, moment) {
   const name = valueOf(control.name, moment) ?? entityName(moment.hass, entityId);
-  const title = valueOf(control.title, moment) ?? entityName(moment.hass, entityId) ?? name;
+  const title = valueOf(control.title, moment) ?? moment.names?.get(control.id) ?? entityName(moment.hass, entityId) ?? name;
   const detail = valueOf(control.detail, moment);
   return {
     key: control.key ?? control.id, entity: entityId, text: name, color: control.color,
@@ -1120,7 +1150,7 @@ const FAN_TURNS = [2.4, 1.6, 1, 0.6];
 function fanLook(control, on, config, speed) {
   if (!control.fan || !on) return {};
   const spin = config?.animate_fan === false ? undefined : speed ? FAN_TURNS[Math.min(4, Math.max(1, speed)) - 1] : FAN_TURN;
-  return { color: control.color, pressed: true, spin };
+  return { color: control.onColor ?? control.color, pressed: true, spin };
 }
 
 // The color of a safety check that is off (or in its problem state), unless the Safety feature's Disabled color says otherwise
@@ -1137,16 +1167,59 @@ function switchKey(feature, control, entityId, moment) {
     ? () => fire(feature, "hass-more-info", { entityId })
     : () => toggle(feature, control, entityId, on);
   if (control.check) {
-    // A safety check: green while it is safe; red and filled while it is not
+    // A safety check: green while it is safe; red and filled while it is
+    // not; dimmed, in no state's color, while it is neither on nor off
+    // (unavailable or unknown)
     const { problem, words = control.kind === "display" ? ["in", "removed"] : ["on", "off"] } = control.check;
+    const known = on || state === "off";
     const unsafe = problem === "on" ? on : problem === "off" ? state === "off" : false;
     return {
       ...base, label: `${base.label}: ${on ? words[0] : state === "off" ? words[1] : stateObj ? moment.hass.formatEntityState(stateObj) : "unknown"}`,
-      color: unsafe ? moment.config?.disabled_color ?? DISABLED_COLOR : "green", pressed: on, fill: unsafe, disabled, action,
+      color: !known ? undefined : unsafe ? moment.config?.disabled_color ?? DISABLED_COLOR : "green", pressed: on, fill: unsafe,
+      disabled: disabled || !known, action,
       readout: control.kind === "display",
     };
   }
   return { ...base, pressed: on, disabled, ...fanLook(control, on, moment.config), action, readout: control.kind === "display" };
+}
+
+/**
+ * A key for one of a fan's modes (see CONTROLS: mode): pressed while the fan
+ * is in it. Off turns the fan off; auto sets its first preset (none without
+ * one); speed shows the speed it runs at, or the last one shown, and a tap
+ * steps to the next (after the last, the first). While the fan's state is
+ * neither on nor off (unavailable or unknown), the speed key shows no speed.
+ */
+function fanModeKey(feature, control, entityId, moment) {
+  const hass = moment.hass, stateObj = hass.states[entityId];
+  const preset = (stateObj?.attributes.preset_modes ?? [])[0];
+  if (!stateObj || (control.mode === "auto" && !preset)) return undefined;
+  const step = stateObj.attributes.percentage_step ?? 25;
+  const speeds = Math.max(1, Math.round(100 / step));
+  const percentage = stateObj.attributes.percentage ?? 0;
+  const mode = stateObj.attributes.preset_mode ? "auto" : stateObj.state === "off" ? "off" : stateObj.state === "on" ? "speed" : undefined;
+  const base = keyBase(control, entityId, moment);
+  const key = {
+    ...base, entity: undefined, icon: control.icon, alwaysText: control.alwaysText, pressed: mode === control.mode,
+    disabled: !feature._usable(entityId),
+    ...(mode === control.mode ? fanLook(control, stateObj.state === "on", moment.config, Math.round(percentage / step)) : {}),
+  };
+  if (control.mode === "off") return { ...key, action: () => mode !== "off" && hass.callService("fan", "turn_off", { entity_id: entityId }) };
+  if (control.mode === "auto") {
+    return { ...key, action: () => mode !== "auto" && hass.callService("fan", "set_preset_mode", { entity_id: entityId, preset_mode: preset }) };
+  }
+  if (mode === "speed") feature._speed = Math.min(speeds, Math.max(1, Math.round(percentage / step)));
+  const speed = feature._speed ?? 1;
+  const next = mode === "speed" ? (speed % speeds) + 1 : speed;
+  const known = stateObj.state === "on" || stateObj.state === "off";
+  return {
+    ...key,
+    ...(known ? { text: String(speed), alwaysText: true, label: mode === "speed" ? `${base.label} ${speed}. Tap for ${next}` : `${base.label} ${speed}` } : {}),
+    action: () => {
+      feature._speed = next;
+      hass.callService("fan", "set_percentage", { entity_id: entityId, percentage: Math.min(100, next * step) });
+    },
+  };
 }
 
 /** A key for a button entity: a tap presses it, asking first when the control says so. */
@@ -1196,7 +1269,8 @@ function selectKey(feature, control, entityId, moment) {
     };
   }
   const next = options[(options.indexOf(stateObj.state) + 1) % options.length];
-  const disabled = stateObj.state === "unavailable" || !next;
+  // No step from a state that is not an option (unavailable or unknown)
+  const disabled = !chosen || !next;
   return {
     ...base, label: disabled ? `${base.label}: ${words(stateObj.state)}` : `${base.label}: ${words(stateObj.state)}. Tap for ${words(next)}`, text,
     // In brief only an option of the select; unavailable or unknown shows no letter
@@ -1415,7 +1489,8 @@ class FieldGroup {
     this._shown = this._format(this._values());
     this._input.disabled = !usable;
     this._field.classList.toggle("disabled", !usable);
-    nameItem(this._field, item.entities.map((entityId) => entityName(feature._hass, entityId) ?? entityId).join(", "));
+    // Named as in the editor (see fieldName): Laser position X and Y, Laser position
+    nameItem(this._field, fieldName(feature._hass, this._control, feature._device) ?? item.entities.join(", "));
     this._input.setAttribute("aria-label", this._field.title);
     if (this._pending || feature.shadowRoot.activeElement !== this._input) this._input.value = this._format(values);
   }
@@ -1483,6 +1558,7 @@ const KINDS = {
   number: { key: numberKey, input: { type: "numeric-input", style: "buttons" } },
   select: { key: selectKey, input: { type: "select-options" } },
   display: { key: switchKey },
+  fan_mode: { key: fanModeKey },
   field: { key: fieldKey },
 };
 
@@ -1757,12 +1833,13 @@ class XtoolElement extends HTMLElement {
    * for the editor, each named as its entity is (or by its option).
    */
   static offered(device, hass) {
-    return this.controlIds(device).map((id) => ({ id, ...this.controlFor(id, device, hass) }))
-      .filter(({ control, entityId }) => control && (this.offerAll || entityId || (control.picks && present(control, device))))
-      .map(({ id, control, entityId }) => ({
-        value: id,
-        label: control.option ?? (control.roles ? fieldName(hass, control, device) : entityName(hass, entityId)) ?? control.name,
-      }));
+    const items = this.controlIds(device).map((id) => ({ id, ...this.controlFor(id, device, hass) }))
+      .filter(({ control, entityId }) => control && (this.offerAll || entityId || (control.picks && present(control, device))));
+    const names = accessoryNames(hass, device, items);
+    return items.map(({ id, control, entityId }) => ({
+      value: id,
+      label: control.option ?? (control.roles ? fieldName(hass, control, device) : names.get(id) ?? entityName(hass, entityId)) ?? control.name,
+    }));
   }
 
   /** Whether Home Assistant's feature picker offers the feature for this device: it has one of its controls. */
@@ -1910,6 +1987,9 @@ class XtoolFeature extends XtoolElement {
   _buttons() {
     const moment = this._moment();
     if (this.constructor.hidden?.(moment)) return [];
+    // Titled as in the editor (see accessoryNames)
+    const { device, hass } = moment;
+    moment.names = accessoryNames(hass, device, this.constructor.controlIds(device).map((id) => ({ id, ...this.constructor.controlFor(id, device, hass) })));
     return this._chosen().map((id) => this._controlKey(id, moment, this.constructor.keyOptions)).filter(Boolean);
   }
 
@@ -2177,7 +2257,7 @@ class XtoolCamera extends XtoolFeature {
   static defaults = ["cameras", "crop", "perspective", ...CAMERA_INPUTS];
   static form = {
     label: "Controls",
-    helper: "In order, line by line. Crop: tap it, then tap two opposite corners on the picture to show only that part. It stays on, for another crop, until it is tapped again (the camera then goes back to its crop preset, or its whole area) or the other camera is shown.",
+    helper: "Crop: tap it, then tap two opposite corners on the picture.",
   };
 
   static supports(device) {
@@ -2218,7 +2298,7 @@ class XtoolCamera extends XtoolFeature {
           selector: select(CAMERA_VIEWS),
         },
         ...base.schema.filter((f) => f.name === "controls"),
-        displayField("For the camera's keys and the deep camera's perspective."),
+        displayField("For the camera's keys."),
         {
           name: "show_last_updated", label: "Show the last updated time",
           helper: "Along the bottom of the picture, in the Auto view, in the card's Time format (under Content).",
@@ -3005,34 +3085,29 @@ class XtoolMeasure extends XtoolFeature {
 // Shown disabled while the laser does not see the IF2, as Home Assistant's are.
 // ---------------------------------------------------------------------------
 const NUMBER_ON = "var(--state-number-active-color, var(--state-active-color, var(--primary-color, #03a9f4)))";
-// The IF2 2.0's keys: Off, Auto and the speed. They are this feature's own:
-// they set the fan entity's modes, not an entity each
-// Each key's id starts with fan_, so none is a word YAML reads as true or false (off)
-const IF2_KEYS = [["fan_off", "Off"], ["fan_auto", "Auto"], ["fan_speed", "Speed"]];
-const IF2_ICONS = { off: "mdi:fan-off", auto: "mdi:fan", speed: "mdi:fan", 1: "mdi:fan-speed-1", 2: "mdi:fan-speed-2", 3: "mdi:fan-speed-3" };
+// The first IF2's gears' icons
+const IF2_ICONS = { off: "mdi:fan-off", 1: "mdi:fan-speed-1", 2: "mdi:fan-speed-2", 3: "mdi:fan-speed-3" };
 
 class XtoolSafetyproIf2Fan extends XtoolFeature {
   static label = "SafetyPro IF2 fan";
   static pickerName = "xTool SafetyPro IF2 fan";
+  static controls = ["fan_off", "fan_auto", "fan_speed"];
+  static form = { label: "Controls", helper: "The speed key shows the speed, and a tap steps to the next." };
 
   static supports(device) {
     return !!(device.roles.if2_fan_entity ?? device.roles.if2_gear_select);
   }
 
+  // The IF2 2.0: its keys (see CONTROLS: fan_mode); the first IF2: its gears
   static editor(hass, entityId) {
     const { roles } = deviceOf(hass, entityId);
-    const fan = roles.if2_fan_entity, gears = roles.if2_gear_select;
+    if (roles.if2_fan_entity) return super.editor(hass, entityId);
+    const gears = roles.if2_gear_select;
     const options = gears ? hass.states[gears]?.attributes.options ?? [] : [];
     return {
-      // One control: Off, Auto and the speed (IF2 2.0), or the gears (IF2)
       schema: (c) => [
-        ...(fan ? [{
-          name: "controls", label: "Controls",
-          helper: "The speed key shows the speed, and a tap steps to the next.",
-          selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: IF2_KEYS.map(([value, label]) => ({ value, label })) } },
-        }] : []),
         displayField(),
-        ...(!fan && gears ? [
+        ...(gears ? [
           { name: "customize_choices", label: "Customize choices", selector: { boolean: {} } },
           ...(Array.isArray(c.choices) ? [{
             name: "choices", label: "Choices",
@@ -3041,14 +3116,13 @@ class XtoolSafetyproIf2Fan extends XtoolFeature {
         ] : []),
       ],
       data: (c) => ({
-        ...(fan ? { controls: Array.isArray(c.controls) ? c.controls : IF2_KEYS.map(([value]) => value) } : {}),
         show: displayOf(c),
-        ...(!fan && gears ? { customize_choices: Array.isArray(c.choices), ...(Array.isArray(c.choices) ? { choices: c.choices } : {}) } : {}),
+        ...(gears ? { customize_choices: Array.isArray(c.choices), ...(Array.isArray(c.choices) ? { choices: c.choices } : {}) } : {}),
       }),
       // Turning Customize on starts with every choice; off removes the list
       save: (v) => {
         const { customize_choices: customChoices, ...c } = v;
-        if (!fan && gears && customChoices) c.choices = Array.isArray(c.choices) ? c.choices : options;
+        if (gears && customChoices) c.choices = Array.isArray(c.choices) ? c.choices : options;
         else delete c.choices;
         return c;
       },
@@ -3057,51 +3131,7 @@ class XtoolSafetyproIf2Fan extends XtoolFeature {
 
   _buttons() {
     const hass = this._hass, c = this._config, { roles } = this._device;
-    const fan = roles.if2_fan_entity;
-    const fanState = fan ? hass.states[fan] : undefined;
-    if (fanState) {
-      const preset = (fanState.attributes.preset_modes ?? [])[0];
-      const step = fanState.attributes.percentage_step ?? 25;
-      const speeds = Math.max(1, Math.round(100 / step));
-      let value;
-      if (fanState.attributes.preset_mode) value = "auto";
-      else if (fanState.state === "off") value = "off";
-      else if (fanState.state === "on") value = "speed";
-      // The speed key shows the speed it runs at, or the last one shown;
-      // a tap while it runs steps to the next (after the last, the first)
-      if (value === "speed") this._speed = Math.min(speeds, Math.max(1, Math.round((fanState.attributes.percentage ?? 0) / step)));
-      const speed = this._speed ?? 1;
-      const nextSpeed = value === "speed" ? (speed % speeds) + 1 : speed;
-      const disabled = fanState.state === "unavailable";
-      // The key in use (Auto or the speed), while the fan spins: blue, its
-      // fan turning at the speed the IF2 reports
-      const spinning = fanState.state === "on";
-      const sensed = Math.round((fanState.attributes.percentage ?? 0) / step);
-      const look = (key) => (key === value ? fanLook(CONTROLS.if2_fan, spinning, this._config, sensed) : {});
-      const buttons = [{
-        key: "fan_off", label: "Off", text: "Off", icon: IF2_ICONS.off, color: "primary", pressed: value === "off", disabled,
-        action: () => value !== "off" && hass.callService("fan", "turn_off", { entity_id: fan }),
-      }];
-      if (preset) {
-        buttons.push({
-          key: "fan_auto", label: "Auto", text: "A", alwaysText: true, icon: IF2_ICONS.auto, color: "primary", pressed: value === "auto", disabled,
-          ...look("auto"),
-          action: () => value !== "auto" && hass.callService("fan", "set_preset_mode", { entity_id: fan, preset_mode: preset }),
-        });
-      }
-      buttons.push({
-        key: "fan_speed", label: value === "speed" ? `Speed ${speed}. Tap for ${nextSpeed}` : `Speed ${speed}`,
-        text: String(speed), alwaysText: true, icon: IF2_ICONS.speed, color: "primary", pressed: value === "speed", disabled,
-        ...look("speed"),
-        action: () => {
-          this._speed = nextSpeed;
-          hass.callService("fan", "set_percentage", { entity_id: fan, percentage: Math.min(100, nextSpeed * step) });
-        },
-      });
-      // The keys chosen, in the order chosen (all by default)
-      if (!Array.isArray(c.controls)) return buttons;
-      return c.controls.map((key) => buttons.find((b) => b.key === key)).filter(Boolean);
-    }
+    if (roles.if2_fan_entity) return super._buttons();
     const gears = roles.if2_gear_select;
     const gearState = gears ? hass.states[gears] : undefined;
     if (!gearState) return [];
@@ -4788,7 +4818,7 @@ class XtoolCardEditor extends HTMLElement {
           { name: "show_percentage", label: "Show the percentage", selector: { boolean: {} } },
           {
             name: "show_while", label: "Show while",
-            helper: "Without a progress sensor (such as on the F2 Ultra UV), the edge sweeps while a job runs.",
+            helper: "Without a progress sensor, the edge sweeps while a job runs.",
             selector: { select: { multiple: true, mode: "list", options: SHOW_WHILE.map(([value, label]) => ({ value, label })) } },
           },
         ],
