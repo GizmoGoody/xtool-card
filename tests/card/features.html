@@ -865,7 +865,7 @@
       `the camera by its id, not its name (${cameraChoices.join(", ")})`);
     const cameraNames = cameraOptions.querySelector("ha-form").schema.map((s) => s.name);
     const f2Controls = cameraOptions.querySelector("ha-form").schema.find((f) => f.name === "controls");
-    check("camera, options", cameraNames.join() === "camera,camera_view,controls,show,show_last_updated" && f2Controls.selector.select.reorder
+    check("camera, options", cameraNames.join() === "camera,camera_view,controls,show,show_last_updated,full_width" && f2Controls.selector.select.reorder
       && f2Controls.selector.select.options.map((o) => o.label).join() === "Camera buttons,Camera toggle,Custom crop,Perspective"
       && cameraOptions.querySelector("ha-form").data.controls.join() === "camera_buttons,custom_crop,perspective",
       `the camera buttons, the camera toggle, Crop and the perspective, chosen and ordered, all but the toggle by default (${cameraNames.join(", ")})`);

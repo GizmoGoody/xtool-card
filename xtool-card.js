@@ -2352,10 +2352,15 @@ class XtoolCamera extends XtoolFeature {
           helper: "Along the bottom of the picture, in the Auto view, in the card's Time format (under Content).",
           selector: { boolean: {} },
         },
+        {
+          name: "full_width", label: "Full width",
+          helper: "With the features beside the title: the picture takes both columns. Off: one column, with the features after it beside it.",
+          selector: { boolean: {} },
+        },
       ],
       data: (c) => ({
         camera: ids.includes(c.camera) ? c.camera : ids[0], camera_view: c.camera_view === "live" ? "live" : "auto",
-        ...base.data(c), show_last_updated: c.show_last_updated !== false,
+        ...base.data(c), show_last_updated: c.show_last_updated !== false, full_width: c.full_width !== false,
       }),
       save: base.save,
     };
@@ -3576,6 +3581,79 @@ function findAllDeep(root, selector, depth = 5, out = []) {
   return out;
 }
 
+/**
+ * Where each feature below the title goes in Home Assistant's two-column
+ * feature grid (hui-card-features), with the features beside the title
+ * (features position inline). Core's pattern stays: the features alternate
+ * left and right in the order chosen. On top of it:
+ * - a camera with Full width (the default) takes both columns;
+ * - a camera without it takes one column, as many rows tall as its
+ *   picture needs: the features after it fill the other column, one per
+ *   row, until they pass the bottom of the picture; then the pattern
+ *   resumes;
+ * - a feature alone in its row (not beside a camera) takes both columns
+ *   with Last feature full width (the default), one column without it.
+ * items: [{ camera, full, height }] in order; gap: the grid's row gap (px).
+ * Returns { places, rows }: one place for each feature, { column, row,
+ * columns } as CSS grid-column, grid-row and the --feature-columns the
+ * feature reads; and the grid's rows, "auto" each, except a camera's last
+ * row, "1fr": a flexible row takes what the picture needs beyond the
+ * features beside it, so those stay one below the other at the row gap.
+ */
+function featurePlaces(items, gap, lastWide) {
+  const places = [];
+  const gridRows = [];
+  let row = 1, col = 0;
+  // A feature alone at the end of its row: both columns, or one
+  const alone = (index) => {
+    if (lastWide) places[index] = { column: "1 / -1", row: places[index].row, columns: 1 };
+  };
+  for (let i = 0; i < items.length;) {
+    const item = items[i];
+    if (item.camera && item.full) {
+      if (col === 1) {
+        alone(i - 1);
+        row += 1;
+      }
+      places[i] = { column: "1 / -1", row: `${row}`, columns: 1 };
+      row += 1;
+      col = 0;
+      i += 1;
+      continue;
+    }
+    if (item.camera) {
+      // Beside the picture: a feature already left of it in this row, then
+      // the features after it, one per row, until they pass its bottom
+      const other = 1 - col;
+      let rows = col === 1 ? 1 : 0;
+      let height = col === 1 ? items[i - 1].height : 0;
+      let next = i + 1;
+      while (next < items.length && height < item.height && !(items[next].camera && items[next].full)) {
+        places[next] = { column: `${other + 1}`, row: `${row + rows}`, columns: 2 };
+        height += (rows ? gap : 0) + items[next].height;
+        rows += 1;
+        next += 1;
+      }
+      const span = Math.max(rows, 1);
+      places[i] = { column: `${col + 1}`, row: span > 1 ? `${row} / span ${span}` : `${row}`, columns: 2 };
+      gridRows[row + span - 2] = "1fr";
+      row += span;
+      col = 0;
+      i = next;
+      continue;
+    }
+    places[i] = { column: `${col + 1}`, row: `${row}`, columns: 2 };
+    col += 1;
+    if (col === 2) {
+      col = 0;
+      row += 1;
+    }
+    i += 1;
+  }
+  if (col === 1) alone(items.length - 1);
+  return { places, rows: Array.from({ length: row - 1 + col }, (_, i) => gridRows[i] ?? "auto") };
+}
+
 /** The first element matching selector inside root and its shadow roots. */
 function findDeep(root, selector, depth = 5) {
   if (!root || depth < 0) return null;
@@ -3674,7 +3752,8 @@ const BADGE_PATHS = {
 };
 
 // Options this card adds to the tile card's
-const OWN_KEYS = ["style", "features_style", "pattern", "badges", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on"];
+const OWN_KEYS = ["style", "features_style", "pattern", "badges", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on",
+  "last_feature_full_width"];
 
 // The card's defaults for the tile card's options it sets otherwise
 const DEFAULT_FEATURES_POSITION = "inline";
@@ -3983,18 +4062,16 @@ class XtoolCard extends HTMLElement {
   }
 
   /**
-   * The tile card's grid size, so a taller cell is shared out as on a tile
-   * card. The height follows the content (rows: auto) when it can change:
-   * a camera's picture is taller than a row and grows with the width, and a
-   * collapsible card's features come and go.
+   * The tile card's columns, and a height that follows the content (rows:
+   * auto): a camera's picture grows with the width, a collapsible card's
+   * features come and go, and the features take the rows their layout
+   * needs (see featurePlaces). A fixed row count would leave a taller cell
+   * than the content, and the tile card would share the spare height out
+   * above the title.
    */
   getGridOptions() {
-    const options = { ...(this._tile?.getGridOptions?.() ?? { columns: 6 }) };
-    const camera = (this._config?.features ?? []).some((f) => f?.type === `custom:${XtoolCamera.type}`);
-    if (camera || (this._config && this._config.collapsible !== false)) {
-      options.rows = "auto";
-      delete options.min_rows;
-    }
+    const options = { ...(this._tile?.getGridOptions?.() ?? { columns: 6 }), rows: "auto" };
+    delete options.min_rows;
     return options;
   }
 
@@ -4318,10 +4395,58 @@ class XtoolCard extends HTMLElement {
       this._styleWindowText();
     }
     this._removeDividers();
+    this._placeFeatures();
     this._clampCorners();
     this._drawWindow();
     this._drawAreas();
     if (this._badge.classList.contains("on")) this._placeBadge();
+  }
+
+  /**
+   * Place the features below the title in the tile card's feature grid
+   * (see featurePlaces), as inline grid places on Home Assistant's own
+   * feature items. Only when the card's options call for it: otherwise the
+   * grid is Home Assistant's as it is. The places are written after the
+   * layout pass (they change the card's height), and only when they change.
+   */
+  _placeFeatures() {
+    let group;
+    try {
+      group = findAllDeep(this._tile?.shadowRoot, 'hui-card-features[slot="features"]')[0];
+    } catch (err) {
+      console.warn("xTool card: could not place the features", err);
+      return;
+    }
+    const items = [...(group?.shadowRoot?.querySelectorAll("hui-card-feature") ?? [])];
+    const inline = (this._config.features_position ?? DEFAULT_FEATURES_POSITION) === "inline";
+    const lastWide = this._config.last_feature_full_width !== false;
+    const isCamera = (item) => item.feature?.type === `custom:${XtoolCamera.type}`;
+    const placed = inline && items.length > 0 && (!lastWide || items.some(isCamera));
+    const gap = placed ? parseFloat(getComputedStyle(group).rowGap) || 0 : 0;
+    const { places, rows } = placed
+      ? featurePlaces(items.map((item) => ({ camera: isCamera(item), full: item.feature.full_width !== false, height: item.offsetHeight })), gap, lastWide)
+      : { places: [], rows: [] };
+    const key = JSON.stringify([places, rows]);
+    if (group === this._placedGroup && key === this._placedKey) return;
+    clearTimeout(this._placeTimer);
+    this._placeTimer = setTimeout(() => {
+      this._placedGroup = group;
+      this._placedKey = key;
+      if (!group) return;
+      // Two columns for one feature below the title that takes one
+      group.style.gridTemplateColumns = places.some((p) => p.columns === 2) && group.getAttribute("columns") !== "2" ? "repeat(2, minmax(0, 1fr))" : "";
+      group.style.gridTemplateRows = rows.includes("1fr") ? rows.join(" ") : "";
+      items.forEach((item, i) => {
+        const place = places[i];
+        item.style.gridColumn = place?.column ?? "";
+        item.style.gridRow = place?.row ?? "";
+        // Each feature as tall as itself, so the rows beside a picture
+        // follow the features' own heights
+        item.style.alignSelf = place ? "start" : "";
+        if (place) item.style.setProperty("--feature-columns", `${place.columns}`);
+        else item.style.removeProperty("--feature-columns");
+      });
+    }, 0);
   }
 
   /**
@@ -4545,6 +4670,7 @@ class XtoolCard extends HTMLElement {
         return;
       }
       this._removeDividers();
+      this._placeFeatures();
       this._clampCorners();
       this._drawWindow();
       this._drawAreas();
@@ -4749,6 +4875,7 @@ class XtoolCardEditor extends HTMLElement {
       expanded_at_load: v.expanded_at_load !== false,
       collapse_when_powered_off: v.collapse_when_powered_off !== false,
       expand_when_powered_on: v.expand_when_powered_on !== false,
+      last_feature_full_width: v.last_feature_full_width !== false,
     });
   }
 
@@ -4800,6 +4927,8 @@ class XtoolCardEditor extends HTMLElement {
           delete next.show_entity_picture;  // always on: the state picture is shown there
           this._config = minimal(next, this._hass);
           this._fire();
+          // Some of the card's options show only for some tile options (Features position)
+          this._render();
           // The tile editor shows a change only once its configuration is handed back
           editor.setConfig(tileConfig(this._config, this._hass));
           if (ev.detail.config.entity) this._setTileEditorHass(ev.detail.config.entity);
@@ -4846,6 +4975,11 @@ class XtoolCardEditor extends HTMLElement {
         { name: "collapse_when_powered_off", label: "Collapse when powered off", selector: { boolean: {} } },
         { name: "expand_when_powered_on", label: "Expand when powered on", selector: { boolean: {} } },
       ] : []),
+      ...((c.features_position ?? DEFAULT_FEATURES_POSITION) === "inline" ? [{
+        name: "last_feature_full_width", label: "Last feature full width",
+        helper: "With the features beside the title: a last feature alone in its row takes both columns.",
+        selector: { boolean: {} },
+      }] : []),
       {
         name: "badges", label: "Badges (in priority order)",
         helper: "The first one that applies shows on the picture.",
@@ -4891,6 +5025,7 @@ class XtoolCardEditor extends HTMLElement {
       expanded_at_load: c.expanded_at_load !== false,
       collapse_when_powered_off: c.collapse_when_powered_off !== false,
       expand_when_powered_on: c.expand_when_powered_on !== false,
+      last_feature_full_width: c.last_feature_full_width !== false,
     };
   }
 
@@ -4931,6 +5066,8 @@ function minimal(config, hass) {
   // matter only for a collapsible card
   if (c.collapsible !== false) delete c.collapsible;
   for (const key of ["expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on"]) if (c.collapsible === false || c[key] !== false) delete c[key];
+  // Last feature full width matters only with the features beside the title
+  if (c.last_feature_full_width !== false || (c.features_position ?? DEFAULT_FEATURES_POSITION) !== "inline") delete c.last_feature_full_width;
   if (c.features_position === DEFAULT_FEATURES_POSITION) delete c.features_position;
   if (hass && same(c.state_content, defaultStateContent(hass, c.entity))) delete c.state_content;
   if (Array.isArray(c.features) && !c.features.length) delete c.features;

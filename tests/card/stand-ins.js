@@ -479,7 +479,8 @@ customElements.define("hui-card-features", class extends HTMLElement {
   constructor() {
     super();
     // Home Assistant's styles (hui-card-features): a grid, a second
-    // column with a divider before each feature in it
+    // column with a divider before each feature in it, and a last feature
+    // alone in its row across both columns (wide)
     this.attachShadow({ mode: "open" }).innerHTML = `<style>
       :host {
         --feature-height: 42px; --feature-columns: 1; --feature-border-radius: var(--ha-card-features-border-radius, 12px);
@@ -490,6 +491,8 @@ customElements.define("hui-card-features", class extends HTMLElement {
         gap: var(--ha-card-feature-gap, 12px) var(--feature-column-gap); box-sizing: border-box; align-content: space-evenly;
       }
       :host([columns="2"]) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      :host([columns="2"]) hui-card-feature:not(.wide) { --feature-columns: 2; }
+      .wide { grid-column: 1 / -1; }
       .divided {
         box-sizing: border-box; margin-inline-start: calc(-1 * var(--feature-divider-inset));
         padding-inline-start: var(--feature-divider-inset); border-inline-start: var(--ha-card-feature-divider, 1px solid #f0f);
@@ -501,7 +504,9 @@ customElements.define("hui-card-features", class extends HTMLElement {
     if (columns > 1) this.setAttribute("columns", String(columns));
     this.items = features.map((config, index) => {
       const item = document.createElement("hui-card-feature");
-      if (columns > 1 && index % columns > 0) item.className = "divided";
+      const column = index % columns;
+      item.classList.toggle("divided", column > 0);
+      item.classList.toggle("wide", column === 0 && index === features.length - 1);
       item.setup = { config, hass, entityId };
       return item;
     });

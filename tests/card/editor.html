@@ -148,6 +148,28 @@
     check("editor", fired.collapsible === false && !("expanded_at_load" in fired) && !("collapse_when_powered_off" in fired) && !("expand_when_powered_on" in fired)
       && !editor.shadowRoot.getElementById("form").schema.some((s) => s.name === "expanded_at_load"), "turned off, it is saved, and the options under it are removed");
 
+    // Last feature full width: on by default, offered with the features beside the title
+    const lastOption = () => editor.shadowRoot.getElementById("form").schema.find((s) => s.name === "last_feature_full_width");
+    check("editor", lastOption()?.label === "Last feature full width" && editor.shadowRoot.getElementById("form").data.last_feature_full_width === true,
+      "Last feature full width is offered, on by default");
+    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "none", last_feature_full_width: false } } }));
+    check("editor", fired.last_feature_full_width === false, "turned off, it is saved");
+    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "none", last_feature_full_width: true } } }));
+    check("editor", !("last_feature_full_width" in fired), "on, it is left out");
+    // A camera's Full width: on by default, left out while on
+    const cameraEditor = document.createElement("xtool-feature-editor");
+    let cameraFired;
+    cameraEditor.addEventListener("config-changed", (ev) => (cameraFired = ev.detail.config));
+    cameraEditor.hass = makeHass();
+    cameraEditor.context = { entity_id: "sensor.f2_status" };
+    cameraEditor.setConfig({ type: "custom:xtool-camera" });
+    const cameraForm = cameraEditor.querySelector("ha-form");
+    check("camera, full width", cameraForm.schema.find((s) => s.name === "full_width")?.label === "Full width" && cameraForm.data.full_width === true, "offered, on by default");
+    cameraForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...cameraForm.data, full_width: false } } }));
+    check("camera, full width", JSON.stringify(cameraFired) === JSON.stringify({ type: "custom:xtool-camera", full_width: false }), `turned off, it alone is saved (${JSON.stringify(cameraFired)})`);
+    cameraForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...cameraForm.data, full_width: true } } }));
+    check("camera, full width", JSON.stringify(cameraFired) === JSON.stringify({ type: "custom:xtool-camera" }), "on, it is left out");
+
     // The tile card's options change
     tile.dispatchEvent(new CustomEvent("config-changed", { detail: { config: { type: "tile", entity: "sensor.f2_status", name: "Laser", show_entity_picture: true } } }));
     check("editor", fired.type === "custom:xtool-card" && fired.name === "Laser" && !("style" in fired) && !("show_entity_picture" in fired),
@@ -159,6 +181,8 @@
     check("editor", fired.name === "Laser 2" && !("features_position" in fired) && !("state_content" in fired), "and leaves them out while they are the defaults");
     tile.dispatchEvent(new CustomEvent("config-changed", { detail: { config: { ...tile.config, features_position: "bottom", state_content: ["state"] } } }));
     check("editor", fired.features_position === "bottom" && fired.state_content.join() === "state", "but saves other choices");
+    check("editor", !editor.shadowRoot.getElementById("form").schema.some((s) => s.name === "last_feature_full_width"),
+      "with the features at the bottom (one column), Last feature full width is not offered");
     const p2Editor = document.createElement("xtool-card-editor");
     p2Editor.hass = makeHass();
     p2Editor.setConfig({ type: "custom:xtool-card", entity: "sensor.p2_status" });

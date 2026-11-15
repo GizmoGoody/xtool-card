@@ -118,6 +118,63 @@
     features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }] }, { hass: f2("idle"), height: 280 });
   const camera = addCard("camera", { features: [{ type: "custom:xtool-camera" }, { type: "custom:xtool-safetypro-if2-fan" }] }, { hass: f2("idle"), height: 120 });
 
+  // The features below the title in Home Assistant's grid: the camera, and a last feature alone in its row
+  const auto = (hass) => ({ hass, height: "auto" });
+  const f2Max = {
+    style: "f2_ultra_uv", features_style: "console", pattern: 4242, status_light: true,
+    badges: ["alarm", "unavailable", "safety_key", "lid", "safety_checks", "firmware"],
+    progress_edge: { edge: "top", thickness: 4, starts_at: 0, ends_at: 100, direction: "clockwise", color: "state", show_percentage: false, show_while: ["processing", "paused"] },
+    collapsible: true, expanded_at_load: true, collapse_when_powered_off: true, expand_when_powered_on: true, last_feature_full_width: true,
+    state_content: ["state", "engraving_lens", "elapsed"], features_position: "inline",
+    features: [
+      { type: "custom:xtool-job", controls: ["start_pause", "start", "pause", "cancel"], show: "icons", ask_before_cancelling: true },
+      { type: "custom:xtool-controls", controls: ["power", "exhaust_fan", "fill_light_front", "fill_light_back", "red_dot", "autofocus"], show: "icons", animate_fan: true },
+      { type: "custom:xtool-configuration", controls: ["buzzer", "if2_buzzer", "device_sleep"], show: "icons" },
+      { type: "custom:xtool-safety", controls: ["flame_alarm", "stops_when_enclosure_opened", "stops_when_moved", "safety_key"], show: "icons", disabled_color: "red" },
+      { type: "custom:xtool-lights", controls: ["fill_light_front", "fill_light_front_brightness", "fill_light_back", "fill_light_back_brightness"], off_at_minimum: false },
+      { type: "custom:xtool-camera", camera: "main", camera_view: "auto", controls: ["camera_buttons", "camera_toggle", "custom_crop", "perspective"], show: "icons", show_last_updated: true, full_width: true },
+      { type: "custom:xtool-safetypro-if2-fan", controls: ["fan_off", "fan_auto", "fan_speed"], show: "icons" },
+      { type: "custom:xtool-focus", controls: ["autofocus", "focus_height"], show: "icons" },
+    ],
+  };
+  const p2Max = {
+    ...f2Max, entity: "sensor.p2_status", style: "p2", state_content: ["state", "elapsed"],
+    features: [
+      { type: "custom:xtool-controls", controls: ["power", "fill_light_close", "fill_light_left", "fill_light_right", "red_dot_close", "red_dot_quick", "safety_lock", "wake"], show: "icons", animate_fan: true },
+      { type: "custom:xtool-configuration", controls: ["exhaust_fan", "buzzer"], show: "icons" },
+      { type: "custom:xtool-safety", controls: ["flame_alarm", "lid", "baseplate"], show: "icons", disabled_color: "red" },
+      { type: "custom:xtool-lights", controls: ["fill_light_left", "fill_light_left_brightness", "fill_light_right", "fill_light_right_brightness"], off_at_minimum: false },
+      { type: "custom:xtool-camera", camera: "overview", camera_view: "auto", show: "icons", show_last_updated: true, full_width: true,
+        controls: ["camera_buttons", "camera_toggle", "custom_crop", "thickness_or_distance", "measure_thickness_or_distance", "mode", "crop", "exposure", "fill_light_close", "fill_light_close_brightness"] },
+      { type: "custom:xtool-overlays", show: "icons" },
+      { type: "custom:xtool-position", controls: ["laser_position", "move_laser", "home_laser"], show: "icons" },
+    ],
+  };
+  const halfCamera = (config) => ({ ...config, features: config.features.map((f) => (f.type === "custom:xtool-camera" ? { ...f, full_width: false } : f)) });
+  const layouts = {
+    f2Max: addCard("F2 Ultra UV, every option", f2Max, auto(f2("idle"))),
+    f2Half: addCard("F2 Ultra UV, every option, camera in one column", halfCamera(f2Max), auto(f2("idle"))),
+    p2Max: addCard("P2, every option", p2Max, auto(p2("idle"))),
+    p2Half: addCard("P2, every option, camera in one column", halfCamera(p2Max), auto(p2("idle"))),
+    odd: addCard("three below the title", { features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" },
+      { type: "custom:xtool-configuration" }] }, auto(f2("idle"))),
+    oddHalf: addCard("three below the title, last feature in one column", { last_feature_full_width: false, features: [{ type: "custom:xtool-job" },
+      { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }, { type: "custom:xtool-configuration" }] }, auto(f2("idle"))),
+    oneHalf: addCard("one below the title, in one column", { last_feature_full_width: false, features: [{ type: "custom:xtool-job" },
+      { type: "custom:xtool-controls" }] }, auto(f2("idle"))),
+    oddBottom: addCard("bottom: one column", { features_position: "bottom", last_feature_full_width: false, features: [{ type: "custom:xtool-job" },
+      { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }] }, auto(f2("idle"))),
+  };
+  // The smallest cards: the F2 Ultra UV's and the P2's, collapsible and not
+  const minimum = {
+    f2: addCard("F2 Ultra UV, minimum", { style: "f2_ultra_uv", features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] }, auto(f2("idle"))),
+    f2Fixed: addCard("F2 Ultra UV, minimum, not collapsible", { style: "f2_ultra_uv", collapsible: false,
+      features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] }, auto(f2("idle"))),
+    p2: addCard("P2, minimum", { entity: "sensor.p2_status", style: "p2", features: [{ type: "custom:xtool-controls" }] }, auto(p2("idle"))),
+    p2Fixed: addCard("P2, minimum, not collapsible", { entity: "sensor.p2_status", style: "p2", collapsible: false,
+      features: [{ type: "custom:xtool-controls" }] }, auto(p2("idle"))),
+  };
+
   // Home Assistant's own features inside the card's, in Console: one channel each, fitted to the control
   const haInside = addCard("console, Home Assistant features inside", { style: "f2_ultra_uv", features_style: "console", features_position: "bottom",
     features: [{ type: "custom:xtool-lights", controls: ["fill_light_front", "fill_light_front_brightness"] }, { type: "custom:xtool-safetypro-if2-fan" }] }, { hass: f2("idle"), height: 200 });
@@ -438,12 +495,96 @@
     check("inline job", !!second && getComputedStyle(second).borderInlineStartStyle === "none", "the divider is gone from the second column");
     check("inline job", group.shadowRoot.adoptedStyleSheets.length === 1, "removed from the feature group, once");
 
-    // The card's height follows its content
-    const tileGrid = inner(inlineCard).getGridOptions();
-    check("grid", inlineCard.getGridOptions().rows === tileGrid.rows && inlineCard.getGridOptions().min_rows === tileGrid.min_rows
-      && inlineCard.getGridOptions().columns === tileGrid.columns, `the tile card's rows and columns, so a taller cell is shared out as on a tile card (${tileGrid.rows} rows)`);
-    check("grid", camera.getGridOptions().rows === "auto" && collapsible.getGridOptions().rows === "auto",
-      "rows: auto with a camera, which grows with the width, and for a collapsible card");
+    // The card's height follows its content, in every case
+    const sized = [inlineCard, camera, collapsible, defaultCard, ...Object.values(layouts), ...Object.values(minimum)];
+    check("grid", sized.every((card) => card.getGridOptions().rows === "auto" && !("min_rows" in card.getGridOptions())),
+      `rows: auto for every card, with no fixed minimum (${sized.map((card) => card.getGridOptions().rows).join(", ")})`);
+    check("grid", inlineCard.getGridOptions().columns === inner(inlineCard).getGridOptions().columns, "the tile card's columns");
+
+    // The title row is as tall on every card: no spare height above the title
+    const titleRow = (card) => inner(card).shadowRoot.querySelector("ha-tile-container").shadowRoot.querySelector(".content").getBoundingClientRect().height;
+    const titled = [...Object.values(minimum), layouts.f2Max, layouts.p2Max, layouts.odd];
+    check("header", titled.every((card) => Math.abs(titleRow(card) - titleRow(minimum.f2)) < 0.5)
+      && Math.abs(parseFloat(windowBox(minimum.f2Fixed).style.height) - parseFloat(windowBox(minimum.f2).style.height)) < 0.5,
+      `a minimum card that is not collapsible has the same title row as the others (${titled.map((card) => Math.round(titleRow(card))).join(", ")} px)`);
+
+    // Where the features below the title sit
+    const placesOf = (card) => {
+      const group = deep(card, 'hui-card-features[slot="features"]')[0];
+      const css = getComputedStyle(group);
+      const start = group.getBoundingClientRect().left + parseFloat(css.paddingLeft);
+      const width = group.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+      const half = (width - parseFloat(css.columnGap)) / 2;
+      return [...group.shadowRoot.querySelectorAll("hui-card-feature")].map((item) => {
+        const b = item.getBoundingClientRect();
+        return { type: item.feature.type.replace("custom:xtool-", ""), left: b.left - start, top: b.top, bottom: b.bottom, width: b.width,
+          full: Math.abs(b.width - width) < 1, half: Math.abs(b.width - half) < 1, right: b.left - start > half / 2 };
+      });
+    };
+    const describe = (places) => places.map((p) => `${p.type}:${p.full ? "full" : p.right ? "right" : "left"}`).join(" ");
+    const overlap = (places) => places.some((a, i) => places.some((b, j) => j > i && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5
+      && (a.full || b.full || a.right === b.right)));
+    // The camera, the features beside it (in the other column, from its top), and the ones after
+    const besideCamera = (places) => {
+      const cam = places.find((p) => p.type === "camera");
+      const beside = places.filter((p) => p !== cam && !p.full && p.right !== cam.right && p.top < cam.bottom - 0.5 && p.bottom > cam.top + 0.5);
+      const after = places.slice(places.indexOf(cam) + 1).filter((p) => !beside.includes(p));
+      return { cam, beside, after };
+    };
+    await wait(400);
+    for (const [name, card] of [["F2 Ultra UV", layouts.f2Max], ["P2", layouts.p2Max]]) {
+      const places = placesOf(card);
+      const cam = places.find((p) => p.type === "camera");
+      check("layout, camera full width", cam?.full && !overlap(places) && places.every((p) => p.full || p.half),
+        `${name}, every option: the camera takes both columns; the others half each, side by side, none overlapping (${describe(places)})`);
+    }
+    // Core's pattern around a camera across the card: a feature left alone before it takes the full width too
+    const p2Places = placesOf(layouts.p2Max);
+    check("layout, camera full width", describe(p2Places) === "configuration:left safety:right lights:full camera:full overlays:left position:right",
+      `P2: the lights, left alone before the camera, take the full width (${describe(p2Places)})`);
+    check("layout, camera full width", describe(placesOf(layouts.f2Max))
+      === "controls:left configuration:right safety:left lights:right camera:full safetypro-if2-fan:left focus:right",
+      `F2 Ultra UV: left and right in the order chosen (${describe(placesOf(layouts.f2Max))})`);
+    for (const [name, card] of [["F2 Ultra UV", layouts.f2Half], ["P2", layouts.p2Half]]) {
+      const places = placesOf(card);
+      const { cam, beside, after } = besideCamera(places);
+      const rowGap = parseFloat(getComputedStyle(deep(card, 'hui-card-features[slot="features"]')[0]).rowGap);
+      const stacked = beside.every((p, i) => i === 0 || Math.abs(p.top - beside[i - 1].bottom - rowGap) < 0.5);
+      const reached = beside.length > 0 && (beside.at(-1).bottom >= cam.bottom - 0.5 || after.length === 0);
+      const justEnough = beside.length < 2 || beside.at(-2).bottom < cam.bottom - 0.5;
+      check("layout, camera in one column", cam.half && beside.length > 0 && Math.abs(beside[0].top - cam.top) < 0.5 && stacked && reached && justEnough && !overlap(places),
+        `${name}: the camera in one column; the features after it beside it, one per row, until they pass the bottom of the picture (${describe(places)}; picture ${Math.round(cam.top)} to ${Math.round(cam.bottom)}, beside ${beside.map((p) => `${Math.round(p.top)} to ${Math.round(p.bottom)}`).join(", ")})`);
+      check("layout, camera in one column", after.every((p, i) => (p.full ? i === after.length - 1 : p.half && p.right === (i % 2 === 1))) && !overlap(places),
+        `${name}: then left and right again (${describe(after)})`);
+    }
+    // The rule on its own: a picture 100 px tall, features 42 px tall, a 12 px row gap
+    const rule = featurePlaces([{ camera: true, full: false, height: 100 }, ...Array(6).fill({ camera: false, full: false, height: 42 })], 12, true);
+    check("layout, camera in one column", JSON.stringify(rule.places.map((p) => `${p.column}@${p.row}`)) === JSON.stringify(["1@1 / span 3", "2@1", "2@2", "2@3", "1@4", "2@4", "1 / -1@5"])
+      && rule.rows.join(" ") === "auto auto 1fr auto auto",
+      `beside the picture until the features pass its bottom (42, 96, then 150 px), then left and right again, the last alone across (${rule.places.map((p) => `${p.column}@${p.row}`).join("; ")}; rows ${rule.rows.join(" ")})`);
+    const ruleRight = featurePlaces([{ camera: false, full: false, height: 42 }, { camera: true, full: false, height: 50 },
+      { camera: false, full: false, height: 42 }, { camera: false, full: false, height: 42 }], 12, false);
+    check("layout, camera in one column", ruleRight.places.map((p) => `${p.column}@${p.row}`).join("; ") === "1@1; 2@1 / span 2; 1@2; 1@3",
+      `a camera on the right: the feature left of it is the first beside it; one column for the last, without Last feature full width (${ruleRight.places.map((p) => `${p.column}@${p.row}`).join("; ")})`);
+    const ruleFull = featurePlaces([{ camera: false, full: false, height: 42 }, { camera: true, full: true, height: 200 }, { camera: false, full: false, height: 42 }], 12, true);
+    check("layout, camera full width", ruleFull.places.map((p) => `${p.column}@${p.row}`).join("; ") === "1 / -1@1; 1 / -1@2; 1 / -1@3" && ruleFull.rows.join(" ") === "auto auto auto",
+      `a full-width camera: a feature alone before it, and the last, across too (${ruleFull.places.map((p) => `${p.column}@${p.row}`).join("; ")})`);
+
+    // A last feature alone in its row
+    check("layout, last feature", describe(placesOf(layouts.odd)) === "controls:left safety:right configuration:full",
+      `with Last feature full width (the default), it takes both columns (${describe(placesOf(layouts.odd))})`);
+    check("layout, last feature", describe(placesOf(layouts.oddHalf)) === "controls:left safety:right configuration:left" && placesOf(layouts.oddHalf).every((p) => p.half),
+      `without it, one column (${describe(placesOf(layouts.oddHalf))})`);
+    check("layout, last feature", placesOf(layouts.oneHalf).length === 1 && placesOf(layouts.oneHalf)[0].half && !placesOf(layouts.oneHalf)[0].right,
+      "one feature below the title, without it: one column too");
+    const itemsOf = (card) => [...deep(card, 'hui-card-features[slot="features"]')[0].shadowRoot.querySelectorAll("hui-card-feature")];
+    const columnsOf = (card) => itemsOf(card).map((item) => getComputedStyle(item).getPropertyValue("--feature-columns").trim());
+    check("layout, last feature", columnsOf(layouts.odd).join() === "2,2,1" && columnsOf(layouts.oddHalf).join() === "2,2,2",
+      `each feature told how many columns share the row, as Home Assistant tells it (${columnsOf(layouts.odd).join()}; ${columnsOf(layouts.oddHalf).join()})`);
+    check("layout, bottom", placesOf(layouts.oddBottom).every((p) => p.full) && !itemsOf(layouts.oddBottom).some((item) => item.style.gridRow),
+      "features at the bottom: Home Assistant's one column, as it is");
+    check("layout, core", !itemsOf(layouts.odd).some((item) => item.style.gridRow || item.style.gridColumn),
+      "without a camera and with the defaults, Home Assistant's grid is left as it is");
     check("grid", camera.getCardSize() === 7, `the camera counts as five rows (${camera.getCardSize()})`);
 
     // One channel for each Home Assistant control inside the card's features
