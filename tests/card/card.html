@@ -72,23 +72,20 @@
     titleOnly: addCard("champagne, title only", { style: "champagne" }, { hass: f2("processing"), height: 56 }),
   };
 
-  // The space under the title, against Home Assistant's tile card in a cell
-  // of the same size: in every style and features style, with the features
-  // below the title or the first beside it, and in a taller cell
+  // The space under the title, against Home Assistant's tile card fitted to
+  // its content: in every style and features style, with the features below
+  // the title or the first beside it, collapsible (rows: auto)
   const gapFeatures = [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }];
   const gapLooks = [["none", "console"], ["champagne", "match"], ["champagne", "flat"], ["champagne", "console"], ["graphite", "match"], ["graphite", "flat"], ["graphite", "console"]];
   const gapCards = [];
   for (const position of ["bottom", "inline"]) {
     const tile = { features_position: position, features: gapFeatures, show_entity_picture: true, state_content: ["state", "engraving_lens", "elapsed"] };
-    const rows = 1 + (position === "inline" ? 2 : 3);
-    for (const extra of [0, 1]) {
-      const size = { hass: f2("idle"), height: rowsHeight(rows + extra) };
-      const core = addCoreTile(`core tile, ${position}${extra ? ", a row taller" : ""}`, tile, size);
-      for (const [style, look] of extra ? [["champagne", "console"]] : gapLooks) {
-        const card = addCard(`gap: ${style}, ${look}, ${position}${extra ? ", a row taller" : ""}`,
-          { style, features_style: look, features_position: position, features: gapFeatures }, size);
-        gapCards.push({ card, core, name: `${style}, ${look}, ${position}${extra ? ", a row taller" : ""}` });
-      }
+    const size = { hass: f2("idle"), height: "auto" };
+    const core = addCoreTile(`core tile, ${position}`, tile, size);
+    for (const [style, look] of gapLooks) {
+      const card = addCard(`gap: ${style}, ${look}, ${position}`,
+        { style, features_style: look, features_position: position, collapsible: true, features: gapFeatures }, size);
+      gapCards.push({ card, core, name: `${style}, ${look}, ${position}` });
     }
   }
 
@@ -219,7 +216,8 @@
     };
     for (const { card, core, name } of gapCards) {
       const ours = textToFeature(inner(card)), theirs = textToFeature(core);
-      check(`gap: ${name}`, Math.abs(ours - theirs) < 0.5, `the title's text to the first feature below: ${Math.round(ours)} px, as on the tile card (${Math.round(theirs)} px)`);
+      check(`gap: ${name}`, Math.abs(ours - theirs - 12) < 0.5,
+        `the title's text to the first feature below: ${Math.round(ours)} px, the tile card's (${Math.round(theirs)} px) and Home Assistant's 12 px spacing`);
       if (card._config.style === "none") continue;
       // The window is one row, centered on the icon, however tall the cell
       const win = windowBox(card).getBoundingClientRect(), icon = inner(card).shadowRoot.querySelector("ha-tile-icon").getBoundingClientRect();

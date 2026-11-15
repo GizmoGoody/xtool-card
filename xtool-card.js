@@ -4233,6 +4233,9 @@ class XtoolCard extends HTMLElement {
     if (!XtoolCard._windowSheet) {
       XtoolCard._windowSheet = new CSSStyleSheet();
       XtoolCard._windowSheet.replaceSync(`
+        /* Space between the title row and the features below it (none
+           while collapsed, when no features show below) */
+        hui-card-features[slot="features"] { margin-top: var(--ha-space-3, 12px); }
         :host(.champagne) ha-tile-info {
           --primary-text-color: rgba(255, 248, 240, .97); --secondary-text-color: rgba(255, 236, 220, .86);
           text-shadow: 0 1px 2px rgba(90, 30, 0, .55);
