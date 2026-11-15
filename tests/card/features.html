@@ -57,39 +57,39 @@
     await wait(20);
     check("job, paused", !asking() && lastCall(hass).data.entity_id === "button.f2_cancel", "without asking, when turned off in the options");
 
-    // Peripherals
+    // Controls
     hass = makeHass({ "sensor.f2_status": "idle" });
     let row = addFeature({ type: "custom:xtool-controls" }, { hass });
     await wait(50);
-    check("peripherals", keysOf(row).map((k) => k.dataset.key).join() === "power,exhaust,fill_light_front,fill_light_back,red_dot,autofocus",
+    check("controls", keysOf(row).map((k) => k.dataset.key).join() === "power,exhaust,fill_light_front,fill_light_back,red_dot,autofocus",
       "every control the F2 Ultra UV has, in order, Autofocus last");
-    check("peripherals", keyNamed(row, "power").querySelector("ha-state-icon")?.stateObj === hass.states["switch.f2_power"]
+    check("controls", keyNamed(row, "power").querySelector("ha-state-icon")?.stateObj === hass.states["switch.f2_power"]
       && keyNamed(row, "power").querySelector("ha-state-icon").hass === hass && !keyNamed(row, "power").querySelector("span"),
       "icons by default: the entity's own icon, Home Assistant's state icon");
-    check("peripherals", keyNamed(row, "exhaust").title === "Exhaust fan" && keyNamed(row, "red_dot").title === "Red dot", "titled with the entity's name");
-    check("peripherals", !row.shadowRoot.querySelector(".key ha-icon:not(.arrow)"), "no icons of the card's own for the entities");
+    check("controls", keyNamed(row, "exhaust").title === "Exhaust fan" && keyNamed(row, "red_dot").title === "Red dot", "titled with the entity's name");
+    check("controls", !row.shadowRoot.querySelector(".key ha-icon:not(.arrow)"), "no icons of the card's own for the entities");
     keyNamed(row, "autofocus").click();
-    check("peripherals", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "button", service: "press", data: { entity_id: "button.f2_autofocus" } }),
+    check("controls", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "button", service: "press", data: { entity_id: "button.f2_autofocus" } }),
       "Autofocus is pressed, not toggled");
-    check("peripherals", keyNamed(row, "exhaust").getAttribute("aria-pressed") === "true" && keyNamed(row, "red_dot").getAttribute("aria-pressed") === "false",
+    check("controls", keyNamed(row, "exhaust").getAttribute("aria-pressed") === "true" && keyNamed(row, "red_dot").getAttribute("aria-pressed") === "false",
       "on and off shown");
     keyNamed(row, "exhaust").click();
-    check("peripherals", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "switch", service: "turn_off", data: { entity_id: "switch.f2_exhaust" } }),
+    check("controls", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "switch", service: "turn_off", data: { entity_id: "switch.f2_exhaust" } }),
       "a tap turns the exhaust off");
     keyNamed(row, "fill_light_back").click();
-    check("peripherals", lastCall(hass).domain === "light" && lastCall(hass).service === "turn_on", "a tap turns the back fill light on");
+    check("controls", lastCall(hass).domain === "light" && lastCall(hass).service === "turn_on", "a tap turns the back fill light on");
     keyNamed(row, "power").click();
     await wait(20);
-    check("peripherals", !asking() && lastCall(hass).data.entity_id === "switch.f2_power", "Power turns off without asking while idle");
+    check("controls", !asking() && lastCall(hass).data.entity_id === "switch.f2_power", "Power turns off without asking while idle");
     hass = makeHass({ "sensor.f2_status": "processing" });
     row = addFeature({ type: "custom:xtool-controls", controls: ["red_dot", "power", "autofocus"], show: "both" }, { hass });
     await wait(50);
-    check("peripherals, chosen", keysOf(row).map((k) => k.dataset.key).join() === "red_dot,power,autofocus" && keyNamed(row, "red_dot").textContent === "Dot"
+    check("controls, chosen", keysOf(row).map((k) => k.dataset.key).join() === "red_dot,power,autofocus" && keyNamed(row, "red_dot").textContent === "Dot"
       && keyNamed(row, "red_dot").querySelector("ha-state-icon"), "the chosen controls, in the chosen order; Show: Icons and names");
-    check("peripherals, chosen", keyNamed(row, "autofocus").disabled, "no Autofocus while a job runs");
+    check("controls, chosen", keyNamed(row, "autofocus").disabled, "no Autofocus while a job runs");
     keyNamed(row, "power").click();
     await wait(20);
-    check("peripherals, chosen", asking()?.title === "Turn off power?" && hass.calls.length === 0, "Power asks first while a job runs");
+    check("controls, chosen", asking()?.title === "Turn off power?" && hass.calls.length === 0, "Power asks first while a job runs");
     asking().answer(false);
     row = addFeature({ type: "custom:xtool-controls", controls: ["red_dot"], show: "names" }, { hass });
     await wait(50);
@@ -98,7 +98,7 @@
     await wait(50);
     check("show", keysOf(row).map((k) => k.textContent).join() === "Exhaust,Power", "each name one word (Exhaust, not Exhaust fan)");
 
-    // The fill lights stay buttons in the peripherals feature: on or off only
+    // The fill lights stay buttons in the Controls feature: on or off only
     hass = makeHass();
     row = addFeature({ type: "custom:xtool-controls" }, { hass });
     await wait(50);
@@ -111,6 +111,32 @@
     front.click();
     check("fill lights as buttons", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "light", service: "turn_off", data: { entity_id: "light.f2_fill_front" } }),
       "a tap turns it off");
+    // No editor note says what the editor already shows (the chosen controls are in order)
+    const helpers = [];
+    for (const { type } of window.customCardFeatures) {
+      for (const entity_id of ["sensor.f2_status", "sensor.p2_status"]) {
+        const editor = document.createElement("xtool-feature-editor");
+        editor.hass = makeHass();
+        editor.context = { entity_id };
+        editor.setConfig({ type: `custom:${type}` });
+        helpers.push(...(editor.querySelector("ha-form")?.schema ?? []).map((f) => f.helper).filter(Boolean));
+      }
+    }
+    check("editor notes", helpers.length > 0 && !helpers.some((h) => /^In order/.test(h)), "no note that only says the controls are in order");
+
+    // Crop numbers not known (the laser off): no crop of its own, so Crop is off
+    const unknownCrops = ["unknown", "unavailable"].map((state) => [state, addFeature({ type: "custom:xtool-camera" }, { hass: makeHass(Object.fromEntries(
+      ["width", "height", "center_x", "center_y"].map((side) => [`number.f2_main_crop_${side}`, state]))) })]);
+    await wait(60);
+    for (const [state, unknownCrop] of unknownCrops) {
+      const cropKey = keyNamed(unknownCrop, "crop");
+      check("camera, crop", cropKey?.getAttribute("aria-pressed") === "false" && cropKey.title === "Crop by tapping" && cropKey.disabled,
+        `crop numbers ${state}: Crop stays in place, off and not usable (${cropKey?.title})`);
+    }
+    // A safety check that is unavailable says so, in Home Assistant's words
+    const unseenCheck = addFeature({ type: "custom:xtool-safety" }, { hass: makeHass({ "switch.f2_moved": "unavailable" }) });
+    check("safety", keyNamed(unseenCheck, "moved_stop").title.endsWith(": unavailable"), `an unavailable check is not called unknown (${keyNamed(unseenCheck, "moved_stop").title})`);
+
     // A feature's editor writes only what differs from the feature's defaults
     const jobEditor = document.createElement("xtool-feature-editor");
     jobEditor.hass = makeHass();
@@ -201,8 +227,7 @@
       && lightForm.data.off_at_minimum === false && minimum.label === "Off at minimum"
       && minimum.helper === "Setting a light's slider to its minimum (1%) turns the light off.",
       "four choices on the F2 Ultra UV, each light's icon and slider by its name, and Off at minimum (off by default)");
-    check("lights", window.customCardFeatures.find((f) => f.type === "xtool-lights")?.name === "xTool lights"
-      && !window.customCardFeatures.some((f) => f.type === "xtool-light"), "named xTool lights");
+    check("lights", window.customCardFeatures.find((f) => f.type === "xtool-lights")?.name === "xTool lights", "named xTool lights");
     const noLights = makeHass();
     delete noLights.entities["light.f2_fill_front"];
     delete noLights.entities["light.f2_fill_back"];
@@ -276,6 +301,14 @@
     const lowLevel = addFeature({ type: "custom:xtool-safety" }, { hass: makeHass({ "select.p2_flame_level": "low" }), entityId: "sensor.p2_status" });
     await wait(50);
     check("safety, flame alarm", keyNamed(lowLevel, "flame_alarm_level").querySelector("span")?.textContent === "L", "and L for Low");
+    for (const state of ["unavailable", "unknown"]) {
+      const noLevel = addFeature({ type: "custom:xtool-safety" }, { hass: makeHass({ "sensor.p2_status": "off", "select.p2_flame_level": state }), entityId: "sensor.p2_status" });
+      check("safety, flame alarm", !keyNamed(noLevel, "flame_alarm_level").querySelector("span"), `no letter while the level is ${state}`);
+      const namedNoLevel = addFeature({ type: "custom:xtool-safety", show: "names" }, { hass: makeHass({ "sensor.p2_status": "off", "select.p2_flame_level": state }), entityId: "sensor.p2_status" });
+      check("safety, flame alarm", keyNamed(namedNoLevel, "flame_alarm_level").textContent === "Flame", `with Names, its own name while the level is ${state}, not the state`);
+      check("safety, flame alarm", keyNamed(namedNoLevel, "flame_alarm_level").title.includes("Tap for") === (state !== "unavailable") && keyNamed(namedNoLevel, "flame_alarm_level").disabled === (state === "unavailable"),
+        `while ${state}: unavailable, the key is off and its title offers no next level; unknown, a tap sets the first`);
+    }
     const namedLevel = addFeature({ type: "custom:xtool-safety", show: "both" }, { hass: makeHass(), entityId: "sensor.p2_status" });
     await wait(50);
     check("safety, flame alarm", keyNamed(namedLevel, "flame_alarm_level").querySelector("span")?.textContent === "high",
@@ -1128,8 +1161,7 @@
       `X and Y in one field in whole millimeters (${xy().value}), then Move and Home; no slide keys`);
     check("position", keyNamed(position, "move_laser").textContent === "Move" && position.style.getPropertyValue("--feature-color").includes("--state-number-active-color"),
       "in the number color");
-    check("position", window.customCardFeatures.find((f) => f.type === "xtool-position").name === "xTool position"
-      && !window.customCardFeatures.some((f) => f.type === "xtool-laser") && !customElements.get("xtool-laser"), "named Position, in place of Laser position");
+    check("position", window.customCardFeatures.find((f) => f.type === "xtool-position").name === "xTool position", "named xTool position");
     check("position", position.shadowRoot.querySelector(".field").title === "Laser position X, Laser position Y",
       `the field's name on hover (${position.shadowRoot.querySelector(".field").title})`);
     xy().value = "120, 60.4";

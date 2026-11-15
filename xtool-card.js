@@ -1141,7 +1141,7 @@ function switchKey(feature, control, entityId, moment) {
     const { problem, words = control.kind === "display" ? ["in", "removed"] : ["on", "off"] } = control.check;
     const unsafe = problem === "on" ? on : problem === "off" ? state === "off" : false;
     return {
-      ...base, label: `${base.label}: ${on ? words[0] : state === "off" ? words[1] : "unknown"}`,
+      ...base, label: `${base.label}: ${on ? words[0] : state === "off" ? words[1] : stateObj ? moment.hass.formatEntityState(stateObj) : "unknown"}`,
       color: unsafe ? moment.config?.disabled_color ?? DISABLED_COLOR : "green", pressed: on, fill: unsafe, disabled, action,
       readout: control.kind === "display",
     };
@@ -1175,28 +1175,33 @@ function numberKey(feature, control, entityId, moment) {
 
 /**
  * A key for a select: its name is the option chosen, in Home Assistant's
- * words, and a tap opens Home Assistant's dialog to choose another, or
- * (cycle) steps to the next option. A cycling key's action returns the
- * call's promise.
+ * words (its own name while no option is chosen: unavailable or unknown),
+ * and a tap opens Home Assistant's dialog to choose another, or (cycle)
+ * steps to the next option. A cycling key's action returns the call's
+ * promise.
  */
 function selectKey(feature, control, entityId, moment) {
   const hass = moment.hass, stateObj = hass.states[entityId];
   if (!stateObj) return undefined;
   const base = keyBase(control, entityId, moment);
   const words = (value) => hass.formatEntityState(stateObj, value);
+  const options = stateObj.attributes.options ?? [];
+  const chosen = options.includes(stateObj.state);
+  const text = chosen ? words(stateObj.state) : base.text;
   if (!control.cycle) {
     return {
-      ...base, label: `${base.label}: ${words(stateObj.state)}. Tap to choose`, text: words(stateObj.state),
+      ...base, label: `${base.label}: ${words(stateObj.state)}. Tap to choose`, text,
       pressed: false, disabled: !feature._usable(entityId),
       action: () => fire(feature, "hass-more-info", { entityId }),
     };
   }
-  const options = stateObj.attributes.options ?? [];
   const next = options[(options.indexOf(stateObj.state) + 1) % options.length];
+  const disabled = stateObj.state === "unavailable" || !next;
   return {
-    ...base, label: `${base.label}: ${words(stateObj.state)}. Tap for ${words(next)}`, text: words(stateObj.state),
-    ...(control.brief ? { brief: briefOf(stateObj.state, options, words) } : {}),
-    disabled: stateObj.state === "unavailable" || !next,
+    ...base, label: disabled ? `${base.label}: ${words(stateObj.state)}` : `${base.label}: ${words(stateObj.state)}. Tap for ${words(next)}`, text,
+    // In brief only an option of the select; unavailable or unknown shows no letter
+    ...(control.brief && chosen ? { brief: briefOf(stateObj.state, options, words) } : {}),
+    disabled,
     action: () => Promise.resolve(feature._hass.callService("select", "select_option", { entity_id: entityId, option: next })),
   };
 }
@@ -2092,7 +2097,7 @@ class XtoolJob extends XtoolFeature {
   static keyOptions = { pressed: undefined };
   static form = {
     label: "Controls",
-    helper: "In order. Start / Pause is one button: Pause while the job runs, Start (or Resume) otherwise.",
+    helper: "Start / Pause is one button: Pause while the job runs, Start (or Resume) otherwise.",
     options: [{ name: "ask_before_cancelling", label: "Ask before cancelling a job" }],
   };
 }
@@ -2106,7 +2111,7 @@ const PARTS = [
   "buzzer", "if2_buzzer", "device_sleep",
 ];
 
-// Peripherals: power, the fans, the fill lights, the red dots and the cover
+// Controls: power, the fans, the fill lights, the red dots and the cover
 // lock, on and off, and Autofocus
 class XtoolControls extends XtoolFeature {
   static label = "Controls";
@@ -2539,14 +2544,15 @@ class XtoolCamera extends XtoolFeature {
       // On: taps on the picture choose a crop of its own, until it is
       // turned off or another camera is shown. Off: the camera's crop
       // returns to its preset (see _toggleCropping)
+      // (off while the crop numbers are not known)
       crop: () => {
-        const crop = this._crop();
-        if (!crop) return [];
-        const usable = this._usable(current);
+        if (!this._cropReset || !camera || !CROP_ROLES.every((role) => camera.settings[role])) return [];
+        const usable = this._usable(current) && !!this._crop();
+        const on = usable && !!this._cropping;
         return [{
-          key: "crop", label: this._cropping ? "Crop: on. Tap two corners on the picture; tap Crop to go back" : "Crop by tapping",
+          key: "crop", label: on ? "Crop: on. Tap two corners on the picture; tap Crop to go back" : "Crop by tapping",
           text: "Crop", icon: "mdi:crop", color: "primary",
-          pressed: usable && !!this._cropping, disabled: !usable, action: () => this._toggleCropping(),
+          pressed: on, disabled: !usable, action: () => this._toggleCropping(),
         }];
       },
       // The deep camera's perspective; the integration takes the new photo
@@ -2578,7 +2584,7 @@ class XtoolCamera extends XtoolFeature {
     return this._cropNow();
   }
 
-  /** The shown camera's crop numbers now ({ width, height, center_x, center_y }, mm), or undefined. */
+  /** The shown camera's crop numbers now ({ width, height, center_x, center_y }, mm), or undefined while any is not known. */
   _cropNow() {
     const camera = this._shownCamera;
     if (!camera) return undefined;
@@ -2586,7 +2592,9 @@ class XtoolCamera extends XtoolFeature {
     for (const role of CROP_ROLES) {
       const entityId = camera.settings[role];
       if (!entityId) return undefined;
-      crop[role.slice(5)] = Number(this._hass.states[entityId]?.state);
+      const value = Number(this._hass.states[entityId]?.state);
+      if (!Number.isFinite(value)) return undefined;
+      crop[role.slice(5)] = value;
     }
     return crop;
   }
@@ -3020,7 +3028,7 @@ class XtoolSafetyproIf2Fan extends XtoolFeature {
       schema: (c) => [
         ...(fan ? [{
           name: "controls", label: "Controls",
-          helper: "In order. The speed key shows the speed, and a tap steps to the next.",
+          helper: "The speed key shows the speed, and a tap steps to the next.",
           selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: IF2_KEYS.map(([value, label]) => ({ value, label })) } },
         }] : []),
         displayField(),
