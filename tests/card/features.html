@@ -289,15 +289,15 @@
     row.addEventListener("hass-more-info", (ev) => (keyOpened = ev.detail.entityId));
     const safetyKey = readout(row, "safety_key");
     safetyKey.click();
-    check("safety", keyOpened === "binary_sensor.f2_safety_key" && hass.calls.length === 0 && safetyKey.style.getPropertyValue("--c") === "var(--green-color)",
-      "the safety key is shown (in: green); a tap opens it, nothing is switched");
+    check("safety", keyOpened === "binary_sensor.f2_safety_key" && hass.calls.length === 0 && safetyKey.style.getPropertyValue("--c") === "",
+      "the safety key is shown (in: the Enabled color); a tap opens it, nothing is switched");
     check("safety, read-out", safetyKey.localName === "div" && safetyKey.classList.contains("field") && !safetyKey.classList.contains("key")
       && !safetyKey.hasAttribute("aria-pressed") && safetyKey.querySelector("ha-state-icon"),
       "a state that is only shown is not a button: a field, with its icon, in its state's color");
     const offColored = addFeature({ type: "custom:xtool-safety", disabled_color: "purple" }, { hass });
     await wait(50);
     check("safety, disabled color", keyNamed(offColored, "stops_when_moved").style.getPropertyValue("--c") === "var(--purple-color)"
-      && keyNamed(offColored, "flame_alarm").style.getPropertyValue("--c") === "var(--green-color)",
+      && keyNamed(offColored, "flame_alarm").style.getPropertyValue("--c") === "",
       "Disabled color: the color of a check that is off");
     const lidOpen = addFeature({ type: "custom:xtool-safety", disabled_color: "purple" }, { hass: makeHass({ "binary_sensor.p2_cover": "on" }), entityId: "sensor.p2_status" });
     await wait(50);
@@ -327,7 +327,7 @@
     // The theme's state colors, offered first in Home Assistant's color picker
     const warned = addFeature({ type: "custom:xtool-safety", disabled_color: "warning" }, { hass });
     await wait(50);
-    check("safety, disabled color", keyNamed(warned, "stops_when_moved").style.getPropertyValue("--c") === "var(--warning-color)", "a theme's state color: Warning");
+    check("safety, disabled color", keyNamed(warned, "stops_when_moved").style.getPropertyValue("--c") === "var(--warning-color, var(--amber-color))", "a theme's state color: Warning");
     const safetyOptions = document.createElement("xtool-feature-editor");
     safetyOptions.hass = makeHass();
     safetyOptions.context = { entity_id: "sensor.f2_status" };
@@ -335,16 +335,16 @@
     const colorField = safetyOptions.querySelector("ha-form").schema.find((f) => f.name === "disabled_color");
     const extra = colorField?.selector.ui_color.extra_options ?? [];
     check("safety, disabled color", extra.map((o) => `${o.value}:${o.label}:${o.display_color}`).join()
-      === "error:Error:var(--error-color),warning:Warning:var(--warning-color),success:Success:var(--success-color),info:Info:var(--info-color)",
+      === "error:Error:var(--error-color, var(--red-color)),warning:Warning:var(--warning-color, var(--amber-color)),success:Success:var(--success-color, var(--green-color)),info:Info:var(--info-color, var(--blue-color))",
       "Home Assistant's color picker offers the theme's Error, Warning, Success and Info colors first (its extra options)");
     const access = keyNamed(row, "access_control");
-    check("safety, access control", !access.classList.contains("fill") && access.style.getPropertyValue("--c") === "var(--green-color)" && access.getAttribute("aria-pressed") === "false",
+    check("safety, access control", !access.classList.contains("fill") && access.style.getPropertyValue("--c") === "" && access.getAttribute("aria-pressed") === "false",
       "Access control off is plain, not a red warning");
     const moved = keyNamed(row, "stops_when_moved"), flame = keyNamed(row, "flame_alarm");
-    check("safety", moved.classList.contains("fill") && moved.style.getPropertyValue("--c") === "var(--red-color)" && moved.getAttribute("aria-pressed") === "false",
-      "a check that is off is red");
-    check("safety", !flame.classList.contains("fill") && flame.style.getPropertyValue("--c") === "var(--green-color)" && flame.getAttribute("aria-pressed") === "true",
-      "a check that is on is green");
+    check("safety", moved.classList.contains("fill") && moved.style.getPropertyValue("--c") === "var(--error-color, var(--red-color))" && moved.getAttribute("aria-pressed") === "false",
+      "a check that is off is in the theme error color, else red");
+    check("safety", !flame.classList.contains("fill") && flame.style.getPropertyValue("--c") === "" && flame.getAttribute("aria-pressed") === "true",
+      "a check that is on is in the Enabled color");
     check("safety", !row.shadowRoot.querySelector(".warn, i"), "no dots");
     keyNamed(row, "stops_when_moved").click();
     await wait(20);
@@ -643,6 +643,52 @@
     targetCamera.hass = makeHass({ "number.p2_laser_x": { state: "300", attributes: { waiting: true, position: 100 } } });
     check("target", target.style.display === "none", "not while the Laser target overlay is off");
 
+    // Hold: on a camera with a Laser target overlay, a hold sets the laser's position to the held point
+    const holdHass = makeHass();
+    const holder = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: holdHass, entityId: "sensor.p2_status" });
+    await wait(80);
+    let holdOpened = 0;
+    holder.addEventListener("hass-more-info", () => holdOpened++);
+    const holdShot = holder.shadowRoot.querySelector(".shot");
+    const holdBox = holder.shadowRoot.querySelector(".shot hui-image:not([hidden])").shadowRoot.querySelector("img").getBoundingClientRect();
+    const held = { bubbles: true, composed: true, cancelable: true, clientX: holdBox.left + 0.25 * holdBox.width, clientY: holdBox.top + 0.5 * holdBox.height, button: 0, pointerId: 11, pointerType: "touch" };
+    holdShot.dispatchEvent(new PointerEvent("pointerdown", held));
+    await wait(300);
+    check("hold", holdHass.calls.length === 0, "not before the hold time");
+    await wait(300);
+    holdShot.dispatchEvent(new PointerEvent("pointerup", held));
+    holdShot.dispatchEvent(new MouseEvent("click", held));
+    const sets = holdHass.calls.filter((c) => c.service === "set_value").map((c) => `${c.data.entity_id}=${c.data.value}`);
+    check("hold", holdOpened === 0 && sets.join() === "number.p2_laser_x=153,number.p2_laser_y=153",
+      `a hold sets X and Y to the held point in whole mm, and does not open the camera (${sets.join()})`);
+    holdShot.dispatchEvent(new PointerEvent("pointerdown", { ...held, pointerId: 12 }));
+    holdShot.dispatchEvent(new PointerEvent("pointerup", { ...held, pointerId: 12 }));
+    holdShot.dispatchEvent(new MouseEvent("click", held));
+    check("hold", holdOpened === 1 && holdHass.calls.filter((c) => c.service === "set_value").length === 2, "a short tap still opens the camera");
+    const closeHolder = addFeature({ type: "custom:xtool-camera", show: "names", camera: "close" }, { hass: holdHass, entityId: "sensor.p2_status" });
+    await wait(80);
+    const closeShot = closeHolder.shadowRoot.querySelector(".shot");
+    // Both at once: a press that moves, and a hold on a camera without a Laser target overlay
+    holdShot.dispatchEvent(new PointerEvent("pointerdown", { ...held, pointerId: 13 }));
+    holdShot.dispatchEvent(new PointerEvent("pointermove", { ...held, clientX: held.clientX + 30, pointerId: 13 }));
+    closeShot.dispatchEvent(new PointerEvent("pointerdown", { ...at0(closeShot), pointerId: 14 }));
+    await wait(600);
+    holdShot.dispatchEvent(new PointerEvent("pointerup", { ...held, clientX: held.clientX + 30, pointerId: 13 }));
+    closeShot.dispatchEvent(new PointerEvent("pointerup", { ...at0(closeShot), pointerId: 14 }));
+    check("hold", holdHass.calls.filter((c) => c.service === "set_value").length === 2,
+      "a press that moves is not a hold, and a camera without a Laser target overlay takes no hold");
+
+    // A new picture (the camera's access token changes, as after an overlay is switched): shown at once
+    const overlayBefore = holder.shadowRoot.querySelector(".shot hui-image:not([hidden])");
+    holder.hass = makeHass({ "switch.p2_overview_target": "on" });
+    await wait(40);
+    check("new picture", holder.shadowRoot.querySelector(".shot hui-image:not([hidden])") === overlayBefore, "an overlay switched: the picture stays until the integration has the new one");
+    holder.hass = makeHass({ "switch.p2_overview_target": "on", "camera.p2_overview": { attributes: { access_token: "c2" } } });
+    await wait(150);
+    const overlayAfter = holder.shadowRoot.querySelector(".shot hui-image:not([hidden])");
+    check("new picture", overlayAfter !== overlayBefore && !overlayBefore.isConnected && overlayAfter.loads === 1,
+      "the new access token: a new image replaces the old one at once");
+
     // P2 crop: tap two corners on the overview picture; the work area measured from its back left corner
     const p2Crop = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(80);
@@ -772,11 +818,11 @@
     cropOpened = undefined;
     keyNamed(cropped, "custom_crop").click();
     check("camera, crop", keyNamed(cropped, "custom_crop").getAttribute("aria-pressed") === "true"
-      && cropped.shadowRoot.querySelector(".hint").textContent === "Tap a corner of the part to show", "Crop on: pressed, and it asks for a corner");
+      && cropped.shadowRoot.querySelector(".hint").textContent === "Tap a corner to start selection of a crop area", "Crop on: pressed, and it asks for a corner");
     tapAt(0.75, 0.8);
     const area = cropped.shadowRoot.querySelector(".area");
     check("camera, crop", !cropOpened && hass.calls.length === 0 && !area.hidden && area.style.width === "0px"
-      && cropped.shadowRoot.querySelector(".hint").textContent === "Tap the opposite corner", "the first tap marks a corner and asks for the opposite one");
+      && cropped.shadowRoot.querySelector(".hint").textContent === "Tap the opposite corner of the custom crop area", "the first tap marks a corner and asks for the opposite one");
     const imgBox = img.getBoundingClientRect(), shotBox = shot.getBoundingClientRect();
     shot.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: imgBox.left + 0.5 * imgBox.width, clientY: imgBox.top + 0.5 * imgBox.height }));
     check("camera, crop", Math.abs(parseFloat(area.style.width) - 0.25 * imgBox.width) < 1 && Math.abs(parseFloat(area.style.height) - 0.3 * imgBox.height) < 1
@@ -788,8 +834,16 @@
     tapAt(0.25, 0.2);
     check("camera, crop", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "xtool", service: "camera", data: {
       crop_width: 100, crop_height: 120, crop_center_x: 0, crop_center_y: 0, entity_id: "camera.f2_main" } })
-      && area.hidden && cropped.shadowRoot.querySelector(".hint").textContent === "Tap a corner of the part to show",
+      && area.hidden && cropped.shadowRoot.querySelector(".hint").textContent === "Tap a corner to start selection of a crop area",
       `the opposite corner crops to the rectangle between them, in mm on the work surface, and Crop stays on for another (${JSON.stringify(lastCall(hass).data)})`);
+    await wait(30);
+    check("camera, crop", [...cropped.shadowRoot.querySelectorAll(".shot hui-image")].filter((i) => !i.hidden)[0] === before,
+      "until the integration has the new picture, the old one stays");
+    // The integration has the new picture: the camera's access token changes
+    const newPicture = makeHass({ "camera.f2_main": { attributes: { access_token: "a2" } } });
+    newPicture.calls = hass.calls;
+    newPicture._cameraTmbUrl = hass._cameraTmbUrl;
+    cropped.hass = newPicture;
     await wait(150);
     const visible = [...cropped.shadowRoot.querySelectorAll(".shot hui-image")].filter((i) => !i.hidden);
     check("camera, crop", hass._cameraTmbUrl["camera.f2_main"] === undefined && hass._cameraTmbUrl["camera.f2_deep"] !== undefined,
@@ -801,7 +855,7 @@
     const croppedHass = makeHass({ "number.f2_main_crop_width": "100", "number.f2_main_crop_height": "120" });
     cropped.hass = croppedHass;
     await wait(20);
-    check("camera, crop", keyNamed(cropped, "custom_crop").getAttribute("aria-pressed") === "true" && cropped.shadowRoot.querySelector(".hint").textContent === "Tap a corner of the part to show",
+    check("camera, crop", keyNamed(cropped, "custom_crop").getAttribute("aria-pressed") === "true" && cropped.shadowRoot.querySelector(".hint").textContent === "Tap a corner to start selection of a crop area",
       "Crop stays on until it is turned off; a tap on the picture still marks a corner");
     keyNamed(cropped, "custom_crop").click();
     check("camera, crop", JSON.stringify(lastCall(croppedHass).data) === JSON.stringify({ crop_width: 200, crop_height: 200, crop_center_x: 0, crop_center_y: 0, entity_id: "camera.f2_main" }),
@@ -834,6 +888,7 @@
       "the deep camera's perspective is one key in the camera row, showing the one chosen");
     const deepBefore = cropped.shadowRoot.querySelector(".shot hui-image:not([hidden])");
     perspectiveKey.click();
+    cropped.hass = makeHass({ "number.f2_main_crop_width": "100", "number.f2_main_crop_height": "120", "camera.f2_deep": { attributes: { access_token: "b2" } } });
     await wait(150);
     const deepAfter = cropped.shadowRoot.querySelector(".shot hui-image:not([hidden])");
     check("camera, perspective", deepAfter !== deepBefore && !deepBefore.isConnected && deepAfter.loads === 1 && deepAfter.cameraImage === "camera.f2_deep",
@@ -925,12 +980,12 @@
       "in Auto: A pressed; Show: Icons, with the speed's number beside its fan icon");
     const autoKey = keyNamed(fan, "fan_auto"), spinOf = (key) => key.querySelector("ha-icon.spin")?.style.getPropertyValue("--spin");
     check("IF2 fan", autoKey.querySelector("ha-icon").icon === "mdi:fan" && autoKey.querySelector("span")?.textContent === "A"
-      && spinOf(autoKey) === "1.6s" && autoKey.style.getPropertyValue("--c").includes("blue") && !spinOf(keyNamed(fan, "fan_speed")),
-      `Auto, spinning at speed 2: its fan icon with A beside it, blue, turning once in 1.6 s; the speed key still (${spinOf(autoKey)})`);
+      && spinOf(autoKey) === "1.6s" && autoKey.style.getPropertyValue("--c") === "" && !spinOf(keyNamed(fan, "fan_speed")),
+      `Auto, spinning at speed 2: its fan icon with A beside it, in the Enabled color, turning once in 1.6 s; the speed key still (${spinOf(autoKey)})`);
     fan = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "names", show: "icons" }, { hass: makeHass({ "fan.if2_fan": { attributes: { percentage: 100 } } }) });
     await wait(60);
-    check("IF2 fan", spinOf(keyNamed(fan, "fan_speed")) === "0.6s" && keyNamed(fan, "fan_speed").style.getPropertyValue("--c").includes("blue"),
-      `at speed 4: the speed key blue, turning faster (${spinOf(keyNamed(fan, "fan_speed"))})`);
+    check("IF2 fan", spinOf(keyNamed(fan, "fan_speed")) === "0.6s" && keyNamed(fan, "fan_speed").style.getPropertyValue("--c") === "",
+      `at speed 4: the speed key in the Enabled color, turning faster (${spinOf(keyNamed(fan, "fan_speed"))})`);
     fan = addFeature({ type: "custom:xtool-safetypro-if2-fan", show: "names", show: "icons" }, { hass: makeHass({ "fan.if2_fan": { state: "off", attributes: { preset_mode: "Auto", percentage: 0 } } }) });
     await wait(60);
     check("IF2 fan", keyNamed(fan, "fan_auto").getAttribute("aria-pressed") === "true" && !spinOf(keyNamed(fan, "fan_auto"))
@@ -1354,6 +1409,11 @@
     await wait(50);
     check("heights", heights(tall).every((h) => h === 42) && heights(inline).every((h) => h === 36),
       `each item as tall as the feature height: 42 px, or 36 px beside the title (${heights(tall).join(", ")}; ${heights(inline).join(", ")})`);
+    const cameraRow = addFeature({ type: "custom:xtool-camera", camera: "overview", controls: ["custom_crop", "thickness_or_distance", "measure_thickness_or_distance"] },
+      { hass: makeHass(), entityId: "sensor.p2_status" });
+    await wait(80);
+    check("heights", heights(cameraRow).length === 3 && heights(cameraRow).every((h) => h === 42),
+      `the camera's keys and fields below the picture as tall as each other (${heights(cameraRow).join(", ")})`);
 
     // The features are offered only for lasers that have their parts
     const offered = Object.fromEntries(window.customCardFeatures.map((f) => [f.type, f.isSupported(makeHass(), { entity_id: "sensor.p2_status" })]));

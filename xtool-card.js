@@ -98,10 +98,19 @@ const HA_COLORS = [
   "error", "warning", "success", "info",
 ];
 // The theme's state colors, which Home Assistant's color picker offers
-// (ui_color's extra_options) before its own colors
+// (ui_color's extra_options) before its own colors, each with the named
+// color it falls back to when a theme leaves it out
+const STATE_FALLBACKS = { error: "red", warning: "amber", success: "green", info: "blue" };
+const cssColor = (color) => (STATE_FALLBACKS[color] ? `var(--${color}-color, var(--${STATE_FALLBACKS[color]}-color))`
+  : HA_COLORS.includes(color) ? `var(--${color}-color)` : color);
 const STATE_COLORS = [["error", "Error"], ["warning", "Warning"], ["success", "Success"], ["info", "Info"]]
-  .map(([value, label]) => ({ value, label, display_color: `var(--${value}-color)` }));
-const cssColor = (color) => (HA_COLORS.includes(color) ? `var(--${color}-color)` : color);
+  .map(([value, label]) => ({ value, label, display_color: cssColor(value) }));
+// One color for every key that is on and every slider, across the card
+// (the card's Enabled color; the theme's Info color by default). Keys of
+// their own color are the job's (Start, Pause, Cancel) and Safety's
+// problems, in the theme's state colors.
+const ENABLED_COLOR = "info";
+const ENABLED = `var(--xtool-enabled-color, ${cssColor(ENABLED_COLOR)})`;
 
 // The working color by laser, and the color of every other state
 const LASER_COLORS = { uv: "#9b7bff", co2: "#ff7043", diode: "#42a5f5" };
@@ -119,9 +128,18 @@ const phaseColor = (phase, laser) => (phase === "processing" ? LASER_COLORS[lase
  */
 let colorProbe;
 function textOn(el, cssValue) {
-  const resolved = cssValue.startsWith("var(")
-    ? getComputedStyle(el).getPropertyValue(cssValue.slice(4, -1).split(",")[0].trim()).trim()
-    : cssValue;
+  if (!el.isConnected) return null;
+  const root = el.shadowRoot ?? el;
+  let probe = root.querySelector(":scope > .color-probe");
+  if (!probe) {
+    probe = document.createElement("span");
+    probe.className = "color-probe";
+    probe.hidden = true;
+    root.append(probe);
+  }
+  probe.style.color = "";
+  probe.style.color = cssValue;
+  const resolved = getComputedStyle(probe).color;
   if (!resolved) return null;
   colorProbe ??= document.createElement("canvas").getContext("2d");
   colorProbe.fillStyle = "#000";
@@ -303,7 +321,7 @@ const DEFAULT_OVERLAYS = [
 /** An overlay's control (id: see cameraModel): its switch, named by its entity and its camera. */
 function overlayControl(id, entityId, camera, hass) {
   const name = `${entityName(hass, entityId) ?? entityId} (${entityName(hass, camera.entityId) ?? camera.label})`;
-  return { id, kind: "toggle", color: "primary", option: name, title: name };
+  return { id, kind: "toggle", option: name, title: name };
 }
 
 // ---------------------------------------------------------------------------
@@ -378,7 +396,7 @@ const CONTROLS = {
     pick: ({ phase }) => (running(phase) ? "pause" : "start"),
   },
   start: {
-    kind: "press", role: "resume", key: "resume", color: "green",
+    kind: "press", role: "resume", key: "resume", color: "success",
     name: ({ phase }) => (phase === "paused" ? "Resume" : "Start"),
     // Its entity resumes a paused job; otherwise the key starts one
     title: ({ phase }) => (phase === "paused" ? undefined : "Start the job"),
@@ -386,11 +404,11 @@ const CONTROLS = {
     allowed: ({ phase, controlled }) => !running(phase) && !["off", "sleeping", "firmware"].includes(phase) && (!controlled || phase === "paused"),
   },
   pause: {
-    kind: "press", name: "Pause", color: "amber", access: true,
+    kind: "press", name: "Pause", color: "warning", access: true,
     allowed: ({ phase }) => phase === "processing",
   },
   cancel: {
-    kind: "press", name: "Cancel", color: "red",
+    kind: "press", name: "Cancel", color: "error",
     allowed: ({ phase }) => running(phase) || phase === "paused",
     confirm: { title: "Cancel the job?", text: "The job stops and cannot be resumed.", confirm_text: "Cancel the job" },
     confirmOption: "ask_before_cancelling",
@@ -398,35 +416,35 @@ const CONTROLS = {
 
   // Parts
   power: {
-    kind: "toggle", name: "Power", color: "green",
+    kind: "toggle", name: "Power",
     // Asked only while a job runs: cutting the power stops it at once
     confirm: { off: "A job is running. Turning the power off stops it at once and it cannot be resumed.", while: ["processing", "paused"] },
   },
   // The F2's fan, or the P2's setting that runs it after a job (a setting
   // does not turn: see fanLook)
-  exhaust_fan: { kind: "toggle", name: "Exhaust", color: "blue", fan: true },
+  exhaust_fan: { kind: "toggle", name: "Exhaust", fan: true },
   // The IF2 2.0's fan, as three keys for its modes (see fanModeKey): the one
   // in use blue and turning while it spins, faster at each of its four speeds
-  fan_off: { kind: "fan_mode", role: "if2_fan_entity", mode: "off", option: "Off", title: "Off", name: "Off", icon: "mdi:fan-off", color: "primary" },
+  fan_off: { kind: "fan_mode", role: "if2_fan_entity", mode: "off", option: "Off", title: "Off", name: "Off", icon: "mdi:fan-off" },
   fan_auto: {
     kind: "fan_mode", role: "if2_fan_entity", mode: "auto", option: "Auto", title: "Auto", name: "A", alwaysText: true,
-    icon: "mdi:fan", color: "primary", fan: true, onColor: "blue",
+    icon: "mdi:fan", fan: true,
   },
   fan_speed: {
     kind: "fan_mode", role: "if2_fan_entity", mode: "speed", option: "Speed", title: "Speed", name: "Speed",
-    icon: "mdi:fan", color: "primary", fan: true, onColor: "blue",
+    icon: "mdi:fan", fan: true,
   },
-  cooling_fan: { kind: "toggle", name: "Cooling", color: "cyan", fan: true },
+  cooling_fan: { kind: "toggle", name: "Cooling", fan: true },
   fill_light: { kind: "light", name: "Light", color: DAYLIGHT },
   fill_light_close: { kind: "light", name: "Light", color: DAYLIGHT },
   fill_light_front: { kind: "light", name: "Light", color: DAYLIGHT, direction: "front" },
   fill_light_back: { kind: "light", name: "Light", color: DAYLIGHT, direction: "back" },
   fill_light_left: { kind: "light", name: "Light", color: DAYLIGHT, direction: "left" },
   fill_light_right: { kind: "light", name: "Light", color: DAYLIGHT, direction: "right" },
-  red_dot: { kind: "toggle", name: "Dot", color: "red" },
-  red_dot_close: { kind: "toggle", name: "Aimed", color: "red" },
-  red_dot_quick: { kind: "toggle", name: "Quick", color: "red" },
-  safety_lock: { kind: "toggle", name: "Lock", color: "indigo" },
+  red_dot: { kind: "toggle", name: "Dot" },
+  red_dot_close: { kind: "toggle", name: "Aimed" },
+  red_dot_quick: { kind: "toggle", name: "Quick" },
+  safety_lock: { kind: "toggle", name: "Lock" },
 
   // Moving the laser, measuring and focusing
   // Where the laser goes: X,Y in whole millimeters; a drag on the field
@@ -435,21 +453,21 @@ const CONTROLS = {
     kind: "field", role: "laser_x", roles: ["laser_x", "laser_y"], decimals: 0, drag: ["x", "y"],
   },
   // A move works while the laser sleeps, but not while it works or is off
-  move_laser: { kind: "press", name: "Move", color: "primary", busy: true },
-  home_laser: { kind: "press", name: "Home", color: "primary", busy: true },
+  move_laser: { kind: "press", name: "Move", busy: true },
+  home_laser: { kind: "press", name: "Home", busy: true },
   // The P2's Wake: it takes a photo, which wakes the laser while it sleeps
-  wake: { kind: "press", name: "Wake", color: "primary" },
+  wake: { kind: "press", name: "Wake" },
   // The P2's (its overview camera's): the material's thickness or the
   // distance to it, sliding right or up raises it; and measuring it, the
   // key's title with the last reading
   thickness_or_distance: { kind: "field", roles: ["thickness_or_distance"], drag: ["xy"] },
   measure_thickness_or_distance: {
-    kind: "press", name: "Measure", color: "primary", busy: true,
+    kind: "press", name: "Measure", busy: true,
     detail: (moment) => (lastReading(moment) ? `Last reading: ${lastReading(moment)}` : undefined),
   },
   // As in Studio: no Autofocus while the laser works, frames, focuses or is
   // off, or while Access control is on
-  autofocus: { kind: "press", name: "Autofocus", color: "primary", busy: true, access: true },
+  autofocus: { kind: "press", name: "Autofocus", busy: true, access: true },
   // The thickness the laser focuses on, 0.1 mm a step, as in Studio:
   // sliding right or up raises it, and the head moves once the slide ends
   focus_height: { kind: "field", roles: ["focus_height"], decimals: 1, drag: ["xy"] },
@@ -464,7 +482,7 @@ const CONTROLS = {
         kind: "toggle", check: { problem: "off" },
         confirm: { off: "No flame alarm will be triggered while it is off. Fires may cause serious injuries and property damage." },
       },
-      select: { kind: "select", cycle: true, brief: true, color: "red" },
+      select: { kind: "select", cycle: true, brief: true },
     },
   },
   stops_when_enclosure_opened: {
@@ -489,20 +507,20 @@ const CONTROLS = {
   },
 
   // Configuration: the settings in the Configuration section of the laser's and its accessories' device pages
-  buzzer: { kind: "toggle", name: "Buzzer", color: "teal" },
-  if2_buzzer: { kind: "toggle", name: "IF2", color: "teal" },
-  device_sleep: { kind: "toggle", name: "Sleep", color: "indigo" },
+  buzzer: { kind: "toggle", name: "Buzzer" },
+  if2_buzzer: { kind: "toggle", name: "IF2" },
+  device_sleep: { kind: "toggle", name: "Sleep" },
 
   // A camera's settings
   // A camera with crop presets (the P2's): the key shows the preset, and a
   // tap opens Home Assistant's own dialog for the select to choose another
-  crop: { kind: "select", name: "Crop", color: "primary" },
+  crop: { kind: "select", name: "Crop" },
   // The deep camera's perspective: as the camera sees it (skewed), turned
   // square to the work area, and straightened flat; a tap steps to the next
-  perspective: { kind: "select", cycle: true, name: "Perspective", color: "primary" },
-  exposure: { kind: "number", name: "Exposure", color: "primary", input: { style: "slider" } },
+  perspective: { kind: "select", cycle: true, name: "Perspective" },
+  exposure: { kind: "number", name: "Exposure", input: { style: "slider" } },
   // The P2's processing mode, which its crop presets follow
-  mode: { kind: "select", name: "Mode", color: "primary" },
+  mode: { kind: "select", name: "Mode" },
 };
 
 /** The safety checks that are switches (a badge shows when one is off). */
@@ -968,9 +986,10 @@ const FEATURE_CSS = `
   .field.disabled { opacity: .45; cursor: default; }
   /* A read-out: a field, tinted and its icon in its state's color */
   .field.readout { cursor: pointer; gap: 6px; padding: 0 4px; font-size: var(--ha-font-size-s, 12px); min-width: 0; }
-  .field.readout::before { background: var(--c, var(--feature-color)); }
-  .field.readout:focus-visible { outline: 2px solid var(--c, var(--feature-color)); outline-offset: 2px; }
-  .field.readout ha-state-icon { flex: none; --mdc-icon-size: 22px; color: var(--c, var(--feature-color)); }
+  .field.readout::before { background: var(--c, ${ENABLED}); }
+  .field.readout:focus-visible { outline: 2px solid var(--c, ${ENABLED}); outline-offset: 2px; }
+  .slide { --feature-color: ${ENABLED}; }
+  .field.readout ha-state-icon { flex: none; --mdc-icon-size: 22px; color: var(--c, ${ENABLED}); }
   .row .field.readout { flex: 1 1 0; min-width: ${ITEM_MIN.key}px; }
   /* A field to press and drag on: the page does not scroll under it */
   .field.drag { touch-action: none; cursor: move; }
@@ -981,13 +1000,13 @@ const FEATURE_CSS = `
     background: var(--xtool-feature-backing, var(--xtool-feature-scrim, transparent));
     color: var(--xtool-text, var(--primary-text-color)); font: inherit; font-size: var(--ha-font-size-s, 12px); font-weight: 500;
   }
-  .key::before { content: ""; position: absolute; inset: 0; background: var(--c, var(--feature-color)); opacity: .2; transition: opacity 180ms ease-in-out; }
+  .key::before { content: ""; position: absolute; inset: 0; background: var(--c, ${ENABLED}); opacity: .2; transition: opacity 180ms ease-in-out; }
   /* A switch that is off: Home Assistant's off color, not its own */
   .key[aria-pressed="false"]:not(.fill)::before { background: var(--disabled-color, #bdbdbd); }
   .key:hover::before { opacity: .35; }
   .key[aria-pressed="true"]::before { opacity: 1; }
   .key[aria-pressed="true"] { color: var(--xtool-on-color, #fff); }
-  .key:focus-visible { outline: 2px solid var(--c, var(--feature-color)); outline-offset: 2px; }
+  .key:focus-visible { outline: 2px solid var(--c, ${ENABLED}); outline-offset: 2px; }
   .key:disabled { cursor: default; opacity: .45; }
   .key:disabled::before { opacity: .12; }
   .key > * { position: relative; }
@@ -1184,7 +1203,7 @@ function fanLook(control, on, config, speed) {
 }
 
 // The color of a safety check that is off (or in its problem state), unless the Safety feature's Disabled color says otherwise
-const DISABLED_COLOR = "red";
+const DISABLED_COLOR = "error";
 
 /** A key for something on or off: a switch, light, fan or lock, or a state that is only shown (a read-out). */
 function switchKey(feature, control, entityId, moment) {
@@ -1205,7 +1224,7 @@ function switchKey(feature, control, entityId, moment) {
     const unsafe = problem === "on" ? on : problem === "off" ? state === "off" : false;
     return {
       ...base, label: `${base.label}: ${on ? words[0] : state === "off" ? words[1] : stateObj ? moment.hass.formatEntityState(stateObj) : "unknown"}`,
-      color: !known ? undefined : unsafe ? moment.config?.disabled_color ?? DISABLED_COLOR : "green", pressed: on, fill: unsafe,
+      color: !known ? undefined : unsafe ? moment.config?.disabled_color ?? DISABLED_COLOR : undefined, pressed: on, fill: unsafe,
       disabled: disabled || !known, action,
       readout: control.kind === "display",
     };
@@ -1363,6 +1382,8 @@ function decimalsOf(control, stateObj) {
 
 // A tap moves the pointer less than this between press and release (px)
 const TAP_SLOP = 10;
+// A press held this long (ms) is a hold, as Home Assistant's own hold action
+const HOLD_TIME = 500;
 
 // Scrubbing: no change within this distance of the press (px), and a new
 // value every tick (ms) while the pointer is held. Beyond the dead zone,
@@ -2064,7 +2085,7 @@ class XtoolFeature extends XtoolElement {
     buttons.forEach((b, i) => {
       if (b.direction && !needsDirection(faces, i)) delete b.direction;
     });
-    const colors = buttons.map((b) => (b.color ? textOn(this, cssColor(b.color)) : ""));
+    const colors = buttons.map((b) => textOn(this, b.color ? cssColor(b.color) : ENABLED));
     if (colors.includes(null)) {
       // Not on the page yet: the button text colors are found once it is
       if (!this._retry) {
@@ -2384,7 +2405,7 @@ class XtoolCamera extends XtoolFeature {
       .shot.cropping { cursor: crosshair; }
       .shot .area {
         position: absolute; pointer-events: none; box-sizing: border-box;
-        border: 2px solid var(--primary-color, #03a9f4); box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 0 0 100vmax rgba(0, 0, 0, .35);
+        border: 2px solid ${ENABLED}; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 0 0 100vmax rgba(0, 0, 0, .35);
       }
       .shot .area[hidden] { display: none; }
       .shot .hint {
@@ -2399,7 +2420,7 @@ class XtoolCamera extends XtoolFeature {
         background: linear-gradient(to top, rgba(0, 0, 0, .6), rgba(0, 0, 0, 0));
       }
       .shot .time:empty { display: none; }
-      .shot { touch-action: manipulation; }
+      .shot { touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
       /* Where the laser goes: a dashed line from where it is to the target */
       .shot .target { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
       .shot .target line, .shot .target circle { fill: none; stroke: #ff2b2b; stroke-width: 2; vector-effect: non-scaling-stroke; }
@@ -2410,7 +2431,7 @@ class XtoolCamera extends XtoolFeature {
          items, on as many lines as they need, each line filled, the lines
          as far apart as Home Assistant's features */
       .row.inputs { flex-wrap: wrap; height: auto; row-gap: var(--ha-card-feature-gap, 12px); }
-      .row.inputs > * { height: var(--feature-height, 42px); }
+      .row.inputs > *, .row.inputs > .group > * { height: var(--feature-height, 42px); }
       ${LIGHT_CSS}`;
     this._shot = document.createElement("button");
     this._shot.type = "button";
@@ -2430,29 +2451,50 @@ class XtoolCamera extends XtoolFeature {
     // the browser then also sends mouse events and a click (iOS among
     // them, sometimes late or not at all): that click is the same tap, so
     // only a click without pointer events (a keyboard) is a tap of its own
+    // A press held in one place (see _aimable) sets the laser's position there
     this._shot.addEventListener("pointerdown", (ev) => {
       this._down = ev.button === 0 ? { x: ev.clientX, y: ev.clientY } : undefined;
       this._tapped = undefined;
+      this._held = false;
+      clearTimeout(this._holding);
+      if (this._down && this._aimable()) {
+        const at = { clientX: ev.clientX, clientY: ev.clientY };
+        this._holding = setTimeout(() => {
+          this._held = true;
+          this._aim(at);
+        }, HOLD_TIME);
+      }
     });
     this._shot.addEventListener("pointerup", (ev) => {
       const down = this._down;
       this._down = undefined;
+      clearTimeout(this._holding);
       if (!down || Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > TAP_SLOP) return;
       this._tapped = ev.timeStamp;
-      this._tap(ev);
+      // A hold is not a tap as well
+      if (!this._held) this._tap(ev);
     });
-    this._shot.addEventListener("pointercancel", () => (this._down = undefined));
+    this._shot.addEventListener("pointercancel", () => {
+      this._down = undefined;
+      clearTimeout(this._holding);
+    });
+    // A long press does not open the browser's menu where a hold aims
+    this._shot.addEventListener("contextmenu", (ev) => {
+      if (this._aimable()) ev.preventDefault();
+    });
     this._shot.addEventListener("click", (ev) => {
       ev.stopPropagation();
       ev.preventDefault();
-      if (this._tapped !== undefined) {
+      if (this._tapped !== undefined || this._held) {
         this._tapped = undefined;
+        this._held = false;
         return;
       }
       this._tap(ev);
     });
     // After the first corner, the rectangle follows the pointer
     this._shot.addEventListener("pointermove", (ev) => {
+      if (this._down && Math.hypot(ev.clientX - this._down.x, ev.clientY - this._down.y) > TAP_SLOP) clearTimeout(this._holding);
       if (this._first) this._showArea(this._first, this._placeOf(ev));
     });
     this.shadowRoot.prepend(style);
@@ -2483,6 +2525,29 @@ class XtoolCamera extends XtoolFeature {
     if (!this._camera) return;
     if (this._cropping && this._crop()) this._cropTap(ev);
     else fire(this, "hass-more-info", { entityId: this._camera });
+  }
+
+  /**
+   * Whether a hold on the picture sets the laser's position: the laser has
+   * the position numbers, and the shown camera has a Laser target overlay,
+   * so its crop is in the laser's mm (as the target preview draws it).
+   */
+  _aimable() {
+    const { laser_x: x, laser_y: y } = this._device?.roles ?? {};
+    return !!x && !!y && !!this._shownCamera?.overlays.some((o) => o.key === "overlay_laser_target")
+      && [x, y].every((id) => this._usable(id));
+  }
+
+  /** Set the position numbers to the held point (whole mm, within their limits); Move then takes the laser there. */
+  _aim(at) {
+    const crop = this._cropNow();
+    const point = crop && this._pointOf(at, crop);
+    if (!point) return;
+    const { laser_x: x, laser_y: y } = this._device.roles;
+    for (const [entityId, value] of [[x, point.x], [y, point.y]]) {
+      const { min = -Infinity, max = Infinity } = this._hass.states[entityId]?.attributes ?? {};
+      this._hass.callService("number", "set_value", { entity_id: entityId, value: Math.min(max, Math.max(min, Math.round(value))) });
+    }
   }
 
   connectedCallback() {
@@ -2609,9 +2674,24 @@ class XtoolCamera extends XtoolFeature {
         .filter((camera) => before.states[camera]?.state === "unavailable" && hass.states[camera] && hass.states[camera].state !== "unavailable");
       if (back) this._renewImages([...this._images.keys()]);
       else if (returned.length) this._renewImages(returned);
+      else this._newPictures(before, hass);
     }
     this._showCamera();
     this._drawTarget();
+  }
+
+  /**
+   * A camera's access token changes when the integration has a new picture
+   * for it (after a change to an overlay, a crop, a mode, or on its own
+   * schedule): the shown camera shows it at once, the others when shown.
+   */
+  _newPictures(before, hass) {
+    for (const camera of this._images.keys()) {
+      const was = before.states[camera]?.attributes.access_token, now = hass.states[camera]?.attributes.access_token;
+      if (!was || !now || was === now) continue;
+      if (camera === this._camera) this._reloadImage(camera);
+      else this._forgetPicture(camera);
+    }
   }
 
   /** Make these cameras' images anew: the shown one at once, the others when shown again. */
@@ -2659,7 +2739,7 @@ class XtoolCamera extends XtoolFeature {
     const keys = {
       // A key for each camera
       camera_buttons: () => (cameras.length < 2 ? [] : cameras.map((c) => ({
-        key: c.entityId, entity: c.entityId, label: nameOf(c), text: c.label, color: "primary",
+        key: c.entityId, entity: c.entityId, label: nameOf(c), text: c.label,
         pressed: c.entityId === current, disabled: !this._usable(c.entityId), action: () => this._pick(c.entityId),
       }))),
       // One key for the camera shown: a tap shows the next one that can be shown
@@ -2669,7 +2749,7 @@ class XtoolCamera extends XtoolFeature {
         const next = [...cameras.slice(at + 1), ...cameras.slice(0, at)].find((c) => this._usable(c.entityId));
         const shown = cameras[at];
         return [{
-          key: "camera_toggle", entity: shown.entityId, text: shown.label, color: "primary",
+          key: "camera_toggle", entity: shown.entityId, text: shown.label,
           label: next ? `${nameOf(shown)}. Tap for ${nameOf(next)}` : nameOf(shown), pressed: false, disabled: !next,
           action: () => next && this._pick(next.entityId),
         }];
@@ -2684,18 +2764,15 @@ class XtoolCamera extends XtoolFeature {
         const on = usable && !!this._cropping;
         return [{
           key: "custom_crop", label: on ? "Custom crop: on. Tap two corners on the picture; tap again to go back" : "Custom crop",
-          text: "Crop", icon: "mdi:crop", color: "primary",
+          text: "Crop", icon: "mdi:crop",
           pressed: on, disabled: !usable, action: () => this._toggleCropping(),
         }];
       },
-      // The deep camera's perspective; the integration takes the new photo
-      // before the action ends: show it then
+      // The deep camera's perspective
       perspective: () => {
         const entityId = camera?.settings.perspective;
         const key = entityId && keyOf(this, controlOf("perspective", moment.device.profile), entityId, moment);
-        if (!key) return [];
-        const shownCamera = this._camera;
-        return [{ ...key, action: () => key.action().then(() => this._reloadImage(shownCamera), () => {}) }];
+        return key ? [key] : [];
       },
       // The overview camera's thickness or distance, in a field, and Measure
       thickness_or_distance: () => {
@@ -2856,18 +2933,14 @@ class XtoolCamera extends XtoolFeature {
     this._render();
   }
 
-  // The integration takes the new photo before the action ends: show it then
   _sendCrop(crop) {
-    const camera = this._camera;
-    Promise.resolve(this._hass.callService(DOMAIN, "camera", {
+    this._hass.callService(DOMAIN, "camera", {
       crop_width: crop.width, crop_height: crop.height, crop_center_x: crop.center_x, crop_center_y: crop.center_y,
-    }, { entity_id: camera })).then(() => this._reloadImage(camera), () => {});
+    }, { entity_id: this._camera });
   }
 
   _sendPreset(entityId, option) {
-    const camera = this._camera;
-    Promise.resolve(this._hass.callService("select", "select_option", { entity_id: entityId, option }))
-      .then(() => this._reloadImage(camera), () => {});
+    this._hass.callService("select", "select_option", { entity_id: entityId, option });
   }
 
   /**
@@ -2900,6 +2973,7 @@ class XtoolCamera extends XtoolFeature {
       old.remove();
       this._images.set(camera, image);
       this._showCamera();
+      if (camera === this._camera) this._arrived();
     };
     Promise.resolve(image.updateComplete).then(() => {
       image.shadowRoot?.addEventListener("load", () => finish(true), true);
@@ -2923,7 +2997,7 @@ class XtoolCamera extends XtoolFeature {
   _showHint() {
     const crop = this._cropping ? this._crop() : undefined;
     this._shot.classList.toggle("cropping", !!crop);
-    this._hint.textContent = !crop ? "" : this._first ? "Tap the opposite corner" : "Tap a corner of the part to show";
+    this._hint.textContent = !crop ? "" : this._first ? "Tap the opposite corner of the custom crop area" : "Tap a corner to start selection of a crop area";
   }
 
   _currentCamera(cameras) {
@@ -2980,12 +3054,15 @@ class XtoolCamera extends XtoolFeature {
     // While the laser is off or asleep it takes no photos: a picture that
     // loads then is an old one Home Assistant still serves, so the time
     // stays when the last one arrived while it could take one
-    root.addEventListener("load", () => {
-      this._drawTarget();
-      if (["off", "sleeping"].includes(phaseNow(this._hass, this._entityId))) return;
-      this._pictureAt = new Date();
-      this._showTime();
-    }, true);
+    root.addEventListener("load", () => this._arrived(), true);
+  }
+
+  /** A picture has arrived for the shown camera. */
+  _arrived() {
+    this._drawTarget();
+    if (["off", "sleeping"].includes(phaseNow(this._hass, this._entityId))) return;
+    this._pictureAt = new Date();
+    this._showTime();
   }
 
   /**
@@ -3192,7 +3269,7 @@ class XtoolSafetyproIf2Fan extends XtoolFeature {
     return shown.map((value) => {
       const name = hass.formatEntityState?.(gearState, value) ?? value;
       return {
-        key: value, label: name, text: name, icon: IF2_ICONS[String(value).toLowerCase()], color: "primary",
+        key: value, label: name, text: name, icon: IF2_ICONS[String(value).toLowerCase()],
         pressed: gearState.state === value, disabled: gearState.state === "unavailable",
         action: () => value !== gearState.state && hass.callService("select", "select_option", { entity_id: gears, option: value }),
       };
@@ -3752,7 +3829,7 @@ const BADGE_PATHS = {
 };
 
 // Options this card adds to the tile card's
-const OWN_KEYS = ["style", "features_style", "pattern", "badges", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on",
+const OWN_KEYS = ["style", "features_style", "enabled_color", "pattern", "badges", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on",
   "last_feature_full_width"];
 
 // The card's defaults for the tile card's options it sets otherwise
@@ -4380,6 +4457,9 @@ class XtoolCard extends HTMLElement {
     const tone = TONE[style];
     for (const [id] of STYLES) this._frame.classList.toggle(id, id === style && !!tone);
     this._frame.classList.toggle("styled", !!tone);
+    // The Enabled color, for every feature inside
+    if (this._config.enabled_color) this.style.setProperty("--xtool-enabled-color", cssColor(this._config.enabled_color));
+    else this.style.removeProperty("--xtool-enabled-color");
     if (tone) {
       const pattern = Number.isFinite(this._config.pattern) ? this._config.pattern : DEFAULT_PATTERN;
       this._window.style.setProperty("--xtool-gloss", glassReflections(tone, pattern));
@@ -4965,6 +5045,11 @@ class XtoolCardEditor extends HTMLElement {
         helper: "Match style: the controls sit on the body. Flat: on a patch of the body's base color. Console: in a channel pressed into the body.",
         selector: select(FEATURES_STYLES),
       }] : []),
+      {
+        name: "enabled_color", label: "Enabled color",
+        helper: "For every key that is on and every slider. The job's keys and Safety's problems keep their own colors.",
+        selector: { ui_color: { default_color: ENABLED_COLOR, extra_options: STATE_COLORS } },
+      },
       {
         name: "collapsible", label: "Collapsible",
         helper: "A tap on the card shows or hides the features, instead of its Tap behavior (under Interactions). Icon tap behavior still works.",

@@ -47,7 +47,7 @@ def run_page(browser: str, page: Path) -> tuple[str, str]:
             "--disable-gpu",
             "--no-sandbox",
             "--allow-file-access-from-files",
-            "--virtual-time-budget=10000",
+            "--virtual-time-budget=20000",
             "--dump-dom",
             page.resolve().as_uri(),
         ],

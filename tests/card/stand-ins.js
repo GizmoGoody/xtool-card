@@ -101,14 +101,14 @@ const F2 = [
   ["sensor.f2_engraving_lens", "engraving_lens", "big", { device_class: "enum", options: ["none", "small", "big"] }],
 ];
 const F2_MAIN_CAMERA = [
-  ["camera.f2_main", "camera_main", "idle", { entity_picture: "/api/camera_proxy/camera.f2_main?token=a" }],
+  ["camera.f2_main", "camera_main", "idle", { access_token: "a", entity_picture: "/api/camera_proxy/camera.f2_main?token=a" }],
   ["number.f2_main_crop_width", "crop_width", "200", { min: 0, max: 460, step: 1, unit_of_measurement: "mm", icon: "mdi:arrow-expand-horizontal" }],
   ["number.f2_main_crop_height", "crop_height", "200", { min: 0, max: 460, step: 1, unit_of_measurement: "mm", icon: "mdi:arrow-expand-vertical" }],
   ["number.f2_main_crop_center_x", "crop_center_x", "0", { min: -200, max: 200, step: 1, unit_of_measurement: "mm", icon: "mdi:arrow-left-right" }],
   ["number.f2_main_crop_center_y", "crop_center_y", "0", { min: -200, max: 200, step: 1, unit_of_measurement: "mm", icon: "mdi:arrow-up-down" }],
 ];
 const F2_DEEP_CAMERA = [
-  ["camera.f2_deep", "camera_deep", "idle", { entity_picture: "/api/camera_proxy/camera.f2_deep?token=b" }],
+  ["camera.f2_deep", "camera_deep", "idle", { access_token: "b", entity_picture: "/api/camera_proxy/camera.f2_deep?token=b" }],
   ["select.f2_deep_perspective", "perspective", "straightened", { options: ["uncorrected", "rotated", "straightened"] }],
 ];
 const IF2 = [
@@ -137,7 +137,7 @@ const P2 = [
   ["light.p2_fill_left", "fill_light_3", "off", { supported_color_modes: ["brightness"] }],
 ];
 const P2_OVERVIEW_CAMERA = [
-  ["camera.p2_overview", "camera_overview", "idle", { entity_picture: "/api/camera_proxy/camera.p2_overview?token=c" }],
+  ["camera.p2_overview", "camera_overview", "idle", { access_token: "c", entity_picture: "/api/camera_proxy/camera.p2_overview?token=c" }],
   ["select.p2_overview_crop", "crop_preset", "uncropped", { options: ["uncropped", "sync_to_mode", "process_on_slats", "custom"] }],
   ["number.p2_thickness", "thickness_or_distance", "3", { min: 0, max: 50, step: 0.1, unit_of_measurement: "mm", mode: "box" }],
   // Measure and Measured are on the overview camera's device, as the integration has them
@@ -155,7 +155,7 @@ const P2_OVERVIEW_CAMERA = [
   ["switch.p2_overview_close", "overlay_close_camera", "off"],
 ];
 const P2_CLOSE_CAMERA = [
-  ["camera.p2_close", "camera_closeup", "idle", { entity_picture: "/api/camera_proxy/camera.p2_close?token=d" }],
+  ["camera.p2_close", "camera_closeup", "idle", { access_token: "d", entity_picture: "/api/camera_proxy/camera.p2_close?token=d" }],
   ["select.p2_close_crop", "crop_preset", "studio", { options: ["uncropped", "studio", "custom"] }],
   ["number.p2_close_crop_width", "crop_width", "140", { min: 0, max: 140, step: 1, unit_of_measurement: "mm" }],
   ["number.p2_close_crop_height", "crop_height", "100", { min: 0, max: 100, step: 1, unit_of_measurement: "mm" }],
