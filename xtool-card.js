@@ -2423,9 +2423,9 @@ class XtoolCamera extends XtoolFeature {
       .shot { touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
       /* Where the laser goes: a dashed line from where it is to the target */
       .shot .target { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-      .shot .target line, .shot .target circle { fill: none; stroke: #ff2b2b; stroke-width: 2; vector-effect: non-scaling-stroke; }
+      .shot .target line, .shot .target circle { fill: none; stroke: ${ENABLED}; stroke-width: 2; vector-effect: non-scaling-stroke; }
       .shot .target .path { stroke-dasharray: 6 5; }
-      .shot .target .now { fill: #ff2b2b; }
+      .shot .target .now { fill: ${ENABLED}; }
       .row:empty { display: none; }
       /* The controls below the picture, in the order chosen: as a row's
          items, on as many lines as they need, each line filled, the lines
@@ -2580,7 +2580,7 @@ class XtoolCamera extends XtoolFeature {
   /**
    * The target on the picture, while the position is being set and the
    * shown camera's Laser target overlay is on: a reticle at the target,
-   * joined to where the head is by a dashed red line, placed with the
+   * joined to where the head is by a dashed line, all in the Enabled color, placed with the
    * camera's crop (as tap to crop reads it).
    */
   _drawTarget() {
