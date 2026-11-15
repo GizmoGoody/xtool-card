@@ -36,7 +36,7 @@
     none: addCard("no badge", {}, { hass: f2("idle") }),
     key: addCard("safety key out", {}, { hass: f2("idle", { "binary_sensor.f2_safety_key": "off" }) }),
     safetyOff: addCard("a safety check off", {}, { hass: f2("idle", { "switch.f2_moved": "off" }) }),
-    offline: addCard("not connected", {}, { hass: f2("unavailable") }),
+    offline: addCard("unavailable", {}, { hass: f2("unavailable") }),
     chosen: addCard("badges turned off", { badges: [] }, { hass: f2("idle", { "binary_sensor.f2_safety_key": "off" }) }),
     lid: addCard("P2 lid open", { entity: "sensor.p2_status" }, { hass: p2("idle", { "binary_sensor.p2_cover": "on" }) }),
     alarmFirst: addCard("alarm, then safety key", { badges: ["alarm", "safety_key"] },
@@ -165,7 +165,7 @@
     check("no badge", !on(badges.none), "no badge when all is well");
     check("safety key out", on(badges.key) && badge(badges.key).title === "Safety key removed", "the safety key badge");
     check("a safety check off", on(badges.safetyOff) && badge(badges.safetyOff).title === "A safety check is off", "the safety check badge");
-    check("not connected", on(badges.offline) && badge(badges.offline).title === "Not connected", "the connection badge");
+    check("unavailable", on(badges.offline) && badge(badges.offline).title === "Unavailable", "the badge for a Status entity that is unavailable");
     check("badges turned off", !on(badges.chosen), "no badge when none are chosen");
     check("P2 lid open", on(badges.lid) && badge(badges.lid).title === "Lid open", "the lid badge");
     check("badge order", badge(badges.alarmFirst).title === "Alarm", "alarm listed first: the alarm shows");

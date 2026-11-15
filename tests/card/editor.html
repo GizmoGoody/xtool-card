@@ -76,8 +76,29 @@
     randomize.click();
     check("reflections", Number.isInteger(fired.pattern) && fired.pattern >= 1 && fired.style === "champagne" && !("features_style" in fired),
       `a click saves a new pattern (${fired.pattern}) and keeps the other options`);
-    check("editor", form.data.badges.join() === "alarm,connection,safety_key,lid,safety_off", "the default badges are shown");
+    check("editor", form.data.badges.join() === "alarm,unavailable,safety_key,safety_checks", "the default badges are shown: of the defaults, those the F2 Ultra UV has (it has no lid sensor)");
     const badgeField = form.schema.find((s) => s.name === "badges");
+    check("badges", badgeField.selector.select.options.map((o) => o.value).join() === "alarm,unavailable,safety_key,safety_checks,firmware",
+      `the F2 Ultra UV is offered every badge but Lid (${badgeField.selector.select.options.map((o) => o.value).join(", ")})`);
+    check("badges", badgeField.selector.select.options.map((o) => o.label).join() === "Alarm or fire warning,Unavailable,Safety key removed,A safety check is off,Firmware update available",
+      "each by what it shows");
+    // The P2: no safety key, and no safety check that can be off (its flame alarm is a level)
+    const badgeEditor = document.createElement("xtool-card-editor");
+    let badgeFired;
+    badgeEditor.addEventListener("config-changed", (ev) => (badgeFired = ev.detail.config));
+    badgeEditor.hass = makeHass();
+    badgeEditor.setConfig({ type: "custom:xtool-card", entity: "sensor.p2_status", style: "graphite" });
+    document.getElementById("cards").append(badgeEditor);
+    await wait(150);
+    const badgeForm = badgeEditor.shadowRoot.getElementById("form");
+    const p2Badges = badgeForm.schema.find((s) => s.name === "badges").selector.select.options.map((o) => o.value);
+    check("badges", p2Badges.join() === "alarm,unavailable,lid,firmware" && badgeForm.data.badges.join() === "alarm,unavailable,lid",
+      `the P2 is offered only the badges it has, and its defaults are those of the defaults it has (${p2Badges.join(", ")}; ${badgeForm.data.badges.join(", ")})`);
+    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "graphite", badges: ["alarm", "unavailable", "lid"] } } }));
+    check("badges", badgeFired && !("badges" in badgeFired), "the P2's defaults are not written");
+    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "graphite", badges: ["alarm", "unavailable", "lid", "firmware"] } } }));
+    check("badges", badgeFired.badges.join() === "alarm,unavailable,lid,firmware", "other choices are written");
+    badgeEditor.remove();
     check("editor", badgeField.selector.select.reorder === true && badgeField.selector.select.multiple === true, "the badges can be put in order");
     check("editor", badgeField.label.includes("priority order") && badgeField.helper === "The first one that applies shows on the picture.", "and are labeled as in priority order");
     form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "champagne", badges: ["lid", "alarm", "safety_key"] } } }));

@@ -3625,15 +3625,27 @@ const CHANNEL_PAD = { match: 0, flat: 2, console: 3 };
 // The window's edge inside the title row (px)
 const WINDOW_MARGIN = 4;
 const DEFAULT_FEATURES_STYLE = "console";
+// Each badge: [id, label, whether a laser has what it shows (its roles)].
+// Alarm reads the Status entity too, and Unavailable is about the Status
+// entity itself, so every laser has both
 const BADGES = [
-  ["alarm", "Alarm or fire warning"],
-  ["connection", "Not connected"],
-  ["safety_key", "Safety key removed"],
-  ["lid", "Lid open"],
-  ["safety_off", "A safety check is off"],
-  ["firmware", "Firmware update available"],
+  ["alarm", "Alarm or fire warning", () => true],
+  ["unavailable", "Unavailable", () => true],
+  ["safety_key", "Safety key removed", (roles) => !!roles.safety_key],
+  ["lid", "Lid open", (roles) => !!roles.lid],
+  ["safety_checks", "A safety check is off", (roles) => SAFETY_CHECKS.some((role) => roles[role] && domainOf(roles[role]) === "switch")],
+  ["firmware", "Firmware update available", (roles) => !!roles.firmware],
 ];
-const DEFAULT_BADGES = ["alarm", "connection", "safety_key", "lid", "safety_off"];
+const DEFAULT_BADGES = ["alarm", "unavailable", "safety_key", "lid", "safety_checks"];
+
+/** The badges this laser has, in the editor's order. */
+const badgesOf = (hass, entityId) => {
+  const { roles } = deviceOf(hass, entityId);
+  return BADGES.filter(([, , has]) => has(roles));
+};
+
+/** The default badges, of those this laser has. */
+const defaultBadges = (hass, entityId) => DEFAULT_BADGES.filter((id) => badgesOf(hass, entityId).some(([badge]) => badge === id));
 const EDGES = [["none", "None"], ["top", "Top"], ["bottom", "Bottom"], ["left", "Left"], ["right", "Right"], ["around", "Around the card"]];
 const DIRECTIONS = [["clockwise", "Clockwise"], ["counterclockwise", "Counterclockwise"]];
 const SHOW_WHILE = [["processing", "Processing"], ["paused", "Paused"], ["framing", "Framing"], ["finished", "Finished"], ["error", "Error"]];
@@ -3654,10 +3666,10 @@ const TRACK = "var(--disabled-color, rgba(127, 127, 127, .35))";
 const BADGE_PATHS = {
   alarm: "M12 3 22 20H2z M12 9.5v4.5 M12 17h.01",
   fire: FLAME,
-  connection: "M3 3l18 18 M8.5 16.5a5 5 0 0 1 7 0 M5 12.6a10 10 0 0 1 4-2.4 M19 12.6a10 10 0 0 0-2.2-1.6 M12 20h.01",
+  unavailable: "M3 3l18 18 M8.5 16.5a5 5 0 0 1 7 0 M5 12.6a10 10 0 0 1 4-2.4 M19 12.6a10 10 0 0 0-2.2-1.6 M12 20h.01",
   safety_key: "M7.5 11a4.5 4.5 0 1 0 0 9 4.5 4.5 0 1 0 0-9 M10.7 12.3 20 3 M17 6l3 3 M14.5 8.5l2 2",
   lid: "M3 7l9-4 9 4 M5 9.5h14V20H5z",
-  safety_off: "M3 3l18 18 M19 13V6l-7-3-4 1.7 M5.2 6.5V11c0 4.5 3 8.2 6.8 10 1.4-.7 2.7-1.6 3.7-2.7",
+  safety_checks: "M3 3l18 18 M19 13V6l-7-3-4 1.7 M5.2 6.5V11c0 4.5 3 8.2 6.8 10 1.4-.7 2.7-1.6 3.7-2.7",
   firmware: "M12 4v11 M7 10l5 5 5-5 M5 20h14",
 };
 
@@ -4128,7 +4140,7 @@ class XtoolCard extends HTMLElement {
    */
   _badgeNow() {
     const hass = this._hass, id = this._config.entity;
-    const chosenBadges = Array.isArray(this._config.badges) ? this._config.badges : DEFAULT_BADGES;
+    const chosenBadges = Array.isArray(this._config.badges) ? this._config.badges : defaultBadges(hass, id);
     const stateOf = (role) => {
       const entityId = deviceOf(hass, id).roles[role];
       return entityId ? hass.states[entityId]?.state : undefined;
@@ -4143,11 +4155,11 @@ class XtoolCard extends HTMLElement {
         [phase === "overheat", "alarm", error, "Laser overheat"],
         [stateOf("alarm") === "on" || phase === "error", "alarm", error, "Alarm"],
       ],
-      connection: [[!status || hass.states[status]?.state === "unavailable", "connection", "#616161", "Not connected"]],
+      unavailable: [[!status || hass.states[status]?.state === "unavailable", "unavailable", "#616161", "Unavailable"]],
       safety_key: [[stateOf("safety_key") === "off", "safety_key", warning, "Safety key removed"]],
       lid: [[stateOf("lid") === "on", "lid", warning, "Lid open"]],
-      safety_off: [[SAFETY_CHECKS.some((role) => stateOf(role) === "off"),
-        "safety_off", warning, "A safety check is off"]],
+      safety_checks: [[SAFETY_CHECKS.some((role) => stateOf(role) === "off"),
+        "safety_checks", warning, "A safety check is off"]],
       firmware: [[stateOf("firmware") === "on", "firmware", "var(--info-color, #039be5)", "Firmware update available"]],
     };
     for (const option of chosenBadges) {
@@ -4837,7 +4849,7 @@ class XtoolCardEditor extends HTMLElement {
       {
         name: "badges", label: "Badges (in priority order)",
         helper: "The first one that applies shows on the picture.",
-        selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: BADGES.map(([value, label]) => ({ value, label })) } },
+        selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: badgesOf(this._hass, c.entity).map(([value, label]) => ({ value, label })) } },
       },
       {
         name: "status_light", label: "Status light",
@@ -4872,7 +4884,7 @@ class XtoolCardEditor extends HTMLElement {
     ];
     this._form.data = {
       features_style: c.features_style ?? DEFAULT_FEATURES_STYLE,
-      badges: Array.isArray(c.badges) ? c.badges : DEFAULT_BADGES,
+      badges: Array.isArray(c.badges) ? c.badges : defaultBadges(this._hass, c.entity),
       status_light: c.status_light !== false,
       progress_edge: progressOptions(c),
       collapsible: !!c.collapsible,
@@ -4908,7 +4920,7 @@ function minimal(config, hass) {
   if (!styled) delete c.style;
   if (!styled || c.features_style === DEFAULT_FEATURES_STYLE || !FEATURES_STYLES.some(([id]) => id === c.features_style)) delete c.features_style;
   if (!styled || !Number.isFinite(c.pattern) || c.pattern === DEFAULT_PATTERN) delete c.pattern;
-  if (!Array.isArray(c.badges) || same(c.badges, DEFAULT_BADGES)) delete c.badges;
+  if (!Array.isArray(c.badges) || (hass && same(c.badges, defaultBadges(hass, c.entity)))) delete c.badges;
   if (c.status_light !== false) delete c.status_light;
   if (c.progress_edge && typeof c.progress_edge === "object") {
     const edge = Object.fromEntries(Object.entries(c.progress_edge).filter(([key, value]) => !same(value, PROGRESS_DEFAULTS[key])));
