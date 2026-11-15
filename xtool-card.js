@@ -3536,6 +3536,10 @@ function glassReflections(tone, pattern) {
 const FLAT = { champagne: "#cdae94", graphite: "#2d3136" };
 // The same keys and values as the SVS and Lampster cards
 const FEATURES_STYLES = [["match", "Match style"], ["flat", "Flat"], ["console", "Console"]];
+// How far a features style's patch or channel reaches around each control (px)
+const CHANNEL_PAD = { match: 0, flat: 2, console: 3 };
+// The window's edge inside the title row (px)
+const WINDOW_MARGIN = 4;
 const DEFAULT_FEATURES_STYLE = "console";
 const BADGES = [
   ["alarm", "Alarm or fire warning"],
@@ -4212,6 +4216,9 @@ class XtoolCard extends HTMLElement {
       this._tile.classList.toggle("light", tone === "light");
       this._tile.classList.toggle("champagne", style === "champagne");
       this._tile.classList.toggle("solid", !!tone && (this._config.features_style ?? DEFAULT_FEATURES_STYLE) !== "match");
+      // For the space under the title row (see _styleWindowText)
+      this._tile.style.setProperty("--xtool-channel-pad", `${CHANNEL_PAD[this._featuresStyle()]}px`);
+      this._tile.style.setProperty("--xtool-window-margin", `${tone ? WINDOW_MARGIN : 0}px`);
       this._styleWindowText();
     }
     this._removeDividers();
@@ -4234,8 +4241,12 @@ class XtoolCard extends HTMLElement {
       XtoolCard._windowSheet = new CSSStyleSheet();
       XtoolCard._windowSheet.replaceSync(`
         /* Space between the title row and the features below it (none
-           while collapsed, when no features show below) */
-        hui-card-features[slot="features"] { margin-top: var(--ha-space-2, 8px); }
+           while collapsed, when no features show below): from the window's
+           edge to the first patch or channel, the same as between two rows
+           of them (the feature gap, less a pad on each side) */
+        hui-card-features[slot="features"] {
+          margin-top: calc(var(--ha-card-feature-gap, 12px) - var(--xtool-window-margin, 0px) - var(--xtool-channel-pad, 0px));
+        }
         :host(.champagne) ha-tile-info {
           --primary-text-color: rgba(255, 248, 240, .97); --secondary-text-color: rgba(255, 236, 220, .86);
           text-shadow: 0 1px 2px rgba(90, 30, 0, .55);
@@ -4286,7 +4297,7 @@ class XtoolCard extends HTMLElement {
     if (!TONE[this._config.style]) return;
     const W = this._frame.offsetWidth, H = this._frame.offsetHeight;
     if (!W || !H) return;
-    const margin = 4;
+    const margin = WINDOW_MARGIN;
     let top = margin, bottom = H - margin;
     const row = this._titleRow();
     if (row) {
@@ -4398,14 +4409,19 @@ class XtoolCard extends HTMLElement {
     this._mutations.observe(root, { childList: true, subtree: true });
   }
 
+  /** The features style drawn: Match without an xTool style. */
+  _featuresStyle() {
+    return TONE[this._config?.style] ? this._config.features_style ?? DEFAULT_FEATURES_STYLE : "match";
+  }
+
   _drawAreas() {
-    const style = TONE[this._config?.style] ? this._config.features_style ?? DEFAULT_FEATURES_STYLE : "match";
+    const style = this._featuresStyle();
     this._styleControls(style === "console");
     if (style === "match") {
       this._areas.replaceChildren();
       this._areasKey = undefined;
     } else {
-      const pad = style === "console" ? 3 : 2;
+      const pad = CHANNEL_PAD[style];
       const areas = this._featureAreas().map((b) => ({
         x: b.x - pad, y: b.y - pad, w: b.w + 2 * pad, h: b.h + 2 * pad,
         radius: Math.min(b.radius + pad, (b.h + 2 * pad) / 2),

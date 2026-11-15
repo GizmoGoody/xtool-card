@@ -79,13 +79,15 @@
   const gapLooks = [["none", "console"], ["champagne", "match"], ["champagne", "flat"], ["champagne", "console"], ["graphite", "match"], ["graphite", "flat"], ["graphite", "console"]];
   const gapCards = [];
   for (const position of ["bottom", "inline"]) {
-    const tile = { features_position: position, features: gapFeatures, show_entity_picture: true, state_content: ["state", "engraving_lens", "elapsed"] };
+    // Two rows below the title in either position
+    const features = position === "inline" ? [...gapFeatures, { type: "custom:xtool-configuration" }, { type: "custom:xtool-focus" }] : gapFeatures;
+    const tile = { features_position: position, features, show_entity_picture: true, state_content: ["state", "engraving_lens", "elapsed"] };
     const size = { hass: f2("idle"), height: "auto" };
     const core = addCoreTile(`core tile, ${position}`, tile, size);
     for (const [style, look] of gapLooks) {
       const card = addCard(`gap: ${style}, ${look}, ${position}`,
-        { style, features_style: look, features_position: position, collapsible: true, features: gapFeatures }, size);
-      gapCards.push({ card, core, name: `${style}, ${look}, ${position}` });
+        { style, features_style: look, features_position: position, collapsible: true, features }, size);
+      gapCards.push({ card, core, look: style === "none" ? "match" : look, name: `${style}, ${look}, ${position}` });
     }
   }
 
@@ -214,11 +216,32 @@
       const group = tile.shadowRoot.querySelector('hui-card-features[slot="features"]');
       return group.shadowRoot.querySelector("hui-card-feature").getBoundingClientRect().top - text.bottom;
     };
-    for (const { card, core, name } of gapCards) {
+    // What shows of each control below the title: its patch or channel, or the control itself in Match
+    const shapesBelow = (card, top) => {
+      const areas = [...card.shadowRoot.querySelectorAll(".area")].map((a) => a.getBoundingClientRect());
+      const items = deep(inner(card).shadowRoot.querySelector('hui-card-features[slot="features"]'), ".key, .field, .slide:not([hidden]), ha-tile-icon")
+        .map((el) => el.getBoundingClientRect()).filter((r) => r.width);
+      return (areas.length ? areas : items).filter((r) => r.top > top - 1);
+    };
+    for (const { card, core, name, look } of gapCards) {
       const ours = textToFeature(inner(card)), theirs = textToFeature(core);
-      check(`gap: ${name}`, Math.abs(ours - theirs - 8) < 0.5,
-        `the title's text to the first feature below: ${Math.round(ours)} px, the tile card's (${Math.round(theirs)} px) and 8 px, so the oval sits 12 px above the next row like the gap between rows`);
+      const pad = { match: 0, flat: 2, console: 3 }[look], margin = card._config.style === "none" ? 0 : 4;
+      check(`gap: ${name}`, Math.abs(ours - theirs - (12 - margin - pad)) < 0.5,
+        `the title's text to the first feature below: ${Math.round(ours)} px, the tile card's (${Math.round(theirs)} px) and the feature gap less the window's margin and the channel's pad`);
       if (card._config.style === "none") continue;
+      // From the window's bottom edge to the first row of shapes, as from one row of them to the next
+      const winBottom = windowBox(card).getBoundingClientRect().bottom;
+      const shapes = shapesBelow(card, winBottom);
+      // The first row: the shapes that start with the highest; the second: those below all of them.
+      // A pressed Console key sits 1 px lower, so each row is measured where its keys rest (the highest)
+      const firstTop = Math.min(...shapes.map((r) => r.top));
+      const first = shapes.filter((r) => r.top < firstTop + 4);
+      const firstBottom = Math.min(...first.map((r) => r.bottom));
+      const second = shapes.filter((r) => r.top >= firstBottom + 2);
+      const under = firstTop - winBottom;
+      const between = Math.min(...second.map((r) => r.top)) - firstBottom;
+      check(`gap: ${name}`, second.length > 0 && Math.abs(under - between) < 0.5,
+        `under the window as between rows: ${under.toFixed(1)} and ${between.toFixed(1)} px`);
       // The window is one row, centered on the icon, however tall the cell
       const win = windowBox(card).getBoundingClientRect(), icon = inner(card).shadowRoot.querySelector("ha-tile-icon").getBoundingClientRect();
       check(`gap: ${name}`, Math.abs(win.height - 48) < 0.5 && Math.abs((win.top + win.bottom) / 2 - (icon.top + icon.bottom) / 2) < 0.5,
