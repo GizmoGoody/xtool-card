@@ -25,7 +25,7 @@
       .filter(([id, e]) => !jobButtons.includes(id) && !(e.platform === "xtool" && e.translation_key === "status" && id !== "sensor.p2_status")));
     for (const id of jobButtons) delete p2Only.states[id];
     const p2Stub = customElements.get("xtool-card").getStubConfig(p2Only);
-    check("new card", p2Stub.entity === "sensor.p2_status" && p2Stub.style === "p2_black" && p2Stub.features.map((f) => f.type).join() === "custom:xtool-controls",
+    check("new card", p2Stub.entity === "sensor.p2_status" && p2Stub.style === "p2_grey" && p2Stub.features.map((f) => f.type).join() === "custom:xtool-controls",
       `the P2, in the P2 style, with Controls only: it has no job buttons (${JSON.stringify(p2Stub)})`);
     const noLaser = makeHass();
     noLaser.entities = {};
@@ -70,7 +70,7 @@
     const styleChoices = styleForm.schema.find((f) => f.name === "style").selector.select.options;
     const choiceText = styleChoices.map((o) => `${o.value}=${o.label}`).join();
     check("editor", choiceText.startsWith("none=None (theme),d1=D1,d1_pro_grey=D1 Pro (Grey),d1_pro_red=D1 Pro (Red),")
-      && ["f2_ultra_uv=F2 Ultra UV", "f2_ultra_uv_class_1=F2 Ultra UV (Class 1)", "p2_black=P2 (Black)", "p2_white=P2 (White)", "s1_white=S1 (White)", "apparel_printer=Apparel Printer"]
+      && ["f2_ultra_uv=F2 Ultra UV", "f2_ultra_uv_class_1=F2 Ultra UV (Class 1)", "p2_grey=P2 (Grey)", "p2_white=P2 (White)", "s1_white=S1 (White)", "apparel_printer=Apparel Printer"]
         .every((choice) => choiceText.includes(choice)) && styleChoices.length === 31,
       `a style for each model, and each color it comes in (${styleChoices.length}: ${styleChoices.map((o) => o.label).join(", ")})`);
 
@@ -93,18 +93,18 @@
     let badgeFired;
     badgeEditor.addEventListener("config-changed", (ev) => (badgeFired = ev.detail.config));
     badgeEditor.hass = makeHass();
-    badgeEditor.setConfig({ type: "custom:xtool-card", entity: "sensor.p2_status", style: "p2_black" });
+    badgeEditor.setConfig({ type: "custom:xtool-card", entity: "sensor.p2_status", style: "p2_grey" });
     document.getElementById("cards").append(badgeEditor);
     await wait(150);
     const badgeForm = badgeEditor.shadowRoot.getElementById("form");
     const p2Badges = badgeForm.schema.find((s) => s.name === "status_badge").selector.select.options.map((o) => o.value);
     check("badges", p2Badges.join() === "alarm,lid,firmware" && badgeForm.data.status_badge.join() === "alarm,lid",
       `the P2 is offered only the badges it has, and its defaults are those of the defaults it has (${p2Badges.join(", ")}; ${badgeForm.data.status_badge.join(", ")})`);
-    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2_black", status_badge: ["alarm", "lid"] } } }));
+    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2_grey", status_badge: ["alarm", "lid"] } } }));
     check("badges", badgeFired && !("status_badge" in badgeFired) && !("connection_badge" in badgeFired), "the P2's defaults are not written");
-    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2_black", status_badge: ["alarm", "lid", "firmware"] } } }));
+    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2_grey", status_badge: ["alarm", "lid", "firmware"] } } }));
     check("badges", badgeFired.status_badge.join() === "alarm,lid,firmware", "other choices are written");
-    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2_black", connection_badge: false } } }));
+    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2_grey", connection_badge: false } } }));
     check("badges", badgeFired.connection_badge === false, "the connection badge turned off is written");
     badgeEditor.remove();
     check("editor", badgeField.selector.select.reorder === true && badgeField.selector.select.multiple === true, "the badges can be put in order");

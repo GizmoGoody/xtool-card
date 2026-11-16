@@ -1,6 +1,6 @@
 # xTool colorways
 
-The card's **Style** option draws the tile in the colors of an xTool machine: a **body** (the frame or case) and a **window** (the plexi or lid, behind the title). The editor has one style for each model, and one for each color a model is sold in. A new card gets its laser's model's style, in the first color listed below.
+The card's **Style** option draws the tile in the colors of an xTool machine: a **body** (the frame or case) and a **window** (the plexi or lid, behind the title). The editor has one style for each model, and one for each color a model is sold in. Colors use the names on xTool's US store. A new card gets its laser's model's style, in the first color listed below.
 
 Models that look alike share a body and a window in the code (`BODIES`, `WINDOWS` and `MODEL_STYLES` in `xtool-card.js`). Every orange plexi is drawn with the same orange.
 
@@ -54,9 +54,9 @@ The sampled colors come from xTool's own product photos (a 7 by 7 pixel average)
 | `m2` | M2 | `white` | `orange` | `#eeeeee` | `#bd7f53` | [M2](https://cdn.shopify.com/s/files/1/0467/7985/9095/files/m2-global_uk.jpg) |
 | `metalfab` | MetalFab | `silver` | `smoke` | `#cccccc` | `#2d2d2d` (black panels) | [MetalFab](https://cdn.shopify.com/s/files/1/0467/7985/9095/files/mk-baidituyingyong_eu_pc_metalfab_6646-15287.webp) |
 | `o1_omni_printer` | O1 Omni Printer | `white` | `smoke` | `#eeeeee` | Smoked | [O1 Omni Printer](https://storage-us.atomm.com/resource/dic/owl/20261013/uNbvHXVvf/owl/2025/file-20261013102613/mk-a-o1omniprinter_us_pc_singleuvstandalone_11500-685.webp) |
-| `p2_black` | P2 (Black) | `graphite` | `smoke_amber` | `#50555b` | `#885a31` | [P2, Black](https://cdn.shopify.com/s/files/1/0467/7985/9095/files/mk-baidituyingyong_us_pc_p-black-whitebackground_7671-141.webp) |
+| `p2_grey` | P2 (Grey) | `graphite` | `smoke_amber` | `#50555b` | `#885a31` | [P2, Grey](https://cdn.shopify.com/s/files/1/0467/7985/9095/files/mk-baidituyingyong_us_pc_p-black-whitebackground_7671-141.webp) |
 | `p2_white` | P2 (White) | `white` | `smoke_amber` | `#e5e5e6` | Amber | [P2, White](https://cdn.shopify.com/s/files/1/0467/7985/9095/files/mk-baidituyingyong_us_pc_p-white-whitebackground_7671-157.webp) |
-| `p2s_black` | P2S (Black) | `graphite` | `smoke_amber` | `#50555b` | `#885a31` | [P2S, Black](https://cdn.shopify.com/s/files/1/0643/2715/5925/files/mk-baidituyingyong_eu_pc_p2s-black-standalone_5121-56432_e88d59bb-565e-4336-96b1-fedcc9df7139.webp) |
+| `p2s_grey` | P2S (Grey) | `graphite` | `smoke_amber` | `#50555b` | `#885a31` | [P2S, Grey](https://cdn.shopify.com/s/files/1/0643/2715/5925/files/mk-baidituyingyong_eu_pc_p2s-black-standalone_5121-56432_e88d59bb-565e-4336-96b1-fedcc9df7139.webp) |
 | `p2s_white` | P2S (White) | `white` | `smoke_amber` | `#e5e5e6` | Amber | [P2S, White](https://cdn.shopify.com/s/files/1/0643/2715/5925/files/mk-baidituyingyong_eu_pc_p2s-white-standalone_5121-56614_a0455e5c-1209-4afe-9b1b-54864bdf618c.webp) |
 | `p3` | P3 | `white` | `smoke` | `#dbdbdb` | `#4d4d4d` | [P3](https://cdn.shopify.com/s/files/1/0467/7985/9095/files/mk-p3_ca_pc_us-p3mainimage01_2330-8226.webp) |
 | `retail_marker` | Retail Marker | `grey` | `green` | Same as the F1 Ultra | Same as the F1 Ultra | [Retail Marker](https://cdn.shopify.com/s/files/1/0467/7985/9095/files/img_v3_02lf_a2dcb326-4f18-465a-b532-7daef8e0037g_fff76b8d-3720-406e-9e6e-ad9b44864756.jpg) |
@@ -68,8 +68,8 @@ The sampled colors come from xTool's own product photos (a 7 by 7 pixel average)
 
 - **Variants with the same look.** The D1 Pro 2.0 has the D1 Pro's frame. The F1 Ultra V2 is a Class 1 version of the F1 Ultra. The F2 Ultra (Single) has the F2 Ultra's enclosure. The F2 Ultra UV (Class 1) has the F2 Ultra UV's enclosure. The Apparel Printer looks the same as the Apparel Printer Plus.
 - **D1 series.** The D1 is grey only. The D1 Pro and D1 Pro 2.0 come in red or grey, the two colors of xTool's D1 and D1 Pro risers, which match the frame (xTool calls them Red and Grey on its UK store, Golden Red and Metal Grey on its German store). MatterHackers sells the red D1 Pro. The D1 series has no enclosure, so its style has no window.
-- **P2 and P2S.** Both come in black (xTool calls it Grey on some stores) and white, as the variants of xTool's refurbished P2/P2S listings show.
-- **S1.** Black with a green window, or white with an orange window (xTool's refurbished S1 listing).
+- **P2 and P2S.** Both come in grey and white, as the variants of xTool's US refurbished P2/P2S listing show. xTool's EU and UK stores call the grey one black.
+- **S1.** Black with a green window, or white with an orange window (xTool's US refurbished S1 listing calls them Black and Pure White).
 - **Laserbox.** The Laserbox Pro is white with a smoked lid, and the Laserbox Basic is black.
 - **Retail Marker.** The in-store version of the F1 Ultra. Its enclosure color can be customized for a store ([xTool support, article 2735](https://support.xtool.com/article/2735)); the card draws its standard look.
 - **Model names** are the ones the xTool integration gives each device in Home Assistant (for example, "xTool F2 Ultra UV").
