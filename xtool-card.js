@@ -2357,6 +2357,11 @@ const CAMERA_INPUTS = ["mode", "crop", "exposure", ...lightParts("fill_light_clo
 // camera's perspective, and the overview camera's thickness or distance
 // and Measure (the P2's)
 const CAMERA_SETTINGS = ["perspective", "thickness_or_distance", "measure_thickness_or_distance"];
+// Controls that stay side by side in the camera's sections (see
+// XtoolCamera._layout): Measure with the thickness or distance it measures,
+// and a light's slider with its icon
+const CAMERA_UNITS = { measure_thickness_or_distance: "thickness_or_distance" };
+const unitOf = (id) => lightPart(id)?.light ?? CAMERA_UNITS[id] ?? id;
 
 class XtoolCamera extends XtoolFeature {
   static label = "Camera";
@@ -2464,11 +2469,16 @@ class XtoolCamera extends XtoolFeature {
       .shot .target .path { stroke-dasharray: 6 5; }
       .shot .target .now { fill: ${ENABLED}; }
       .row:empty { display: none; }
-      /* The controls below the picture, in the order chosen: as a row's
-         items, on as many lines as they need, each line filled, the lines
-         as far apart as Home Assistant's features */
-      .row.inputs { flex-wrap: wrap; height: auto; row-gap: var(--ha-card-feature-gap, 12px); }
-      .row.inputs > *, .row.inputs > .group > * { height: var(--feature-height, 42px); }
+      /* The controls below the picture, in sections (see _layout): bands as
+         far apart as Home Assistant's features, each one line across, or two
+         lines side by side (a pair), or an empty line's height (a spacer) */
+      .row.sections { flex-direction: column; align-items: stretch; height: auto; row-gap: var(--ha-card-feature-gap, 12px); }
+      .band { display: flex; column-gap: var(--feature-button-spacing, 12px); }
+      .band > .line { flex: 1 1 0; min-width: 0; }
+      /* A camera without a line of its own keeps its side of a pair empty */
+      .band > .line:empty { display: flex; }
+      .band.spacer { height: var(--feature-height, 42px); }
+      .line > *, .line > .group > * { height: var(--feature-height, 42px); }
       ${LIGHT_CSS}`;
     this._shot = document.createElement("button");
     this._shot.type = "button";
@@ -2535,15 +2545,27 @@ class XtoolCamera extends XtoolFeature {
     });
     this.shadowRoot.prepend(style);
     this._row.before(this._shot);
-    this._row.classList.add("inputs");
+    this._row.classList.add("sections");
     this._slides = new Map();
     this._lights = new Map();
+    this._bands = [];
+    // Sections depend on the feature's width (the box holding them is
+    // hidden while empty): laid out again when it changes
+    this._sizer = new ResizeObserver(() => {
+      if (this.clientWidth !== this._laidOutAt) this._layout();
+    });
+    this._sizer.observe(this);
   }
 
   _render() {
     super._render();
     if (!this._ready()) return;
-    this._showInputs();
+    this._layout();
+  }
+
+  /** The sections' lines are fitted one by one (see _layout), not the box that holds them. */
+  _fit(row) {
+    if (row !== this._row) super._fit(row);
   }
 
   /** Nothing to show only without a camera: the picture always shows. */
@@ -2654,32 +2676,147 @@ class XtoolCamera extends XtoolFeature {
   }
 
   /**
-   * Everything chosen, in the order chosen, below the picture: the keys,
-   * and the inputs the camera shown has (Home Assistant's own features, and
-   * its light: its icon and its slider, as in xTool lights). An input whose
-   * entity has no value to show (unknown, or a select's state that is not
-   * one of its options) is left out: Home Assistant would draw it blank.
+   * A chosen control's items for the camera shown: its keys, or its input
+   * (Home Assistant's own feature, or the light's icon or slider, as in
+   * xTool lights). An input whose entity has no value to show (unknown, or
+   * a select's state that is not one of its options) is left out: Home
+   * Assistant would draw it blank.
    */
-  _showInputs() {
+  _itemsOf(id) {
     const camera = this._shownCamera;
-    const keys = this._keyItems ?? [];
-    showSlides(this._row, this._chosen().flatMap((id) => {
-      if (!CAMERA_INPUTS.includes(id)) return keys.filter((key) => key.dataset.control === id);
-      if (!camera) return [];
+    if (!CAMERA_INPUTS.includes(id)) return (this._keyItems ?? []).filter((key) => key.dataset.control === id);
+    if (!camera) return [];
+    const { light, part } = lightPart(id) ?? {};
+    const control = controlOf(light ?? id, this._device.profile);
+    const entityId = camera.settings[control.role];
+    if (!entityId || !shows(this._hass.states[entityId])) return [];
+    if (light) {
+      if (!this._lights.has(entityId)) this._lights.set(entityId, new LightRow(this, entityId));
+      const row = this._lights.get(entityId);
+      row.update();
+      return [part === "icon" ? row.icon : row.slide.hidden ? undefined : row.slide].filter(Boolean);
+    }
+    const slide = slideOf(this._slides, entityId, inputOf(control));
+    slide.firstChild.hass = this._hass;
+    return [slide];
+  }
+
+  /** Whether a camera has one of the controls (a light's slider: only a light with a brightness). */
+  _has(camera, id) {
+    const { cameras, profile } = this._device;
+    if (id === "camera_buttons" || id === "camera_toggle") return cameras.length > 1;
+    if (id === "custom_crop") return !!profile.cropReset[camera.key] && CROP_ROLES.every((role) => camera.settings[role]);
+    const { light, part } = lightPart(id) ?? {};
+    const entityId = camera.settings[controlOf(light ?? id, profile)?.role];
+    return !!entityId && (part !== "brightness" || dimmable(this._hass, entityId));
+  }
+
+  /**
+   * The size of controls' items as a line shows them: { min, grow, count }:
+   * their least width (see ITEM_MIN, as fitRow counts them, gaps included),
+   * the shares of the line they grow by (a slider or select two, as ROW_CSS
+   * has them), and how many there are.
+   */
+  _sizeOf(ids, gap) {
+    const items = ids.flatMap((id) => {
+      if (id === "camera_buttons") return this._device.cameras.map(() => [ITEM_MIN.key, 1]);
+      if (id === "thickness_or_distance") return [[ITEM_MIN.field, 1]];
+      if (!CAMERA_INPUTS.includes(id)) return [[ITEM_MIN.key, 1]];
       const { light, part } = lightPart(id) ?? {};
-      const control = controlOf(light ?? id, this._device.profile);
-      const entityId = camera.settings[control.role];
-      if (!entityId || !shows(this._hass.states[entityId])) return undefined;
-      if (light) {
-        if (!this._lights.has(entityId)) this._lights.set(entityId, new LightRow(this, entityId));
-        const row = this._lights.get(entityId);
-        row.update();
-        return part === "icon" ? row.icon : row.slide.hidden ? undefined : row.slide;
+      if (light) return [part === "icon" ? [ITEM_MIN.key, 1] : [ITEM_MIN.slider, 2]];
+      return [[inputOf(controlOf(id, this._device.profile)).type === "select-options" ? ITEM_MIN.select : ITEM_MIN.slider, 2]];
+    });
+    return {
+      min: items.reduce((sum, [min]) => sum + min, 0) + Math.max(0, items.length - 1) * gap,
+      grow: items.reduce((sum, [, grow]) => sum + grow, 0),
+      count: items.length,
+    };
+  }
+
+  /**
+   * The chosen controls below the picture, in sections, so a camera switch
+   * moves nothing that stays:
+   * - Every camera: the units every camera has (the camera keys, and such
+   *   as Crop and Exposure, for the camera shown), first, never moving.
+   * - Shown camera: the units only some cameras have, after them, swapped
+   *   as a whole for the camera shown.
+   * A unit is a control, or controls kept together (see CAMERA_UNITS), in
+   * the order chosen. Each section's units fill lines as wide as the row,
+   * in order (by their least widths); each line is a row of its own (see
+   * fitRow). When the last line of Every camera and the widest first line
+   * of any camera's own fit side by side, they share one band, each its
+   * share as if in one row (the right side kept for every camera). The
+   * Shown camera lines take as many bands as the camera with the most, so
+   * nothing below the feature moves either.
+   */
+  _layout() {
+    const box = this._row, full = this.clientWidth;
+    if (!full || !this._ready()) return;
+    this._laidOutAt = full;
+    // Each line is a row of its own: only one with a field flows (see below)
+    box.classList.remove("flow");
+    const cameras = this._device.cameras;
+    const gap = parseFloat(getComputedStyle(box).columnGap) || 0;
+    const units = [];
+    for (const id of this._chosen()) {
+      const key = unitOf(id);
+      const unit = units.find((u) => u.key === key);
+      if (unit) unit.ids.push(id);
+      else units.push({ key, ids: [id] });
+    }
+    const everywhere = (unit) => cameras.every((camera) => unit.ids.every((id) => this._has(camera, id)));
+    const lines = (list) => {
+      const out = [];
+      let width = 0;
+      for (const ids of list) {
+        const need = this._sizeOf(ids, gap).min;
+        if (out.length && width + gap + need <= full + 0.5) {
+          out.at(-1).push(...ids);
+          width += gap + need;
+        } else {
+          out.push([...ids]);
+          width = need;
+        }
       }
-      const slide = slideOf(this._slides, entityId, inputOf(control));
-      slide.firstChild.hass = this._hass;
-      return slide;
-    }).filter(Boolean));
+      return out;
+    };
+    const every = lines(units.filter(everywhere).map((u) => u.ids));
+    const own = (camera) => lines(units.filter((u) => !everywhere(u)).map((u) => u.ids.filter((id) => this._has(camera, id))).filter((ids) => ids.length));
+    const owns = cameras.map(own);
+    const mine = owns[cameras.findIndex((camera) => camera.entityId === this._camera)] ?? [];
+    // Sharing a band: the last line of Every camera, and beside it the
+    // widest first line of any camera's own
+    const left = every.length ? this._sizeOf(every.at(-1), gap) : undefined;
+    const rights = owns.filter((o) => o.length).map((o) => this._sizeOf(o[0], gap));
+    const right = rights.length ? { min: Math.max(...rights.map((r) => r.min)), grow: Math.max(...rights.map((r) => r.grow)), count: Math.max(...rights.map((r) => r.count)) } : undefined;
+    const pair = !!left && !!right && left.min + gap + right.min <= full + 0.5;
+    const most = Math.max(0, ...owns.map((o) => o.length));
+    // The bands: [lines], or [] for a spacer
+    const bands = pair
+      ? [...every.slice(0, -1).map((l) => [l]), [every.at(-1), mine[0] ?? []], ...mine.slice(1).map((l) => [l])]
+      : [...every.map((l) => [l]), ...mine.map((l) => [l])];
+    const total = every.length + most - (pair ? 1 : 0);
+    while (bands.length < total) bands.push([]);
+    showSlides(box, bands.map((band, i) => {
+      const el = this._bands[i] ??= Object.assign(document.createElement("div"), { _lines: [] });
+      el.className = `band${band.length === 2 ? " pair" : band.length ? "" : " spacer"}`;
+      showSlides(el, band.map((ids, j) => {
+        const line = el._lines[j] ??= Object.assign(document.createElement("div"), { className: "row line" });
+        // In a pair, each line's share as if its items were in one row (the
+        // same width for each key on both sides), and never less than its
+        // items' least width
+        const size = band.length === 2 ? [left, right][j] : undefined;
+        line.style.flex = size ? `${size.grow} 1 calc(${size.count - 1} * var(--feature-button-spacing, 12px))` : "";
+        line.style.minWidth = size ? `${size.min}px` : "";
+        const items = ids.flatMap((id) => this._itemsOf(id));
+        showSlides(line, items);
+        // A line with a field lays its keys out as a field's row does (see ROW_CSS: flow)
+        line.classList.toggle("flow", items.some((item) => item.classList.contains("group")));
+        return line;
+      }));
+      return el;
+    }));
+    for (const band of box.children) for (const line of band.children) this._fit(line);
   }
 
   /** Show another camera. */

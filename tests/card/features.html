@@ -482,24 +482,34 @@
     const p2Hass = makeHass();
     const p2Camera = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
-    const inputsOf = (feature) => [...feature.shadowRoot.querySelectorAll(".inputs > .slide hui-card-feature")]
+    const inputsOf = (feature) => [...feature.shadowRoot.querySelectorAll(".line > .slide hui-card-feature")]
       .map((f) => `${f.feature.type}${f.feature.style ? `:${f.feature.style}` : ""}=${f.context.entity_id}`).join();
-    const closeIcon = (feature) => feature.shadowRoot.querySelector(".inputs > ha-tile-icon");
+    const closeIcon = (feature) => feature.shadowRoot.querySelector(".line > ha-tile-icon");
     check("P2 camera", keysOf(p2Camera).map((k) => k.textContent).join() === "Overview,Close,Crop,Measure",
       `keys for the overview and close cameras, and Crop, as for the F2's cameras, and the overview camera's Measure (${keysOf(p2Camera).map((k) => k.textContent).join()})`);
-    check("P2 camera", inputsOf(p2Camera) === "select-options=select.p2_mode,select-options=select.p2_overview_crop,numeric-input:slider=number.p2_overview_exposure"
+    check("P2 camera", inputsOf(p2Camera) === "select-options=select.p2_overview_crop,numeric-input:slider=number.p2_overview_exposure,select-options=select.p2_mode"
       && !closeIcon(p2Camera),
-      `below them, the overview camera's own: the mode, its crop preset and its exposure slider; no close fill light (${inputsOf(p2Camera)})`);
-    const exposureSlide = p2Camera.shadowRoot.querySelector('.inputs > .slide.slider');
+      `what every camera has first (its crop preset and exposure), then the overview camera's own mode; no close fill light (${inputsOf(p2Camera)})`);
+    const exposureSlide = p2Camera.shadowRoot.querySelector('.line > .slide.slider');
     check("P2 camera", exposureSlide?.querySelector(":scope > ha-state-icon")?.stateObj === p2Hass.states["number.p2_overview_exposure"]
       && exposureSlide.querySelector(":scope > hui-card-feature") && exposureSlide.title === "Exposure",
       "a slider shows its entity's icon at its start, over Home Assistant's slider, and its name on hover");
-    check("P2 camera", [...p2Camera.shadowRoot.querySelectorAll(".inputs > .slide")].every((slide) => slide.title),
+    check("P2 camera", [...p2Camera.shadowRoot.querySelectorAll(".line > .slide")].every((slide) => slide.title),
       "every input has its name on hover");
-    const inputBoxes = [...p2Camera.shadowRoot.querySelectorAll(".inputs > *")].map((el) => (el.classList.contains("group") ? el.firstChild : el).getBoundingClientRect());
-    const inputsBox = p2Camera.shadowRoot.querySelector(".inputs").getBoundingClientRect();
+    const itemsOf = (feature) => [...feature.shadowRoot.querySelectorAll(".line > *")].map((el) => (el.classList.contains("group") ? el.firstChild : el));
+    const inputsBox = p2Camera.shadowRoot.querySelector(".sections").getBoundingClientRect();
+    const inputBoxes = itemsOf(p2Camera).map((el) => el.getBoundingClientRect());
     check("P2 camera", inputBoxes.every((b) => b.width >= 35.5 && b.left >= inputsBox.left - 0.5 && b.right <= inputsBox.right + 0.5),
-      `the inputs on as many lines as they need, within the feature (${inputBoxes.map((b) => Math.round(b.width)).join(", ")}; ${[...p2Camera.shadowRoot.querySelectorAll(".inputs > *")].map((el) => el.dataset.control ?? el.dataset.key ?? el.className).join(", ")})`);
+      `the controls on as many lines as they need, within the feature (${inputBoxes.map((b) => Math.round(b.width)).join(", ")})`);
+    // The sections: what every camera has stays where it is on a camera switch
+    const lineOf = (el) => el?.closest(".line");
+    const p2Thickness = p2Camera.shadowRoot.querySelector('[data-control="thickness_or_distance"] .field');
+    check("P2 camera, sections", !!p2Thickness && lineOf(p2Thickness) === lineOf(keyNamed(p2Camera, "measure_thickness_or_distance")),
+      "Measure stays beside the thickness it measures");
+    const stays = () => ["custom_crop", "camera.p2_overview", "camera.p2_close"].map((key) => keyNamed(p2Camera, key))
+      .concat([...p2Camera.shadowRoot.querySelectorAll(".line > .slide")].filter((slide) => /crop|exposure/.test(slide.querySelector("hui-card-feature").context.entity_id)))
+      .map((el) => { const b = el.getBoundingClientRect(); return `${Math.round(b.left)},${Math.round(b.top)},${Math.round(b.width)}`; }).join(" ");
+    const overviewPlaces = stays(), overviewHeight = p2Camera.getBoundingClientRect().height;
     check("P2 camera", !keyNamed(p2Camera, "overlay_laser_target") && !keyNamed(p2Camera, "switch.p2_overview_target") && !keyNamed(p2Camera, "thumbnail_refresh"),
       "no overlays (they are in the overlays feature) and no thumbnail refresh");
     keyNamed(p2Camera, "camera.p2_close").click();
@@ -507,6 +517,10 @@
     check("P2 camera, close", inputsOf(p2Camera) === "select-options=select.p2_close_crop,numeric-input:slider=number.p2_close_exposure,light-brightness=light.p2_close_light"
       && closeIcon(p2Camera)?.querySelector("ha-state-icon")?.stateObj === p2Hass.states["light.p2_close_light"] && closeIcon(p2Camera).title,
       `the close camera: its crop preset, exposure, and its fill light: the tile icon and the brightness slider; no Mode (${inputsOf(p2Camera)})`);
+    check("P2 camera, sections", stays() === overviewPlaces && Math.abs(p2Camera.getBoundingClientRect().height - overviewHeight) < 0.5,
+      `the camera keys, Crop, the crop preset and Exposure keep their places and sizes, and the feature its height (${overviewPlaces} / ${stays()})`);
+    check("P2 camera, sections", lineOf(closeIcon(p2Camera)) === lineOf(p2Camera.shadowRoot.querySelector(".line > .slide.slider:has(> hui-card-feature)") && [...p2Camera.shadowRoot.querySelectorAll(".line > .slide")].find((slide) => slide.querySelector("hui-card-feature").feature.type === "light-brightness")),
+      "the fill light's slider stays beside its icon");
     // An input whose entity has no value to show is left out, not drawn blank
     p2Camera.hass = makeHass({ "number.p2_close_exposure": "unknown", "select.p2_close_crop": "gone" });
     await wait(30);
@@ -851,7 +865,7 @@
     await wait(60);
     const perspectiveKey = keyNamed(cropped, "perspective");
     check("camera, perspective", keysOf(cropped).map((k) => k.dataset.key).join() === "camera.f2_main,camera.f2_deep,perspective"
-      && cropped.shadowRoot.querySelectorAll(".row:not(:empty)").length === 1 && perspectiveKey.textContent === "straightened"
+      && keysOf(cropped).every((k) => k.closest(".band") === perspectiveKey.closest(".band")) && perspectiveKey.textContent === "straightened"
       && !perspectiveKey.hasAttribute("aria-pressed") && perspectiveKey.title === "Perspective: straightened. Tap for uncorrected",
       "the deep camera's perspective is one key in the camera row, showing the one chosen");
     perspectiveKey.click();
@@ -1316,15 +1330,15 @@
       && noneThere.style.display === "none" && noneChosen.getBoundingClientRect().height === 0,
       "no controls chosen, or none the laser has: the feature and Home Assistant's element around it are not shown");
 
-    // Camera: everything chosen, in the order chosen, line by line
+    // Camera: what every camera has first, then the camera's own, each in the order chosen, line by line
     const orderHass = makeHass();
     const ordered = addFeature({ type: "custom:xtool-camera", camera: "overview", controls: ["mode", "camera_buttons", "exposure", "custom_crop"] }, { hass: orderHass, entityId: "sensor.p2_status" });
     await wait(60);
-    const orderOf = (feature) => [...feature.shadowRoot.querySelector(".row").children]
+    const orderOf = (feature) => [...feature.shadowRoot.querySelectorAll(".line > *")]
       .map((el) => el.dataset.control ?? el.querySelector(":scope > hui-card-feature")?.context.entity_id).join();
-    check("camera, order", orderOf(ordered) === "select.p2_mode,camera_buttons,camera_buttons,number.p2_overview_exposure,custom_crop",
-      `the keys and the inputs in the one order chosen (${orderOf(ordered)})`);
-    const boxes = [...ordered.shadowRoot.querySelector(".row").children].map((el) => el.getBoundingClientRect());
+    check("camera, order", orderOf(ordered) === "camera_buttons,camera_buttons,number.p2_overview_exposure,custom_crop,select.p2_mode",
+      `every camera's controls in the order chosen, then the overview camera's Mode (${orderOf(ordered)})`);
+    const boxes = [...ordered.shadowRoot.querySelectorAll(".line > *")].map((el) => el.getBoundingClientRect());
     check("camera, order", boxes.every((b, i) => i === 0 || b.top > boxes[i - 1].top + 1 || b.left > boxes[i - 1].left),
       "left to right, then on the next line");
     const toggled = addFeature({ type: "custom:xtool-camera", camera: "overview", show: "names", controls: ["camera_toggle"] }, { hass: orderHass, entityId: "sensor.p2_status" });
