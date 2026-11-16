@@ -123,6 +123,7 @@ const P2 = [
   ["button.p2_resume", "resume_job", "unknown"],
   ["button.p2_cancel", "cancel_job", "unknown"],
   ["binary_sensor.p2_cover", "lid", "off"],
+  ["sensor.p2_connection", "connection", "ethernet", { device_class: "enum", options: ["ethernet", "wifi"] }],
   ["switch.p2_red_dot", "ir_led_global", "off"],
   ["switch.p2_buzzer", "buzzer", "on"],
   ["switch.p2_exhaust_setting", "exhaust_fan_setting", "on"],

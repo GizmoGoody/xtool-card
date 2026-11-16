@@ -31,7 +31,9 @@
  *   trail while it works, burned-in pause bars, a burned-in check when it
  *   finishes, and so on), shown through the tile card's "show entity
  *   picture" option. The picture is built in memory; no files are written,
- * - one badge on the picture for the most urgent safety state,
+ * - one badge on the picture for the most urgent safety state, at its top
+ *   right, and one for the connection (how Home Assistant reaches the
+ *   laser, or that it is unavailable), at its bottom right,
  * - a progress edge along one side of the card, or around it,
  * - an optional xTool style: the machine's window behind the title and its
  *   body behind the rest, with the features on the body in the Match, Flat
@@ -286,6 +288,8 @@ const ROLES = {
   safety_key: roleSpec(["machine_lock"], ["binary_sensor"]),
   // Configuration
   firmware: roleSpec(["firmware"], ["update"]),
+  // How Home Assistant reaches the laser
+  connection: roleSpec(["connection"], ["sensor"]),
   buzzer: roleSpec(["beep_enable", "buzzer"], ["switch"]),
   device_sleep: roleSpec(["device_sleep"], ["switch"]),
   // The SafetyPro IF2 and IF2 2.0
@@ -3739,17 +3743,16 @@ const CHANNEL_PAD = { match: 0, flat: 2, console: 3 };
 const WINDOW_MARGIN = 4;
 const DEFAULT_FEATURES_STYLE = "console";
 // Each badge: [id, label, whether a laser has what it shows (its roles)].
-// Alarm reads the Status entity too, and Unavailable is about the Status
-// entity itself, so every laser has both
+// Alarm reads the Status entity too, so every laser has it. Unavailable is
+// the connection badge's (see _linkNow)
 const BADGES = [
   ["alarm", "Alarm or fire warning", () => true],
-  ["unavailable", "Unavailable", () => true],
   ["safety_key", "Safety key removed", (roles) => !!roles.safety_key],
   ["lid", "Lid open", (roles) => !!roles.lid],
   ["safety_checks", "A safety check is off", (roles) => SAFETY_CHECKS.some((role) => roles[role] && domainOf(roles[role]) === "switch")],
   ["firmware", "Firmware update available", (roles) => !!roles.firmware],
 ];
-const DEFAULT_BADGES = ["alarm", "unavailable", "safety_key", "lid", "safety_checks"];
+const DEFAULT_BADGES = ["alarm", "safety_key", "lid", "safety_checks"];
 
 /** The badges this laser has, in the editor's order. */
 const badgesOf = (hass, entityId) => {
@@ -3784,10 +3787,15 @@ const BADGE_PATHS = {
   lid: "M3 7l9-4 9 4 M5 9.5h14V20H5z",
   safety_checks: "M3 3l18 18 M19 13V6l-7-3-4 1.7 M5.2 6.5V11c0 4.5 3 8.2 6.8 10 1.4-.7 2.7-1.6 3.7-2.7",
   firmware: "M12 4v11 M7 10l5 5 5-5 M5 20h14",
+  // The connection badge's, by the Connection sensor's state
+  ethernet: "M4 5h16v11h-4v3H8v-3H4z M9 9v3 M12 9v3 M15 9v3",
+  wifi: "M2 8.5a15 15 0 0 1 20 0 M5.5 12.3a10 10 0 0 1 13 0 M9 16a5 5 0 0 1 6 0 M12 20h.01",
+  usb: "M9 2h6v5H9z M6 7h12v6a6 6 0 0 1-12 0z M12 19v3",
 };
+const CONNECTIONS = ["ethernet", "wifi", "usb"];
 
 // Options this card adds to the tile card's
-const OWN_KEYS = ["style", "features_style", "enabled_color", "pattern", "badges", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on",
+const OWN_KEYS = ["style", "features_style", "enabled_color", "pattern", "badges", "connection", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on",
   "last_feature_full_width"];
 
 // The card's defaults for the tile card's options it sets otherwise
@@ -3957,7 +3965,7 @@ class XtoolCard extends HTMLElement {
         }
         #pct.on { display: block; }
 
-        /* The badge on the picture */
+        /* The badges on the picture: safety at the top right, the connection at the bottom right */
         .badge {
           position: absolute; z-index: 3; width: 18px; height: 18px; margin: -9px 0 0 -9px; box-sizing: border-box;
           display: none; place-items: center; border-radius: 50%; pointer-events: none;
@@ -3973,6 +3981,8 @@ class XtoolCard extends HTMLElement {
         <div class="clip over"><div id="edge"><div class="sweep"></div></div><span id="pct"></span></div>
         <span class="badge" role="img"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor"
           stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="badge link" role="img"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor"
+          stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </div>`;
     this._frame = this.shadowRoot.querySelector(".frame");
     this._statesProvider = new StatesProvider(this._frame);
@@ -3982,6 +3992,7 @@ class XtoolCard extends HTMLElement {
     this._edge = this.shadowRoot.getElementById("edge");
     this._pct = this.shadowRoot.getElementById("pct");
     this._badge = this.shadowRoot.querySelector(".badge");
+    this._link = this.shadowRoot.querySelector(".badge.link");
     this._resize = new ResizeObserver(() => this._layout());
     // A tap on the card shows or hides the features (see innerTileConfig),
     // except a tap between the features, which reaches the card behind them
@@ -4289,7 +4300,6 @@ class XtoolCard extends HTMLElement {
       return entityId ? hass.states[entityId]?.state : undefined;
     };
     const phase = this._job.phase;
-    const status = statusOf(hass, id);
     const error = "var(--error-color, #db4437)", warning = "var(--warning-color, #ffa600)";
     // Each option: what applies now, as [applies, symbol, color, label], most urgent first
     const options = {
@@ -4298,7 +4308,6 @@ class XtoolCard extends HTMLElement {
         [phase === "overheat", "alarm", error, "Laser overheat"],
         [stateOf("alarm") === "on" || phase === "error", "alarm", error, "Alarm"],
       ],
-      unavailable: [[!status || hass.states[status]?.state === "unavailable", "unavailable", "#616161", "Unavailable"]],
       safety_key: [[stateOf("safety_key") === "off", "safety_key", warning, "Safety key removed"]],
       lid: [[stateOf("lid") === "on", "lid", warning, "Lid open"]],
       safety_checks: [[SAFETY_CHECKS.some((role) => stateOf(role) === "off"),
@@ -4337,22 +4346,44 @@ class XtoolCard extends HTMLElement {
     tile.setAttribute("xtool-light", light[1]);
   }
 
-  _updateBadge() {
-    const badge = this._hass && this._job ? this._badgeNow() : undefined;
-    this._badge.classList.toggle("on", !!badge);
-    if (!badge) {
-      this._badge.removeAttribute("aria-label");
-      this._badge.title = "";
-      return;
-    }
-    this._badge.style.background = badge.color;
-    this._badge.querySelector("path").setAttribute("d", badge.path);
-    this._badge.title = badge.label;
-    this._badge.setAttribute("aria-label", badge.label);
-    this._placeBadge();
+  /**
+   * The connection badge, or undefined: Unavailable while the Status entity
+   * is, otherwise how Home Assistant reaches the laser (its Connection
+   * sensor), in the enabled color.
+   */
+  _linkNow() {
+    if (this._config.connection === false) return undefined;
+    const hass = this._hass, id = this._config.entity;
+    const status = statusOf(hass, id);
+    if (!status || hass.states[status]?.state === "unavailable") return { path: BADGE_PATHS.unavailable, color: "#616161", label: "Unavailable" };
+    const stateObj = hass.states[deviceOf(hass, id).roles.connection];
+    if (!CONNECTIONS.includes(stateObj?.state)) return undefined;
+    return { path: BADGE_PATHS[stateObj.state], color: ENABLED, label: `Connection: ${hass.formatEntityState(stateObj)}` };
   }
 
-  // The badge sits on the picture's edge, up and to the right
+  _updateBadge() {
+    const ready = this._hass && this._job;
+    const safety = this._showBadge(this._badge, ready ? this._badgeNow() : undefined);
+    const link = this._showBadge(this._link, ready ? this._linkNow() : undefined);
+    if (safety || link) this._placeBadge();
+  }
+
+  /** Show a badge (or hide it, for none); whether it shows. */
+  _showBadge(el, badge) {
+    el.classList.toggle("on", !!badge);
+    if (!badge) {
+      el.removeAttribute("aria-label");
+      el.title = "";
+      return false;
+    }
+    el.style.background = badge.color;
+    el.querySelector("path").setAttribute("d", badge.path);
+    el.title = badge.label;
+    el.setAttribute("aria-label", badge.label);
+    return true;
+  }
+
+  // The badges sit on the picture's edge: safety up and to the right, the connection down and to the right
   _placeBadge() {
     const icon = this._tile?.shadowRoot?.querySelector("ha-tile-icon");
     if (!icon) {
@@ -4370,8 +4401,9 @@ class XtoolCard extends HTMLElement {
     const scale = frame.width / this._frame.offsetWidth || 1;
     const r = box.width / 2 / scale;
     const cx = (box.left - frame.left) / scale + r, cy = (box.top - frame.top) / scale + r;
-    this._badge.style.left = `${cx + r * .7071}px`;
+    this._badge.style.left = this._link.style.left = `${cx + r * .7071}px`;
     this._badge.style.top = `${cy - r * .7071}px`;
+    this._link.style.top = `${cy + r * .7071}px`;
   }
 
   /** The progress edge, as configured, for the job's phase. */
@@ -4468,7 +4500,7 @@ class XtoolCard extends HTMLElement {
     this._clampCorners();
     this._drawWindow();
     this._drawAreas();
-    if (this._badge.classList.contains("on")) this._placeBadge();
+    if (this._badge.classList.contains("on") || this._link.classList.contains("on")) this._placeBadge();
   }
 
   /**
@@ -4743,7 +4775,7 @@ class XtoolCard extends HTMLElement {
       this._clampCorners();
       this._drawWindow();
       this._drawAreas();
-      if (this._badge.classList.contains("on")) this._placeBadge();
+      if (this._badge.classList.contains("on") || this._link.classList.contains("on")) this._placeBadge();
       setTimeout(check, 100);
     };
     setTimeout(check, 100);
@@ -5056,8 +5088,13 @@ class XtoolCardEditor extends HTMLElement {
       }] : []),
       {
         name: "badges", label: "Badges (in priority order)",
-        helper: "The first one that applies shows on the picture.",
+        helper: "The first one that applies shows at the top right of the picture.",
         selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: badgesOf(this._hass, c.entity).map(([value, label]) => ({ value, label })) } },
+      },
+      {
+        name: "connection", label: "Connection badge",
+        helper: "At the bottom right of the picture: how Home Assistant reaches the laser (Ethernet, Wi-Fi or USB), or that it is unavailable.",
+        selector: { boolean: {} },
       },
       {
         name: "status_light", label: "Status light",
@@ -5093,6 +5130,7 @@ class XtoolCardEditor extends HTMLElement {
     this._form.data = {
       features_style: c.features_style ?? DEFAULT_FEATURES_STYLE,
       badges: Array.isArray(c.badges) ? c.badges : defaultBadges(this._hass, c.entity),
+      connection: c.connection !== false,
       status_light: c.status_light !== false,
       progress_edge: progressOptions(c),
       collapsible: c.collapsible !== false,
@@ -5130,6 +5168,7 @@ function minimal(config, hass) {
   if (!styled || c.features_style === DEFAULT_FEATURES_STYLE || !FEATURES_STYLES.some(([id]) => id === c.features_style)) delete c.features_style;
   if (!styled || !Number.isFinite(c.pattern) || c.pattern === DEFAULT_PATTERN) delete c.pattern;
   if (!Array.isArray(c.badges) || (hass && same(c.badges, defaultBadges(hass, c.entity)))) delete c.badges;
+  if (c.connection !== false) delete c.connection;
   if (c.status_light !== false) delete c.status_light;
   if (c.progress_edge && typeof c.progress_edge === "object") {
     const edge = Object.fromEntries(Object.entries(c.progress_edge).filter(([key, value]) => !same(value, PROGRESS_DEFAULTS[key])));

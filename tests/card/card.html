@@ -45,6 +45,10 @@
       { hass: f2("idle", { "binary_sensor.f2_alarm": "on", "binary_sensor.f2_safety_key": "off" }) }),
     firstApplies: addCard("lid first, but closed", { badges: ["lid", "safety_key"] },
       { hass: f2("idle", { "binary_sensor.f2_safety_key": "off" }) }),
+    ethernet: addCard("P2 on Ethernet, lid open", { entity: "sensor.p2_status" }, { hass: p2("idle", { "binary_sensor.p2_cover": "on" }) }),
+    wifi: addCard("P2 on Wi-Fi", { entity: "sensor.p2_status" }, { hass: p2("idle", { "sensor.p2_connection": "wifi" }) }),
+    noLink: addCard("connection badge turned off", { entity: "sensor.p2_status", connection: false }, { hass: p2("idle") }),
+    offlineNoLink: addCard("unavailable, connection badge turned off", { connection: false }, { hass: f2("unavailable") }),
   };
 
   // The progress edge
@@ -122,7 +126,7 @@
   const auto = (hass) => ({ hass, height: "auto" });
   const f2Max = {
     style: "f2_ultra_uv", features_style: "console", enabled_color: "purple", pattern: 4242, status_light: true,
-    badges: ["alarm", "unavailable", "safety_key", "lid", "safety_checks", "firmware"],
+    badges: ["alarm", "safety_key", "lid", "safety_checks", "firmware"],
     progress_edge: { edge: "top", thickness: 4, starts_at: 0, ends_at: 100, direction: "clockwise", color: "state", show_percentage: false, show_while: ["processing", "paused"] },
     collapsible: true, expanded_at_load: true, collapse_when_powered_off: true, expand_when_powered_on: true, last_feature_full_width: true,
     state_content: ["state", "engraving_lens", "elapsed"], features_position: "inline",
@@ -223,7 +227,20 @@
     check("no badge", !on(badges.none), "no badge when all is well");
     check("safety key out", on(badges.key) && badge(badges.key).title === "Safety key removed", "the safety key badge");
     check("a safety check off", on(badges.safetyOff) && badge(badges.safetyOff).title === "A safety check is off", "the safety check badge");
-    check("unavailable", on(badges.offline) && badge(badges.offline).title === "Unavailable", "the badge for a Status entity that is unavailable");
+    const link = (card) => card.shadowRoot.querySelector(".badge.link");
+    const linkOn = (card) => link(card).classList.contains("on");
+    check("unavailable", !on(badges.offline) && linkOn(badges.offline) && link(badges.offline).title === "Unavailable",
+      "a Status entity that is unavailable: the connection badge says so, not a safety badge");
+    check("connection", !linkOn(badges.none), "the F2 has no Connection sensor: no connection badge while it is available");
+    check("connection", on(badges.ethernet) && linkOn(badges.ethernet) && link(badges.ethernet).title === "Connection: ethernet"
+      && link(badges.ethernet).style.background.includes("--xtool-enabled-color"), "the P2 on Ethernet, in the enabled color, beside the lid badge");
+    check("connection", link(badges.wifi).title === "Connection: wifi", "the P2 on Wi-Fi");
+    check("connection", !linkOn(badges.noLink) && !linkOn(badges.offlineNoLink) && !on(badges.offlineNoLink), "turned off: no connection badge, even while unavailable");
+    {
+      const top = badge(badges.ethernet).getBoundingClientRect(), bottom = link(badges.ethernet).getBoundingClientRect();
+      check("connection", Math.abs(top.left - bottom.left) < 0.5 && Math.abs(top.width - bottom.width) < 0.5 && bottom.top > top.bottom,
+        `the same size, straight below the safety badge (${top.left},${top.top} and ${bottom.left},${bottom.top})`);
+    }
     check("badges turned off", !on(badges.chosen), "no badge when none are chosen");
     check("P2 lid open", on(badges.lid) && badge(badges.lid).title === "Lid open", "the lid badge");
     check("badge order", badge(badges.alarmFirst).title === "Alarm", "alarm listed first: the alarm shows");
