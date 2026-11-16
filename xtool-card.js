@@ -346,7 +346,7 @@ const LOOK_OPTIONS = {
   areas: ["color", "line", "style", "icon", "size"],  // outlines, a dot at the origin and the centre
   slats: ["color", "line", "style"],
   target: ["color", "icon", "size"],
-  close: ["color", "line", "style"],  // a ring
+  close: ["color", "icon", "size"],  // an icon, as the laser target
   quick: ["color", "line", "style"],  // a turned ellipse
 };
 // "Integration": a style left as the integration draws it
@@ -2823,14 +2823,16 @@ class XtoolCamera extends XtoolFeature {
           const { x0, y0, x1, y1, label } = m, a = at(x0, y0), b = at(x1, y1);
           shapes += `<line x1="${a.left}" y1="${a.top}" x2="${b.left}" y2="${b.top}" ${stroke}/>`;
           if (label) shapes += `<text class="label" x="${b.left}" y="${Math.min(b.top, view.height) - 4}">${String(label).replace(/[<&]/g, "")}</text>`;
+        } else if (kind === "close") {
+          mark(at(m.x, m.y));
         } else if (kind === "target") {
           // Where the head is now (the position numbers, read with every
           // update of the laser), as the move preview draws it; the
           // attribute's is the picture's, which is older
           mark(at(...(head ?? [m.x, m.y])));
         } else {
-          // A ring or a turned ellipse whose inside is the dot's size
-          const { x, y, diameter, length = diameter, width = diameter, angle = 0 } = m, c = at(x, y);
+          // A turned ellipse whose inside is the dot's size
+          const { x, y, length, width, angle = 0 } = m, c = at(x, y);
           const rx = (length * view.pxPerMm + line) / 2, ry = (width * view.pxPerMm + line) / 2;
           shapes += `<ellipse cx="${c.left}" cy="${c.top}" rx="${rx}" ry="${ry}" transform="rotate(${angle} ${c.left} ${c.top})" ${stroke}/>`;
         }
