@@ -377,6 +377,11 @@ function overlayLooks(hass, entity) {
   return [...looks.values()];
 }
 
+/** An overlay's color: the card's own, or else the integration's (its style attribute), or else the Enabled color. */
+function lookColor(own, given) {
+  return own.color ? cssColor(own.color) : Array.isArray(given?.color) ? `rgb(${given.color.join(",")})` : ENABLED;
+}
+
 /** An overlay's style in the card's Overlay styles, without what follows the integration (empty: none of its own). */
 function lookOf(styles, name) {
   return Object.fromEntries(Object.entries(styles?.[name] ?? {}).filter(([, value]) => value !== undefined && value !== "" && value !== INTEGRATION));
@@ -2562,9 +2567,9 @@ class XtoolCamera extends XtoolFeature {
       .shot { touch-action: manipulation; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
       /* Where the laser goes: a dashed line from where it is to the target */
       .shot .target { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-      .shot .target line, .shot .target circle { fill: none; stroke: ${ENABLED}; stroke-width: 2; vector-effect: non-scaling-stroke; }
+      .shot .target line, .shot .target circle { fill: none; stroke: var(--target-color, ${ENABLED}); stroke-width: 2; vector-effect: non-scaling-stroke; }
       .shot .target .path { stroke-dasharray: 6 5; }
-      .shot .target .now { fill: ${ENABLED}; }
+      .shot .target .now { fill: var(--target-color, ${ENABLED}); }
       /* The overlays the card draws (see _drawLooks) */
       .shot .looks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; }
       .shot .looks * { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; }
@@ -2758,8 +2763,8 @@ class XtoolCamera extends XtoolFeature {
   /**
    * The target on the picture, while the position is being set and the
    * shown camera's Laser target overlay is on: a reticle at the target,
-   * joined to where the head is by a dashed line, all in the Enabled color, placed with the
-   * camera's crop (as tap to crop reads it).
+   * joined to where the head is by a dashed line, all in the laser target's
+   * color (see lookColor), placed by the camera's view (see _viewNow).
    */
   _drawTarget() {
     if (!this._ready() || !this._target) return;
@@ -2778,6 +2783,9 @@ class XtoolCamera extends XtoolFeature {
     this._target.querySelector(".now").setAttribute("cx", from.left);
     this._target.querySelector(".now").setAttribute("cy", from.top);
     this._target.querySelector(".reticle").setAttribute("transform", `translate(${to.left} ${to.top})`);
+    // In the laser target's color
+    const own = lookOf(cardOf(this)?._config?.overlay_styles, lookName(overlay.key));
+    this._target.style.setProperty("--target-color", lookColor(own, this._hass.states[overlay.entityId]?.attributes.style));
     this._target.style.display = "";
   }
 
@@ -2803,7 +2811,7 @@ class XtoolCamera extends XtoolFeature {
       const own = lookOf(styles, lookName(overlay.key));
       if (!kind || stateObj.state !== "on" || (!byCard && !Object.keys(own).length)) continue;
       const given = stateObj.attributes.style ?? {};
-      const color = own.color ? cssColor(own.color) : Array.isArray(given.color) ? `rgb(${given.color.join(",")})` : ENABLED;
+      const color = lookColor(own, given);
       const line = Number(own.line ?? (given.line ?? 2) * view.pxPerPixel);
       const size = Number(own.size ?? (given.size ?? 0) * view.pxPerMm);
       const icon = String(own.icon ?? given.icon ?? "").replace(/[^\w:-]/g, "");

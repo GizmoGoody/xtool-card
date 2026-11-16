@@ -659,6 +659,8 @@
     targetCamera.hass = makeHass({ "switch.p2_overview_target": "on", "number.p2_laser_x": { state: "300", attributes: { waiting: true, position: 100 } } });
     check("target", target.style.display === "" && Number(target.querySelector(".path").getAttribute("x2")) > Number(target.querySelector(".path").getAttribute("x1")),
       "a position set and waiting for Move: still drawn");
+    check("target", target.style.getPropertyValue("--target-color") === "rgb(0,0,255)",
+      `in the laser target's color, from the integration's style (${target.style.getPropertyValue("--target-color")})`);
     targetCamera.hass = makeHass({ "number.p2_laser_x": { state: "300", attributes: { waiting: true, position: 100 } } });
     check("target", target.style.display === "none", "not while the Laser target overlay is off");
 
