@@ -1,5 +1,5 @@
 /**
- * xTool Laser dashboard card and tile features.
+ * xTool dashboard card and tile features.
  *
  * Tile features (they work in any tile card for an xTool entity, and in the
  * xTool card):
@@ -5582,7 +5582,7 @@ if (!customElements.get(CARD_TYPE)) {
   window.customCards = window.customCards || [];
   window.customCards.push({
     type: CARD_TYPE,
-    name: "xTool Laser",
+    name: "xTool",
     description: "A tile card for an xTool laser: its state as a picture, a progress edge, status and connection badges, and an optional xTool style.",
     preview: true,
     documentationURL: "https://github.com/thecodingdad/ha-xtool#dashboard-card",
