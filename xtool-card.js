@@ -870,23 +870,22 @@ const P2_CROP = {
  *   UV in it is UV, with CO2 in it CO2, unless the entry says otherwise),
  * - galvo: true for a galvo (the F-series: random strokes in the state
  *   picture), false for a machine that moves a gantry (a raster),
- * - style: the xTool style a new card gets ("f2_ultra_uv", "p2" or "none"),
  * - light: its status light table (none: no ring),
  * - cropReset: the area each camera's Crop key returns to, by camera key
  *   (a camera without one has no Crop key),
  * - names: names of controls on this model, by control id.
  */
-const DEFAULT_PROFILE = { name: "", galvo: false, style: "none", light: undefined, cropReset: {}, names: {} };
+const DEFAULT_PROFILE = { name: "", galvo: false, light: undefined, cropReset: {}, names: {} };
 
 // The models, most specific first: the first whose pattern matches the
 // device's model name gives its profile
 const MODELS = [
   // F2 Ultra, F2 Ultra (Single), F2 Ultra UV
-  { name: "F2 Ultra", match: /\bF2 Ultra\b/i, galvo: true, style: "f2_ultra_uv", light: ULTRA_LIGHT, cropReset: F2_CROP },
-  { name: "F1 Ultra", match: /\bF1 Ultra\b/i, galvo: true, style: "f2_ultra_uv", light: ULTRA_LIGHT },
+  { name: "F2 Ultra", match: /\bF2 Ultra\b/i, galvo: true, light: ULTRA_LIGHT, cropReset: F2_CROP },
+  { name: "F1 Ultra", match: /\bF1 Ultra\b/i, galvo: true, light: ULTRA_LIGHT },
   // F1, F1 Lite and F2: the knob light (guides 1955, 2013)
   {
-    name: "F1, F2", match: /\bF[12]\b/i, galvo: true, style: "f2_ultra_uv",
+    name: "F1, F2", match: /\bF[12]\b/i, galvo: true,
     light: {
       idle: [BLUE, "solid"], processing: [BLUE, "solid"], finished: [GREEN, "solid"], firmware: [PURPLE, "solid"],
       setup: [YELLOW, "solid"], error: [RED, "solid"], fire: [RED, "solid"], overheat: [RED, "solid"], sleeping: [WHITE, "slow"],
@@ -894,7 +893,7 @@ const MODELS = [
   },
   // P2 and P2S: the ring light (guide 222)
   {
-    name: "P2", match: /\bP2S?\b/i, laser: "co2", style: "p2",
+    name: "P2", match: /\bP2S?\b/i, laser: "co2",
     light: {
       idle: [WHITE, "solid"], processing: [BLUE, "solid"], paused: [BLUE, "solid"], framing: [BLUE, "breathe"],
       focusing: [BLUE, "breathe"], finished: [GREEN, "solid"], sleeping: [GREEN, "breathe"], firmware: [PURPLE, "solid"],
@@ -904,14 +903,14 @@ const MODELS = [
   },
   // P3: the ring light (guide 2004)
   {
-    name: "P3", match: /\bP3\b/i, laser: "co2", style: "p2",
+    name: "P3", match: /\bP3\b/i, laser: "co2",
     light: {
       idle: [BLUE, "solid"], ready: [BLUE, "slow"], finished: [GREEN, "solid"], firmware: [PURPLE, "solid"],
       setup: [YELLOW, "solid"], error: [RED, "solid"], fire: [RED, "solid"],
     },
   },
   // The other P-series machines (P1, P3S): no light table
-  { name: "P-series", match: /\bP[123]S?\b/i, laser: "co2", style: "p2" },
+  { name: "P-series", match: /\bP[123]S?\b/i, laser: "co2" },
   // M1 Ultra: the light on the carriage (guide 1396)
   {
     name: "M1 Ultra", match: /\bM1 Ultra\b/i,
@@ -965,7 +964,8 @@ function profileOf(model) {
   const name = `${model ?? ""}`;
   const entry = MODELS.find((m) => m.match.test(name)) ?? {};
   const laser = /\bUV\b/i.test(name) ? "uv" : entry.laser ?? (/\bCO2\b/i.test(name) ? "co2" : "diode");
-  return { ...DEFAULT_PROFILE, ...entry, laser };
+  // The xTool style a new card gets: its model's (see MODEL_STYLES)
+  return { ...DEFAULT_PROFILE, ...entry, laser, style: modelStyle(name) };
 }
 
 // Status sensor states the lights show apart from the card's phases
@@ -4066,21 +4066,135 @@ function findDeep(root, selector, depth = 5) {
   return null;
 }
 
-// The xTool styles: a body and a window, light or dark (for the text on the
-// body), and the body's base color without grain (for Flat)
-const STYLES = [["none", "None (theme)"], ["f2_ultra_uv", "F2 Ultra UV"], ["p2", "P2"]];
-const TONE = { f2_ultra_uv: "light", p2: "dark" };
+// The xTool styles: each model's colors (see COLORWAYS.md), made of a body
+// (the frame or case) and a window (the plexi or lid, behind the title).
+// Models that look alike share a body and a window.
+// A body: its color from light to dark (the middle one is its base color,
+// for Flat), and whether it is metal (a fine grain)
+const BODIES = {
+  champagne: { stops: ["#dcc1aa", "#cdae94", "#b8977c"], metal: true },
+  graphite: { stops: ["#3a3f45", "#2d3136", "#24272b"] },
+  white: { stops: ["#f4f4f3", "#e6e6e6", "#d3d3d3"] },
+  silver: { stops: ["#c8cac9", "#b4b6b5", "#9d9f9e"], metal: true },
+  grey: { stops: ["#97989b", "#808184", "#6b6c6f"], metal: true },
+  charcoal: { stops: ["#3a3b3e", "#2d2e30", "#232426"] },
+  metal_grey: { stops: ["#93a8c1", "#7d93ad", "#667a92"], metal: true },
+  golden_red: { stops: ["#c23c43", "#a92a31", "#8c1d22"], metal: true },
+};
+// A window: its glass, the title's text on it, and how strongly it
+// reflects (see glassReflections). Every orange plexi is the same orange.
+const LIGHT_TEXT = "--primary-text-color: rgba(255, 255, 255, .95); --secondary-text-color: rgba(235, 235, 240, .72)";
+const DARK_EDGE = "inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(255, 255, 255, .06), inset 0 3px 8px rgba(0, 0, 0, .6)";
+const WINDOWS = {
+  orange: {
+    glass: `radial-gradient(90% 120% at 50% 110%, rgba(245, 162, 26, .55) 0%, rgba(245, 162, 26, 0) 70%),
+      linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%)`,
+    edge: "inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 0 0 1px rgba(90, 30, 0, .35), inset 0 3px 8px rgba(90, 30, 0, .3)",
+    text: "--primary-text-color: rgba(255, 248, 240, .97); --secondary-text-color: rgba(255, 236, 220, .86); text-shadow: 0 1px 2px rgba(90, 30, 0, .55)",
+    glare: 1,
+  },
+  green: {
+    glass: `radial-gradient(90% 120% at 50% 110%, rgba(120, 210, 80, .5) 0%, rgba(120, 210, 80, 0) 70%),
+      linear-gradient(170deg, #6cc84a 0%, #4fa634 45%, #2f7a1d 100%)`,
+    edge: "inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 0 0 1px rgba(10, 50, 0, .35), inset 0 3px 8px rgba(10, 50, 0, .3)",
+    text: "--primary-text-color: rgba(245, 255, 240, .97); --secondary-text-color: rgba(230, 248, 222, .86); text-shadow: 0 1px 2px rgba(10, 50, 0, .6)",
+    glare: 1,
+  },
+  // A dark lid with the amber inside glowing through (the P2 and P2S)
+  smoke_amber: {
+    glass: `radial-gradient(120% 90% at 50% 120%, rgba(214, 140, 60, .28) 0%, rgba(214, 140, 60, 0) 60%),
+      linear-gradient(175deg, #1d2024 0%, #141619 60%, #0f1113 100%)`,
+    edge: DARK_EDGE, text: `${LIGHT_TEXT}; text-shadow: 0 1px 2px rgba(0, 0, 0, .8)`, glare: .5,
+  },
+  smoke: {
+    glass: "linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)",
+    edge: DARK_EDGE, text: `${LIGHT_TEXT}; text-shadow: 0 1px 2px rgba(0, 0, 0, .8)`, glare: .5,
+  },
+  // No window (the open D1 series): a recess in the frame's own color
+  frame: {
+    edge: "inset 0 0 0 1px rgba(0, 0, 0, .25), inset 0 3px 8px rgba(0, 0, 0, .45)",
+    text: `${LIGHT_TEXT}; text-shadow: 0 1px 2px rgba(0, 0, 0, .8)`, glare: .6,
+  },
+};
+// Each model, in the editor's order: [id, model, color (for a model sold
+// in more than one), body, window]. A new card gets its laser's model's
+// style, in the first color listed.
+const MODEL_STYLES = [
+  ["d1", "D1", "", "metal_grey", "frame"],
+  ["d1_pro", "D1 Pro", "Metal Grey", "metal_grey", "frame"],
+  ["d1_pro_golden_red", "D1 Pro", "Golden Red", "golden_red", "frame"],
+  ["d1_pro_2", "D1 Pro 2.0", "Metal Grey", "metal_grey", "frame"],
+  ["d1_pro_2_golden_red", "D1 Pro 2.0", "Golden Red", "golden_red", "frame"],
+  ["f1", "F1", "", "silver", "green"],
+  ["f1_lite", "F1 Lite", "", "silver", "green"],
+  ["f1_ultra", "F1 Ultra", "", "grey", "green"],
+  ["f1_ultra_v2", "F1 Ultra V2", "", "grey", "green"],
+  ["f2", "F2", "", "champagne", "orange"],
+  ["f2_ultra", "F2 Ultra", "", "grey", "smoke"],
+  ["f2_ultra_single", "F2 Ultra (Single)", "", "grey", "smoke"],
+  ["f2_ultra_uv", "F2 Ultra UV", "", "champagne", "orange"],
+  ["f2_ultra_uv_class_1", "F2 Ultra UV (Class 1)", "", "champagne", "orange"],
+  ["laserbox", "Laserbox", "White", "white", "smoke"],
+  ["laserbox_black", "Laserbox", "Black", "charcoal", "smoke"],
+  ["m1", "M1", "", "white", "orange"],
+  ["m1_ultra", "M1 Ultra", "", "white", "orange"],
+  ["m2", "M2", "", "white", "orange"],
+  ["metalfab", "MetalFab", "", "silver", "smoke"],
+  ["o1_omni_printer", "O1 Omni Printer", "", "white", "smoke"],
+  ["p2", "P2", "Black", "graphite", "smoke_amber"],
+  ["p2_white", "P2", "White", "white", "smoke_amber"],
+  ["p2s", "P2S", "Black", "graphite", "smoke_amber"],
+  ["p2s_white", "P2S", "White", "white", "smoke_amber"],
+  ["p3", "P3", "", "white", "smoke"],
+  ["retail_marker", "Retail Marker", "", "grey", "green"],
+  ["s1", "S1", "Black", "charcoal", "green"],
+  ["s1_white", "S1", "White", "white", "orange"],
+  ["apparel_printer", "Apparel Printer", "", "white", "smoke"],
+];
+
+/** Whether a color reads as light (dark text on it). */
+const isLight = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  return .2126 * r + .7152 * g + .0722 * b > .45;
+};
+
+/**
+ * Each style's look: its body and window as CSS, the tone of the text on
+ * its body (light or dark), its base color (for Flat), and its window's
+ * title text and glare.
+ */
+const LOOKS = Object.fromEntries(MODEL_STYLES.map(([id, , , bodyId, windowId]) => {
+  const body = BODIES[bodyId], window = WINDOWS[windowId];
+  const [light, base, dark] = body.stops;
+  const grain = body.metal ? "radial-gradient(rgba(255, 255, 255, .07) .6px, transparent .7px) 0 0 / 3px 3px, " : "";
+  const recess = (color) => `color-mix(in srgb, ${color} 72%, black)`;
+  return [id, {
+    body: `${grain}linear-gradient(160deg, ${light} 0%, ${base} 45%, ${dark} 100%)`,
+    glass: window.glass ?? `linear-gradient(170deg, ${recess(light)} 0%, ${recess(base)} 45%, ${recess(dark)} 100%)`,
+    edge: window.edge, text: window.text, glare: window.glare,
+    tone: isLight(base) ? "light" : "dark", flat: base,
+  }];
+}));
+const STYLES = [["none", "None (theme)"], ...MODEL_STYLES.map(([id, model, color]) => [id, color ? `${model} (${color})` : model])];
+const TONE = Object.fromEntries(Object.entries(LOOKS).map(([id, look]) => [id, look.tone]));
+const FLAT = Object.fromEntries(Object.entries(LOOKS).map(([id, look]) => [id, look.flat]));
+
+/** The style a new card gets for its laser's model (its name in Home Assistant): that model's first style, or none. */
+function modelStyle(model) {
+  const name = `${model ?? ""}`.replace(/^xTool\s+/i, "").trim().toLowerCase();
+  return MODEL_STYLES.find(([, m]) => m.toLowerCase() === name)?.[0] ?? "none";
+}
 const DEFAULT_PATTERN = 4242;
 
 /**
  * The window's glass: a sheen along the top and two to four reflections
  * falling across it at an angle, their places from the pattern (Randomize
- * reflections in the editor picks a new pattern). Stronger on the
- * F2 Ultra UV style's orange glass than on the P2 style's dark glass.
+ * reflections in the editor picks a new pattern), as strong as the
+ * window's glare (bright plexi reflects more than a dark lid).
  */
-function glassReflections(tone, pattern) {
+function glassReflections(glare, pattern) {
   const r = seeded(pattern);
-  const k = tone === "light" ? 1 : .5;
+  const k = glare;
   const white = (a) => `rgba(255, 255, 255, ${(a * k).toFixed(3)})`;
   const angle = Math.round((r() < .5 ? 100 : 30) + r() * 50);
   const layers = [`linear-gradient(to bottom, ${white(.3)} 0%, ${white(.1)} 14%, transparent 42%)`];
@@ -4095,7 +4209,6 @@ function glassReflections(tone, pattern) {
   }
   return layers.join(", ");
 }
-const FLAT = { f2_ultra_uv: "#cdae94", p2: "#2d3136" };
 // The same keys and values as the SVS and Lampster cards
 const FEATURES_STYLES = [["match", "Match style"], ["flat", "Flat"], ["console", "Console"]];
 // How far a features style's patch or channel reaches around each control (px)
@@ -4238,21 +4351,8 @@ class XtoolCard extends HTMLElement {
         /* A machine that is off: its window dims a little, so it still reads in its own color; the body does not */
         #window { transition: filter 400ms ease-in-out; }
         .off #window { filter: brightness(.8) saturate(.9); }
-        .f2_ultra_uv #body {
-          background: radial-gradient(rgba(255, 255, 255, .07) .6px, transparent .7px) 0 0 / 3px 3px,
-            linear-gradient(160deg, #dcc1aa 0%, #cdae94 45%, #b8977c 100%);
-        }
-        .f2_ultra_uv #window {
-          background: radial-gradient(90% 120% at 50% 110%, rgba(245, 162, 26, .55) 0%, rgba(245, 162, 26, 0) 70%),
-            linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 0 0 1px rgba(90, 30, 0, .35), inset 0 3px 8px rgba(90, 30, 0, .3);
-        }
-        .p2 #body { background: linear-gradient(170deg, #3a3f45 0%, #2d3136 40%, #24272b 100%); }
-        .p2 #window {
-          background: radial-gradient(120% 90% at 50% 120%, rgba(214, 140, 60, .28) 0%, rgba(214, 140, 60, 0) 60%),
-            linear-gradient(175deg, #1d2024 0%, #141619 60%, #0f1113 100%);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(255, 255, 255, .06), inset 0 3px 8px rgba(0, 0, 0, .6);
-        }
+        .styled #body { background: var(--xtool-body); }
+        .styled #window { background: var(--xtool-glass); box-shadow: var(--xtool-edge); }
         .styled::after {
           content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 3;
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 -1px 0 rgba(0, 0, 0, .4);
@@ -4842,24 +4942,27 @@ class XtoolCard extends HTMLElement {
     if (!this._config) return;
     const style = this._config.style;
     const tone = TONE[style];
-    for (const [id] of STYLES) this._frame.classList.toggle(id, id === style && !!tone);
-    this._frame.classList.toggle("styled", !!tone);
+    const look = LOOKS[style];
+    this._frame.classList.toggle("styled", !!look);
+    for (const [name, value] of [["--xtool-body", look?.body], ["--xtool-glass", look?.glass], ["--xtool-edge", look?.edge]]) {
+      if (value) this._frame.style.setProperty(name, value);
+      else this._frame.style.removeProperty(name);
+    }
     // The Enabled color, for every feature inside
     if (this._config.enabled_color) this.style.setProperty("--xtool-enabled-color", cssColor(this._config.enabled_color));
     else this.style.removeProperty("--xtool-enabled-color");
     if (tone) {
       const pattern = Number.isFinite(this._config.pattern) ? this._config.pattern : DEFAULT_PATTERN;
-      this._window.style.setProperty("--xtool-gloss", glassReflections(tone, pattern));
+      this._window.style.setProperty("--xtool-gloss", glassReflections(look.glare, pattern));
     }
     if (this._tile) {
       this._tile.classList.toggle("dark", tone === "dark");
       this._tile.classList.toggle("light", tone === "light");
-      this._tile.classList.toggle("f2_ultra_uv", style === "f2_ultra_uv");
       this._tile.classList.toggle("solid", !!tone && (this._config.features_style ?? DEFAULT_FEATURES_STYLE) !== "match");
       // For the space under the title row (see _styleWindowText)
       this._tile.style.setProperty("--xtool-channel-pad", `${CHANNEL_PAD[this._featuresStyle()]}px`);
       this._tile.style.setProperty("--xtool-window-margin", `${tone ? WINDOW_MARGIN : 0}px`);
-      this._styleWindowText();
+      this._styleWindowText(look);
     }
     this._removeDividers();
     this._placeFeatures();
@@ -4917,17 +5020,18 @@ class XtoolCard extends HTMLElement {
   }
 
   /**
-   * In the F2 Ultra UV style the window is orange glass under a light body: the
-   * title's text on the window is light. This styles the tile card's title
-   * from inside it; if Home Assistant renames that part, the title keeps the
+   * The title's text on the window, in the style's own colors (light on
+   * every window: orange or green plexi, a dark lid, a frame's recess), and
+   * the space below the title row. This styles the tile card's title from
+   * inside it; if Home Assistant renames that part, the title keeps the
    * body's text color.
    */
-  _styleWindowText() {
+  _styleWindowText(look) {
     const root = this._tile?.shadowRoot;
     if (!root) return;
-    if (!XtoolCard._windowSheet) {
-      XtoolCard._windowSheet = new CSSStyleSheet();
-      XtoolCard._windowSheet.replaceSync(`
+    // A sheet of the card's own: the title's text is its style's
+    this._windowSheet ??= new CSSStyleSheet();
+    this._windowSheet.replaceSync(`
         /* Space between the title row and the features below it (none
            while collapsed, when no features show below): from the window's
            edge to the first patch or channel, the same as between two rows
@@ -4935,14 +5039,10 @@ class XtoolCard extends HTMLElement {
         hui-card-features[slot="features"] {
           margin-top: calc(var(--ha-card-feature-gap, 12px) - var(--xtool-window-margin, 0px) - var(--xtool-channel-pad, 0px));
         }
-        :host(.f2_ultra_uv) ha-tile-info {
-          --primary-text-color: rgba(255, 248, 240, .97); --secondary-text-color: rgba(255, 236, 220, .86);
-          text-shadow: 0 1px 2px rgba(90, 30, 0, .55);
-        }`);
-    }
+        ${look ? `ha-tile-info { ${look.text}; }` : ""}`);
     try {
-      if (!root.adoptedStyleSheets.includes(XtoolCard._windowSheet)) {
-        root.adoptedStyleSheets = [...root.adoptedStyleSheets, XtoolCard._windowSheet];
+      if (!root.adoptedStyleSheets.includes(this._windowSheet)) {
+        root.adoptedStyleSheets = [...root.adoptedStyleSheets, this._windowSheet];
       }
     } catch (err) {
       console.warn("xTool card: could not style the title on the window", err);

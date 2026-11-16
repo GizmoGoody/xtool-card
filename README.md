@@ -40,6 +40,10 @@ The Marketplace adds the card to **Settings** → **Dashboards** → **Resources
 
 Adding a repository from a link needs a connection to GitHub, which the Marketplace asks for the first time. With HACS on an older Home Assistant, use ⋮ → **Custom repositories**, add `GizmoGoody/xtool-card` with the type **Dashboard**, then select **Download**.
 
+## Styles
+
+The card's **Style** option draws the tile in the colors of an xTool machine. The editor has a style for each model, and for each color a model is sold in; a new card starts with its laser's model's style. [COLORWAYS.md](COLORWAYS.md) lists every style's colors and the xTool photos they come from.
+
 ## xTool Laser integration status and dependencies
 
 The card requires [GizmoGoody/ha-xtool](https://github.com/GizmoGoody/ha-xtool). That integration is also in active development; the current card is ahead of the released upstream integration and should be treated as a development pairing.

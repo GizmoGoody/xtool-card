@@ -74,6 +74,11 @@
     console: addCard("p2, console", { style: "p2", features_style: "console", features: [...jobFeatures.features, { type: "toggle" }] }, { hass: f2("processing"), height: 280 }),
     plain: addCard("no style", { ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     titleOnly: addCard("f2_ultra_uv, title only", { style: "f2_ultra_uv" }, { hass: f2("processing"), height: 56 }),
+    m2: addCard("m2", { style: "m2" }, { hass: f2("processing"), height: 56 }),
+    s1White: addCard("s1_white", { style: "s1_white" }, { hass: f2("processing"), height: 56 }),
+    f1Ultra: addCard("f1_ultra", { style: "f1_ultra" }, { hass: f2("processing"), height: 56 }),
+    d1ProRed: addCard("d1_pro_golden_red", { style: "d1_pro_golden_red" }, { hass: f2("processing"), height: 56 }),
+    p3: addCard("p3", { style: "p3" }, { hass: f2("processing"), height: 56 }),
   };
 
   // The space under the title, against Home Assistant's tile card fitted to
@@ -290,8 +295,22 @@
     // Styles
     const frame = (card) => card.shadowRoot.querySelector(".frame");
     const windowBox = (card) => card.shadowRoot.getElementById("window");
-    check("f2_ultra_uv, match", frame(styles.f2UltraUv).classList.contains("styled") && frame(styles.f2UltraUv).classList.contains("f2_ultra_uv"),
-      "the F2 Ultra UV style is drawn");
+    check("f2_ultra_uv, match", frame(styles.f2UltraUv).classList.contains("styled") && frame(styles.f2UltraUv).style.getPropertyValue("--xtool-glass").includes("#f5a21a")
+      && frame(styles.f2UltraUv).style.getPropertyValue("--xtool-body").includes("#cdae94"),
+      "the F2 Ultra UV style is drawn: its champagne body and orange window");
+    const styleTile = (card) => card.shadowRoot.querySelector("hui-tile-card");
+    // Models that look alike share a body and a window; a model without a window gets a recess in its frame
+    const lookOf = (card) => ["--xtool-body", "--xtool-glass"].map((name) => frame(card).style.getPropertyValue(name)).join(" | ");
+    check("styles", lookOf(styles.m2) === lookOf(styles.s1White) && lookOf(styles.m2).includes("#f5a21a") && lookOf(styles.m2).includes("#e6e6e6"),
+      `every orange plexi is the F2 Ultra UV's orange, on its own body (M2 and S1 (White): ${lookOf(styles.m2).slice(0, 60)})`);
+    check("styles", lookOf(styles.f1Ultra).includes("#4fa634") && styleTile(styles.f1Ultra).classList.contains("light"),
+      "the F1 Ultra: green plexi on a grey frame, with dark text on the body");
+    check("styles", lookOf(styles.d1ProRed).includes("color-mix") && lookOf(styles.d1ProRed).includes("#a92a31") && styleTile(styles.d1ProRed).classList.contains("dark"),
+      "the D1 Pro (Golden Red): no window, a recess in its red frame, with light text on the body");
+    const titleText = (card) => [...(card._windowSheet?.cssRules ?? [])].map((r) => r.cssText).join(" ");
+    check("styles", titleText(styles.p3).includes("ha-tile-info { --primary-text-color: rgba(255, 255, 255, .95)") && styleTile(styles.p3).classList.contains("light")
+      && !!styleTile(styles.p3).shadowRoot?.adoptedStyleSheets.includes(styles.p3._windowSheet),
+      `the P3: a white body with dark text, and light title text on its dark lid (${titleText(styles.p3).slice(-220)})`);
     const wh = parseFloat(windowBox(styles.f2UltraUv).style.height), fh = frame(styles.f2UltraUv).offsetHeight;
     const collapsedHeight = parseFloat(windowBox(styles.titleOnly).style.height);
     check("f2_ultra_uv, match", Math.abs(wh - collapsedHeight) < 0.5 && Math.abs(wh - 48) < 0.5,
