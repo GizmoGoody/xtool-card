@@ -44,7 +44,7 @@
     const form = editor.shadowRoot.getElementById("form");
     const styleForm = editor.shadowRoot.getElementById("style");
     const names = [...styleForm.schema, ...form.schema].map((s) => s.name);
-    check("editor", ["style", "features_style", "badges", "connection", "status_light", "progress_edge"].every((n) => names.includes(n)), `the xTool options (${names.join(", ")})`);
+    check("editor", ["style", "features_style", "status_badge", "connection_badge", "status_light", "progress_edge"].every((n) => names.includes(n)), `the xTool options (${names.join(", ")})`);
     check("editor", [styleForm, form].some((f) => f.data.features_style === "console"), "the features style is Console by default");
     const cardHelpers = [];
     const collect = (schema) => (schema ?? []).forEach((f) => { if (f.helper) cardHelpers.push(f.helper); collect(f.schema); });
@@ -79,8 +79,8 @@
     randomize.click();
     check("reflections", Number.isInteger(fired.pattern) && fired.pattern >= 1 && fired.style === "f2_ultra_uv" && !("features_style" in fired),
       `a click saves a new pattern (${fired.pattern}) and keeps the other options`);
-    check("editor", form.data.badges.join() === "alarm,safety_key,safety_checks" && form.data.connection === true, "the default badges are shown: of the defaults, those the F2 Ultra UV has (it has no lid sensor)");
-    const badgeField = form.schema.find((s) => s.name === "badges");
+    check("editor", form.data.status_badge.join() === "alarm,safety_key,safety_checks" && form.data.connection_badge === true, "the default badges are shown: of the defaults, those the F2 Ultra UV has (it has no lid sensor)");
+    const badgeField = form.schema.find((s) => s.name === "status_badge");
     check("badges", badgeField.selector.select.options.map((o) => o.value).join() === "alarm,safety_key,safety_checks,firmware",
       `the F2 Ultra UV is offered every badge but Lid (${badgeField.selector.select.options.map((o) => o.value).join(", ")})`);
     check("badges", badgeField.selector.select.options.map((o) => o.label).join() === "Alarm or fire warning,Safety key removed,A safety check is off,Firmware update available",
@@ -94,18 +94,20 @@
     document.getElementById("cards").append(badgeEditor);
     await wait(150);
     const badgeForm = badgeEditor.shadowRoot.getElementById("form");
-    const p2Badges = badgeForm.schema.find((s) => s.name === "badges").selector.select.options.map((o) => o.value);
-    check("badges", p2Badges.join() === "alarm,lid,firmware" && badgeForm.data.badges.join() === "alarm,lid",
-      `the P2 is offered only the badges it has, and its defaults are those of the defaults it has (${p2Badges.join(", ")}; ${badgeForm.data.badges.join(", ")})`);
-    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2", badges: ["alarm", "lid"] } } }));
-    check("badges", badgeFired && !("badges" in badgeFired), "the P2's defaults are not written");
-    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2", badges: ["alarm", "lid", "firmware"] } } }));
-    check("badges", badgeFired.badges.join() === "alarm,lid,firmware", "other choices are written");
+    const p2Badges = badgeForm.schema.find((s) => s.name === "status_badge").selector.select.options.map((o) => o.value);
+    check("badges", p2Badges.join() === "alarm,lid,firmware" && badgeForm.data.status_badge.join() === "alarm,lid",
+      `the P2 is offered only the badges it has, and its defaults are those of the defaults it has (${p2Badges.join(", ")}; ${badgeForm.data.status_badge.join(", ")})`);
+    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2", status_badge: ["alarm", "lid"] } } }));
+    check("badges", badgeFired && !("status_badge" in badgeFired) && !("connection_badge" in badgeFired), "the P2's defaults are not written");
+    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2", status_badge: ["alarm", "lid", "firmware"] } } }));
+    check("badges", badgeFired.status_badge.join() === "alarm,lid,firmware", "other choices are written");
+    badgeForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "p2", connection_badge: false } } }));
+    check("badges", badgeFired.connection_badge === false, "the connection badge turned off is written");
     badgeEditor.remove();
     check("editor", badgeField.selector.select.reorder === true && badgeField.selector.select.multiple === true, "the badges can be put in order");
-    check("editor", badgeField.label.includes("priority order") && badgeField.helper === "The first one that applies shows at the top right of the picture.", "and are labeled as in priority order");
-    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "f2_ultra_uv", badges: ["lid", "alarm", "safety_key"] } } }));
-    check("editor", fired.badges.join() === "lid,alarm,safety_key", "the order chosen is the order saved");
+    check("editor", badgeField.label === "Status badge (in priority order)" && badgeField.helper === "The first one that applies shows at the top right of the picture.", "and are labeled as in priority order");
+    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "f2_ultra_uv", status_badge: ["lid", "alarm", "safety_key"] } } }));
+    check("editor", fired.status_badge.join() === "lid,alarm,safety_key", "the order chosen is the order saved");
 
     const tile = editor.shadowRoot.querySelector("xtool-tile-card-editor");
     check("editor", !!tile, "the tile card's own editor is inside");
@@ -126,10 +128,10 @@
     check("editor", calls === 2 && fromContext["sensor.f2_status"].attributes.wifi_signal === "-60 dBm", "and follows new states");
 
     // The xTool options change
-    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "none", badges: ["alarm"], progress_edge: { edge: "bottom" } } } }));
+    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "none", status_badge: ["alarm"], progress_edge: { edge: "bottom" } } } }));
     check("editor", !("style" in fired) && !("features_style" in fired) && !("pattern" in fired), "no style written for None, and no features style or pattern without an xTool style");
     check("reflections", editor.shadowRoot.getElementById("row").style.display === "none", "no Randomize reflections without a style");
-    check("editor", fired.badges.join() === "alarm" && JSON.stringify(fired.progress_edge) === JSON.stringify({ edge: "bottom" }),
+    check("editor", fired.status_badge.join() === "alarm" && JSON.stringify(fired.progress_edge) === JSON.stringify({ edge: "bottom" }),
       `badges and the progress edge are saved, the edge with only the options that differ from the defaults (${JSON.stringify(fired.progress_edge)})`);
     check("editor", !editor.shadowRoot.getElementById("form").schema.some((s) => s.name === "features_style"), "the features style is hidden");
 
