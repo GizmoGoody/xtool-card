@@ -71,13 +71,13 @@
     samePattern: addCard("f2_ultra_uv, pattern 4242", { style: "f2_ultra_uv", features_style: "match", pattern: 4242, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     otherPattern: addCard("f2_ultra_uv, pattern 17", { style: "f2_ultra_uv", features_style: "match", pattern: 17, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     flat: addCard("f2_ultra_uv, flat", { style: "f2_ultra_uv", features_style: "flat", ...jobFeatures }, { hass: f2("processing"), height: 220 }),
-    console: addCard("p2, console", { style: "p2", features_style: "console", features: [...jobFeatures.features, { type: "toggle" }] }, { hass: f2("processing"), height: 280 }),
+    console: addCard("p2, console", { style: "p2_black", features_style: "console", features: [...jobFeatures.features, { type: "toggle" }] }, { hass: f2("processing"), height: 280 }),
     plain: addCard("no style", { ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     titleOnly: addCard("f2_ultra_uv, title only", { style: "f2_ultra_uv" }, { hass: f2("processing"), height: 56 }),
     m2: addCard("m2", { style: "m2" }, { hass: f2("processing"), height: 56 }),
     s1White: addCard("s1_white", { style: "s1_white" }, { hass: f2("processing"), height: 56 }),
     f1Ultra: addCard("f1_ultra", { style: "f1_ultra" }, { hass: f2("processing"), height: 56 }),
-    d1ProRed: addCard("d1_pro_golden_red", { style: "d1_pro_golden_red" }, { hass: f2("processing"), height: 56 }),
+    d1ProRed: addCard("d1_pro_red", { style: "d1_pro_red" }, { hass: f2("processing"), height: 56 }),
     p3: addCard("p3", { style: "p3" }, { hass: f2("processing"), height: 56 }),
   };
 
@@ -85,7 +85,7 @@
   // its content: in every style and features style, with the features below
   // the title or the first beside it, collapsible (rows: auto)
   const gapFeatures = [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }];
-  const gapLooks = [["none", "console"], ["f2_ultra_uv", "match"], ["f2_ultra_uv", "flat"], ["f2_ultra_uv", "console"], ["p2", "match"], ["p2", "flat"], ["p2", "console"]];
+  const gapLooks = [["none", "console"], ["f2_ultra_uv", "match"], ["f2_ultra_uv", "flat"], ["f2_ultra_uv", "console"], ["p2_black", "match"], ["p2_black", "flat"], ["p2_black", "console"]];
   const gapCards = [];
   for (const position of ["bottom", "inline"]) {
     // Two rows below the title in either position
@@ -101,12 +101,12 @@
   }
 
   // The defaults: Console, the first feature beside the title, the laser's own State content
-  const defaultCard = addCard("defaults", { style: "p2", features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] },
+  const defaultCard = addCard("defaults", { style: "p2_black", features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] },
     { hass: f2("idle"), height: rowsHeight(2) });
 
   // Collapsing to the title
   try { localStorage.clear(); } catch (err) { /* no storage: the card still works */ }
-  const collapsible = addCard("tap shows or hides the features", { style: "p2", collapsible: true, ...jobFeatures }, { hass: f2("idle"), height: 220 });
+  const collapsible = addCard("tap shows or hides the features", { style: "p2_black", collapsible: true, ...jobFeatures }, { hass: f2("idle"), height: 220 });
   const closedAtLoad = addCard("hidden at load", { entity: "sensor.p2_status", collapsible: true, expanded_at_load: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
   const closedInline = addCard("hidden at load, inline", { collapsible: true, expanded_at_load: false, features_position: "inline",
     features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }] }, { hass: f2("idle"), height: 160 });
@@ -115,7 +115,7 @@
   const noExpand = addCard("expand when powered on: off", { entity: "sensor.p2_status", collapsible: true, expand_when_powered_on: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
   const expandOnly = addCard("expand when powered on, collapse off", { entity: "sensor.p2_status", collapsible: true, collapse_when_powered_off: false, ...jobFeatures }, { hass: p2("idle"), height: 220 });
   const offAtLoad = addCard("off at load", { collapsible: true, ...jobFeatures }, { hass: f2("off"), height: 220 });
-  const offStyled = addCard("off, p2", { style: "p2", ...jobFeatures }, { hass: f2("off"), height: 220 });
+  const offStyled = addCard("off, p2", { style: "p2_black", ...jobFeatures }, { hass: f2("off"), height: 220 });
   const offOrange = addCard("off, f2_ultra_uv", { style: "f2_ultra_uv", ...jobFeatures }, { hass: f2("off"), height: 220 });
   const noLight = addCard("no status light", { status_light: false }, { hass: f2("idle"), height: 80 });
   // Collapsed, with the P2's controls beside the title
@@ -147,7 +147,7 @@
     ],
   };
   const p2Max = {
-    ...f2Max, entity: "sensor.p2_status", style: "p2", state_content: ["state", "elapsed"],
+    ...f2Max, entity: "sensor.p2_status", style: "p2_black", state_content: ["state", "elapsed"],
     features: [
       { type: "custom:xtool-controls", controls: ["power", "fill_light_close", "fill_light_left", "fill_light_right", "red_dot_close", "red_dot_quick", "safety_lock", "wake"], show: "icons", animate_fan: true },
       { type: "custom:xtool-configuration", controls: ["exhaust_fan", "buzzer"], show: "icons" },
@@ -179,8 +179,8 @@
     f2: addCard("F2 Ultra UV, minimum", { style: "f2_ultra_uv", features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] }, auto(f2("idle"))),
     f2Fixed: addCard("F2 Ultra UV, minimum, not collapsible", { style: "f2_ultra_uv", collapsible: false,
       features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] }, auto(f2("idle"))),
-    p2: addCard("P2, minimum", { entity: "sensor.p2_status", style: "p2", features: [{ type: "custom:xtool-controls" }] }, auto(p2("idle"))),
-    p2Fixed: addCard("P2, minimum, not collapsible", { entity: "sensor.p2_status", style: "p2", collapsible: false,
+    p2: addCard("P2, minimum", { entity: "sensor.p2_status", style: "p2_black", features: [{ type: "custom:xtool-controls" }] }, auto(p2("idle"))),
+    p2Fixed: addCard("P2, minimum, not collapsible", { entity: "sensor.p2_status", style: "p2_black", collapsible: false,
       features: [{ type: "custom:xtool-controls" }] }, auto(p2("idle"))),
   };
 
@@ -306,7 +306,7 @@
     check("styles", lookOf(styles.f1Ultra).includes("#4fa634") && styleTile(styles.f1Ultra).classList.contains("light"),
       "the F1 Ultra: green plexi on a grey frame, with dark text on the body");
     check("styles", lookOf(styles.d1ProRed).includes("color-mix") && lookOf(styles.d1ProRed).includes("#a92a31") && styleTile(styles.d1ProRed).classList.contains("dark"),
-      "the D1 Pro (Golden Red): no window, a recess in its red frame, with light text on the body");
+      "the D1 Pro (Red): no window, a recess in its red frame, with light text on the body");
     const titleText = (card) => [...(card._windowSheet?.cssRules ?? [])].map((r) => r.cssText).join(" ");
     check("styles", titleText(styles.p3).includes("ha-tile-info { --primary-text-color: rgba(255, 255, 255, .95)") && styleTile(styles.p3).classList.contains("light")
       && !!styleTile(styles.p3).shadowRoot?.adoptedStyleSheets.includes(styles.p3._windowSheet),
@@ -430,12 +430,12 @@
     check("editor preview", inner(preview).config.features.length === 3, "adding a feature, or the laser turning off, leaves it expanded");
     inner(preview).shadowRoot.querySelector("ha-card").dispatchEvent(new CustomEvent("ll-custom", { bubbles: true, composed: true, detail: inner(preview).config.tap_action }));
     await wait(50);
-    preview.setConfig({ ...previewConfig, style: "p2" });
+    preview.setConfig({ ...previewConfig, style: "p2_black" });
     await wait(50);
     check("editor preview", inner(preview).config.features.length === 0 && localStorage.getItem("xtool-card:sensor.f2_status") === "0",
       "a tap collapses it, and another change keeps it collapsed; the dashboard's remembered state is not touched");
     const rebuilt = document.createElement("xtool-card");
-    rebuilt.setConfig({ ...previewConfig, style: "p2" });
+    rebuilt.setConfig({ ...previewConfig, style: "p2_black" });
     rebuilt.hass = f2("idle");
     rebuilt.preview = true;
     document.getElementById("cards").append(rebuilt);

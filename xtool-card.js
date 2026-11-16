@@ -4078,8 +4078,8 @@ const BODIES = {
   silver: { stops: ["#c8cac9", "#b4b6b5", "#9d9f9e"], metal: true },
   grey: { stops: ["#97989b", "#808184", "#6b6c6f"], metal: true },
   charcoal: { stops: ["#3a3b3e", "#2d2e30", "#232426"] },
-  metal_grey: { stops: ["#93a8c1", "#7d93ad", "#667a92"], metal: true },
-  golden_red: { stops: ["#c23c43", "#a92a31", "#8c1d22"], metal: true },
+  blue_grey: { stops: ["#93a8c1", "#7d93ad", "#667a92"], metal: true },
+  red: { stops: ["#c23c43", "#a92a31", "#8c1d22"], metal: true },
 };
 // A window: its glass, the title's text on it, and how strongly it
 // reflects (see glassReflections). Every orange plexi is the same orange.
@@ -4120,11 +4120,11 @@ const WINDOWS = {
 // in more than one), body, window]. A new card gets its laser's model's
 // style, in the first color listed.
 const MODEL_STYLES = [
-  ["d1", "D1", "", "metal_grey", "frame"],
-  ["d1_pro", "D1 Pro", "Metal Grey", "metal_grey", "frame"],
-  ["d1_pro_golden_red", "D1 Pro", "Golden Red", "golden_red", "frame"],
-  ["d1_pro_2", "D1 Pro 2.0", "Metal Grey", "metal_grey", "frame"],
-  ["d1_pro_2_golden_red", "D1 Pro 2.0", "Golden Red", "golden_red", "frame"],
+  ["d1", "D1", "", "blue_grey", "frame"],
+  ["d1_pro_grey", "D1 Pro", "Grey", "blue_grey", "frame"],
+  ["d1_pro_red", "D1 Pro", "Red", "red", "frame"],
+  ["d1_pro_2_grey", "D1 Pro 2.0", "Grey", "blue_grey", "frame"],
+  ["d1_pro_2_red", "D1 Pro 2.0", "Red", "red", "frame"],
   ["f1", "F1", "", "silver", "green"],
   ["f1_lite", "F1 Lite", "", "silver", "green"],
   ["f1_ultra", "F1 Ultra", "", "grey", "green"],
@@ -4134,20 +4134,20 @@ const MODEL_STYLES = [
   ["f2_ultra_single", "F2 Ultra (Single)", "", "grey", "smoke"],
   ["f2_ultra_uv", "F2 Ultra UV", "", "champagne", "orange"],
   ["f2_ultra_uv_class_1", "F2 Ultra UV (Class 1)", "", "champagne", "orange"],
-  ["laserbox", "Laserbox", "White", "white", "smoke"],
+  ["laserbox_white", "Laserbox", "White", "white", "smoke"],
   ["laserbox_black", "Laserbox", "Black", "charcoal", "smoke"],
   ["m1", "M1", "", "white", "orange"],
   ["m1_ultra", "M1 Ultra", "", "white", "orange"],
   ["m2", "M2", "", "white", "orange"],
   ["metalfab", "MetalFab", "", "silver", "smoke"],
   ["o1_omni_printer", "O1 Omni Printer", "", "white", "smoke"],
-  ["p2", "P2", "Black", "graphite", "smoke_amber"],
+  ["p2_black", "P2", "Black", "graphite", "smoke_amber"],
   ["p2_white", "P2", "White", "white", "smoke_amber"],
-  ["p2s", "P2S", "Black", "graphite", "smoke_amber"],
+  ["p2s_black", "P2S", "Black", "graphite", "smoke_amber"],
   ["p2s_white", "P2S", "White", "white", "smoke_amber"],
   ["p3", "P3", "", "white", "smoke"],
   ["retail_marker", "Retail Marker", "", "grey", "green"],
-  ["s1", "S1", "Black", "charcoal", "green"],
+  ["s1_black", "S1", "Black", "charcoal", "green"],
   ["s1_white", "S1", "White", "white", "orange"],
   ["apparel_printer", "Apparel Printer", "", "white", "smoke"],
 ];
