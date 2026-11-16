@@ -15,8 +15,7 @@
  *                             tap two corners on the picture to crop it; the deep camera's perspective; the
  *                             P2's mode, crop, exposure and close light (Home Assistant's own features), and
  *                             its overview camera's thickness or distance (a field) and Measure
- * - custom:xtool-overlays     a key for each overlay switch chosen, of the cameras' pictures, and a style (color,
- *                             icon, size) for the ones the card can draw over them itself (the laser target)
+ * - custom:xtool-overlays     a key for each overlay switch chosen, of the cameras' pictures
  * - custom:xtool-safetypro-if2-fan the SafetyPro IF2 inline fan: Off, A (Auto) and a speed key that steps 1 to 4
  * - custom:xtool-position     the laser's position X,Y in a field (press and drag on it to slide both), Move and Home
  * - custom:xtool-focus        Autofocus, and the thickness to focus on in a field (typed, or slid on)
@@ -335,7 +334,8 @@ const DEFAULT_OVERLAYS = [
 ];
 
 // The overlays the card can draw over the picture in a style of its own
-// (see XtoolOverlays.editor and XtoolCamera._drawMarks), by translation key:
+// (the card's Overlay styles, see overlayStylesField and
+// XtoolCamera._drawMarks), by translation key:
 // their option name and kind. Only those whose place the card knows: the
 // laser target is where the head is (the position numbers). The others'
 // places are the integration's.
@@ -356,9 +356,30 @@ const LOOK_FIELDS = {
 };
 const MARK_DEFAULTS = { icon: "mdi:crosshairs", size: 24 };
 
-/** An overlay's style in the overlays feature's options, without what follows the integration (empty: none of its own). */
-function lookOf(config, look) {
-  return Object.fromEntries(Object.entries(config?.[look.name] ?? {}).filter(([, value]) => value !== undefined && value !== "" && value !== INTEGRATION));
+/** An overlay's style in the card's Overlay styles, without what follows the integration (empty: none of its own). */
+function lookOf(styles, look) {
+  return Object.fromEntries(Object.entries(styles?.[look.name] ?? {}).filter(([, value]) => value !== undefined && value !== "" && value !== INTEGRATION));
+}
+
+/** The card's Overlay styles as it keeps them: only the overlays, and their options, that differ from the integration. */
+function ownStyles(styles) {
+  const own = Object.fromEntries(Object.values(OVERLAY_LOOKS).map((look) => [look.name, lookOf(styles, look)]).filter(([, look]) => Object.keys(look).length));
+  return Object.keys(own).length ? own : undefined;
+}
+
+/**
+ * The card editor's Overlay styles: folded away, a section for each overlay
+ * the card can draw (see OVERLAY_LOOKS) that one of the laser's cameras has,
+ * named as its switch is; none without one.
+ */
+function overlayStylesField(hass, entity) {
+  const overlays = entity && hass?.entities?.[entity] ? deviceOf(hass, entity).cameras.flatMap((camera) => camera.overlays) : [];
+  const looks = Object.entries(OVERLAY_LOOKS).map(([key, look]) => ({ ...look, overlay: overlays.find((o) => o.key === key) })).filter((l) => l.overlay);
+  if (!looks.length) return [];
+  return [{
+    type: "expandable", name: "overlay_styles", title: "Overlay styles",
+    schema: looks.map((look) => ({ type: "expandable", name: look.name, title: entityName(hass, look.overlay.entityId) ?? look.name, schema: LOOK_FIELDS[look.kind] })),
+  }];
 }
 
 /** An overlay's control (id: see cameraModel): its switch, named by its entity and its camera. */
@@ -2385,11 +2406,15 @@ const CAMERA_INPUTS = ["mode", "crop", "exposure", ...lightParts("fill_light_clo
 // camera's perspective, and the overview camera's thickness or distance
 // and Measure (the P2's)
 const CAMERA_SETTINGS = ["perspective", "thickness_or_distance", "measure_thickness_or_distance"];
-// Controls that stay side by side in the camera's sections (see
-// XtoolCamera._layout): Measure with the thickness or distance it measures,
-// and a light's slider with its icon
-const CAMERA_UNITS = { measure_thickness_or_distance: "thickness_or_distance" };
-const unitOf = (id) => lightPart(id)?.light ?? CAMERA_UNITS[id] ?? id;
+// Controls chosen as one in the camera (see XtoolCamera._chosen) and kept
+// side by side (see XtoolCamera._layout): the thickness or distance with
+// Measure, and the close fill light with its slider
+const CAMERA_PARTNERS = {
+  thickness_or_distance: ["measure_thickness_or_distance"],
+  fill_light_close: ["fill_light_close_brightness"],
+};
+const unitOf = (id) => Object.keys(CAMERA_PARTNERS).find((key) => CAMERA_PARTNERS[key].includes(id)) ?? id;
+const PARTNERED = Object.values(CAMERA_PARTNERS).flat();
 
 class XtoolCamera extends XtoolFeature {
   static label = "Camera";
@@ -2416,7 +2441,8 @@ class XtoolCamera extends XtoolFeature {
     if (cameras.some((camera) => profile.cropReset[camera.key] && CROP_ROLES.every((role) => camera.settings[role]))) {
       offered.push({ value: "custom_crop", label: "Custom crop" });
     }
-    for (const id of [...CAMERA_SETTINGS, ...CAMERA_INPUTS]) {
+    // A partner is chosen with its control (see CAMERA_PARTNERS)
+    for (const id of [...CAMERA_SETTINGS, ...CAMERA_INPUTS].filter((id) => !PARTNERED.includes(id))) {
       const { light, part } = lightPart(id) ?? {};
       const entityId = cameras.map((camera) => camera.settings[light ?? id]).find(Boolean);
       if (!entityId || (part === "brightness" && !dimmable(hass, entityId))) continue;
@@ -2500,15 +2526,15 @@ class XtoolCamera extends XtoolFeature {
       .shot .marks { position: absolute; inset: 0; pointer-events: none; }
       .shot .marks ha-icon { position: absolute; transform: translate(-50%, -50%); display: flex; filter: drop-shadow(0 0 1px rgba(0, 0, 0, .9)); }
       .row:empty { display: none; }
-      /* The controls below the picture, in sections (see _layout): bands as
-         far apart as Home Assistant's features, each one line across, or two
-         lines side by side (a pair), or an empty line's height (a spacer) */
-      .row.sections { flex-direction: column; align-items: stretch; height: auto; row-gap: var(--ha-card-feature-gap, 12px); }
-      .band { display: flex; column-gap: var(--feature-button-spacing, 12px); }
-      .band > .line { flex: 1 1 0; min-width: 0; }
-      /* A camera without a line of its own keeps its side of a pair empty */
-      .band > .line:empty { display: flex; }
-      .band.spacer { height: var(--feature-height, 42px); }
+      /* The controls below the picture, in cells of two columns (see
+         _layout), as far apart as Home Assistant's features */
+      .row.sections {
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); height: auto;
+        row-gap: var(--ha-card-feature-gap, 12px); column-gap: var(--feature-button-spacing, 12px);
+      }
+      .sections > .line { min-width: 0; }
+      .sections > .line.whole, .sections > .spacer { grid-column: 1 / -1; }
+      .sections > .spacer { height: calc(var(--rows) * var(--feature-height, 42px) + (var(--rows) - 1) * var(--ha-card-feature-gap, 12px)); }
       .line > *, .line > .group > * { height: var(--feature-height, 42px); }
       ${LIGHT_CSS}`;
     this._shot = document.createElement("button");
@@ -2580,7 +2606,7 @@ class XtoolCamera extends XtoolFeature {
     this._row.classList.add("sections");
     this._slides = new Map();
     this._lights = new Map();
-    this._bands = [];
+    this._cells = [];  // made once and kept (see _layout)
     // Sections depend on the feature's width (the box holding them is
     // hidden while empty): laid out again when it changes
     this._sizer = new ResizeObserver(() => {
@@ -2599,6 +2625,11 @@ class XtoolCamera extends XtoolFeature {
   /** The sections' lines are fitted one by one (see _layout), not the box that holds them. */
   _fit(row) {
     if (row !== this._row) super._fit(row);
+  }
+
+  /** The controls chosen, each with its partners (see CAMERA_PARTNERS). */
+  _chosen() {
+    return [...new Set(super._chosen().flatMap((id) => [id, ...(CAMERA_PARTNERS[id] ?? [])]))];
   }
 
   /** Nothing to show only without a camera: the picture always shows. */
@@ -2696,19 +2727,19 @@ class XtoolCamera extends XtoolFeature {
 
   /**
    * The overlays the card draws in a style of its own, over the
-   * integration's: each of OVERLAY_LOOKS whose style the card's overlays
-   * feature changes, while the shown camera's switch for it is on, placed
+   * integration's: each of OVERLAY_LOOKS whose style the card's Overlay
+   * styles change, while the shown camera's switch for it is on, placed
    * with the camera's crop. A point (the laser target, where the head is):
    * its icon, in its color and size.
    */
   _drawMarks() {
     const camera = this._shownCamera, crop = camera && this._cropNow();
-    const options = cardOf(this)?._config?.features?.find((f) => f?.type === `custom:${XtoolOverlays.type}`);
+    const styles = cardOf(this)?._config?.overlay_styles;
     const { laser_x: x, laser_y: y } = this._device.roles;
     const head = [x, y].map((id) => Number(this._hass.states[id]?.attributes.position ?? this._hass.states[id]?.state));
     const marks = [];
     for (const [key, look] of Object.entries(OVERLAY_LOOKS)) {
-      const own = lookOf(options, look);
+      const own = lookOf(styles, look);
       const overlay = camera?.overlays.find((o) => o.key === key);
       if (!crop || !Object.keys(own).length || this._hass.states[overlay?.entityId]?.state !== "on") continue;
       const at = look.kind === "point" && head.every(Number.isFinite) ? this._placeOfMm(head, crop) : undefined;
@@ -2799,29 +2830,28 @@ class XtoolCamera extends XtoolFeature {
   }
 
   /**
-   * The chosen controls below the picture, in sections, so a camera switch
-   * moves nothing that stays:
+   * The chosen controls below the picture, in a grid of two columns, so a
+   * camera switch moves nothing that stays:
    * - Every camera: the units every camera has (the camera keys, and such
    *   as Crop and Exposure, for the camera shown), first, never moving.
    * - Shown camera: the units only some cameras have, after them, swapped
    *   as a whole for the camera shown.
-   * A unit is a control, or controls kept together (see CAMERA_UNITS), in
-   * the order chosen. Each section's units fill lines as wide as the row,
-   * in order (by their least widths); each line is a row of its own (see
-   * fitRow). When the last line of Every camera and the widest first line
-   * of any camera's own fit side by side, they share one band, each its
-   * share as if in one row (the right side kept for every camera). The
-   * Shown camera lines take as many bands as the camera with the most, so
-   * nothing below the feature moves either.
+   * A unit is a control with its partners (see CAMERA_PARTNERS), in the
+   * order chosen. Each unit is a cell, a row of its own (see fitRow): half
+   * the width, or the whole width when it does not fit in half. Keys next
+   * to keys, and inputs next to inputs, share a cell while they fit in half.
+   * The camera's own cells take as many rows as the camera with the most
+   * (an empty space below the fewer), so nothing below the feature moves.
    */
   _layout() {
     const box = this._row, full = this.clientWidth;
     if (!full || !this._ready()) return;
     this._laidOutAt = full;
-    // Each line is a row of its own: only one with a field flows (see below)
+    // Each cell is a row of its own: only one with a field flows (see below)
     box.classList.remove("flow");
     const cameras = this._device.cameras;
     const gap = parseFloat(getComputedStyle(box).columnGap) || 0;
+    const half = (full - gap) / 2;
     const units = [];
     for (const id of this._chosen()) {
       const key = unitOf(id);
@@ -2830,58 +2860,53 @@ class XtoolCamera extends XtoolFeature {
       else units.push({ key, ids: [id] });
     }
     const everywhere = (unit) => cameras.every((camera) => unit.ids.every((id) => this._has(camera, id)));
-    const lines = (list) => {
+    // What shares a cell: keys with keys, inputs with inputs; a field or a light keeps its own
+    const kindOf = (ids) => (ids.includes("thickness_or_distance") ? "field" : ids.some((id) => lightPart(id)) ? "light"
+      : ids.some((id) => CAMERA_INPUTS.includes(id)) ? "input" : "keys");
+    const cells = (list) => {
       const out = [];
-      let width = 0;
       for (const ids of list) {
-        const need = this._sizeOf(ids, gap).min;
-        if (out.length && width + gap + need <= full + 0.5) {
-          out.at(-1).push(...ids);
-          width += gap + need;
-        } else {
-          out.push([...ids]);
-          width = need;
+        const last = out.at(-1), kind = kindOf(ids);
+        if (last && last.kind === kind && ["keys", "input"].includes(kind) && this._sizeOf([...last.ids, ...ids], gap).min <= half + 0.5) last.ids.push(...ids);
+        else out.push({ kind, ids: [...ids] });
+      }
+      return out.map((cell) => ({ ids: cell.ids, span: this._sizeOf(cell.ids, gap).min <= half + 0.5 ? 1 : 2 }));
+    };
+    const every = cells(units.filter(everywhere).map((u) => u.ids));
+    const owns = cameras.map((camera) => cells(units.filter((u) => !everywhere(u)).map((u) => u.ids.filter((id) => this._has(camera, id))).filter((ids) => ids.length)));
+    const mine = owns[cameras.findIndex((camera) => camera.entityId === this._camera)] ?? [];
+    // The rows the cells take, as the grid places them (a whole-width cell after a half starts a row)
+    const rowsOf = (list) => {
+      let row = 0, col = 0;
+      for (const { span } of list) {
+        if (span === 2) {
+          if (col) row += 1;
+          row += 1;
+          col = 0;
+        } else if (++col === 2) {
+          row += 1;
+          col = 0;
         }
       }
-      return out;
+      return row + (col ? 1 : 0);
     };
-    const every = lines(units.filter(everywhere).map((u) => u.ids));
-    const own = (camera) => lines(units.filter((u) => !everywhere(u)).map((u) => u.ids.filter((id) => this._has(camera, id))).filter((ids) => ids.length));
-    const owns = cameras.map(own);
-    const mine = owns[cameras.findIndex((camera) => camera.entityId === this._camera)] ?? [];
-    // Sharing a band: the last line of Every camera, and beside it the
-    // widest first line of any camera's own
-    const left = every.length ? this._sizeOf(every.at(-1), gap) : undefined;
-    const rights = owns.filter((o) => o.length).map((o) => this._sizeOf(o[0], gap));
-    const right = rights.length ? { min: Math.max(...rights.map((r) => r.min)), grow: Math.max(...rights.map((r) => r.grow)), count: Math.max(...rights.map((r) => r.count)) } : undefined;
-    const pair = !!left && !!right && left.min + gap + right.min <= full + 0.5;
-    const most = Math.max(0, ...owns.map((o) => o.length));
-    // The bands: [lines], or [] for a spacer
-    const bands = pair
-      ? [...every.slice(0, -1).map((l) => [l]), [every.at(-1), mine[0] ?? []], ...mine.slice(1).map((l) => [l])]
-      : [...every.map((l) => [l]), ...mine.map((l) => [l])];
-    const total = every.length + most - (pair ? 1 : 0);
-    while (bands.length < total) bands.push([]);
-    showSlides(box, bands.map((band, i) => {
-      const el = this._bands[i] ??= Object.assign(document.createElement("div"), { _lines: [] });
-      el.className = `band${band.length === 2 ? " pair" : band.length ? "" : " spacer"}`;
-      showSlides(el, band.map((ids, j) => {
-        const line = el._lines[j] ??= Object.assign(document.createElement("div"), { className: "row line" });
-        // In a pair, each line's share as if its items were in one row (the
-        // same width for each key on both sides), and never less than its
-        // items' least width
-        const size = band.length === 2 ? [left, right][j] : undefined;
-        line.style.flex = size ? `${size.grow} 1 calc(${size.count - 1} * var(--feature-button-spacing, 12px))` : "";
-        line.style.minWidth = size ? `${size.min}px` : "";
-        const items = ids.flatMap((id) => this._itemsOf(id));
-        showSlides(line, items);
-        // A line with a field lays its keys out as a field's row does (see ROW_CSS: flow)
-        line.classList.toggle("flow", items.some((item) => item.classList.contains("group")));
-        return line;
-      }));
-      return el;
-    }));
-    for (const band of box.children) for (const line of band.children) this._fit(line);
+    const spare = Math.max(0, ...owns.map((own) => rowsOf([...every, ...own]))) - rowsOf([...every, ...mine]);
+    const lines = [...every, ...mine].map((cell, i) => {
+      const line = this._cells[i] ??= Object.assign(document.createElement("div"), { className: "row line" });
+      line.classList.toggle("whole", cell.span === 2);
+      const items = cell.ids.flatMap((id) => this._itemsOf(id));
+      showSlides(line, items);
+      // A cell with a field lays its keys out as a field's row does (see ROW_CSS: flow)
+      line.classList.toggle("flow", items.some((item) => item.classList.contains("group")));
+      return line;
+    });
+    if (spare) {
+      this._spacer ??= Object.assign(document.createElement("div"), { className: "spacer" });
+      this._spacer.style.setProperty("--rows", spare);
+      lines.push(this._spacer);
+    }
+    showSlides(box, lines);
+    for (const line of box.children) if (line.classList.contains("line")) this._fit(line);
   }
 
   /** Show another camera. */
@@ -3354,36 +3379,6 @@ class XtoolOverlays extends XtoolFeature {
     const camera = device.cameras.find((c) => c.overlays.some((overlay) => overlay.id === id));
     const overlay = camera?.overlays.find((o) => o.id === id);
     return { control: overlay && overlayControl(id, overlay.entityId, camera, hass), entityId: overlay?.entityId };
-  }
-
-  /**
-   * The controls, and below them a style for each overlay the card can draw
-   * (see OVERLAY_LOOKS) that one of the cameras has, folded away, named as
-   * its switch is.
-   */
-  static editor(hass, entityId) {
-    const base = super.editor(hass, entityId);
-    const overlays = deviceOf(hass, entityId).cameras.flatMap((camera) => camera.overlays);
-    const looks = Object.entries(OVERLAY_LOOKS).map(([key, look]) => ({ ...look, overlay: overlays.find((o) => o.key === key) })).filter((l) => l.overlay);
-    return {
-      schema: [
-        ...base.schema,
-        ...looks.map((look) => ({
-          type: "expandable", name: look.name, title: entityName(hass, look.overlay.entityId) ?? look.name, schema: LOOK_FIELDS[look.kind],
-        })),
-      ],
-      data: (c) => ({ ...base.data(c), ...Object.fromEntries(looks.map((look) => [look.name, lookOf(c, look)])) }),
-      // Only what differs from the integration is kept
-      save: (v) => {
-        const c = { ...v };
-        for (const look of looks) {
-          const own = lookOf(c, look);
-          if (Object.keys(own).length) c[look.name] = own;
-          else delete c[look.name];
-        }
-        return c;
-      },
-    };
   }
 
   /** Five by default: the overlays in DEFAULT_OVERLAYS, each of the first camera that has it, then others in order. */
@@ -4022,7 +4017,7 @@ const BADGE_RING = 16.7 / 20;
 
 // Options this card adds to the tile card's
 const OWN_KEYS = ["style", "features_style", "enabled_color", "pattern", "status_badge", "connection_badge", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on",
-  "last_feature_full_width"];
+  "last_feature_full_width", "overlay_styles"];
 
 // The card's defaults for the tile card's options it sets otherwise
 const DEFAULT_FEATURES_POSITION = "inline";
@@ -4276,6 +4271,8 @@ class XtoolCard extends HTMLElement {
     const edge = progressOptions(config).edge;
     if (!EDGES.some(([id]) => id === edge)) throw new Error(`Unknown progress edge: ${edge}`);
     this._config = { ...config, style };
+    // The cameras draw the overlays in the card's Overlay styles (see XtoolCamera._drawMarks)
+    TARGETS.dispatchEvent(new Event("change"));
     this._open = config.collapsible === false ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded_at_load !== false;
     this._wasOff = undefined;
     const tile = innerTileConfig(this._config, this._open, this._hass);
@@ -5216,6 +5213,7 @@ class XtoolCardEditor extends HTMLElement {
       collapse_when_powered_off: v.collapse_when_powered_off !== false,
       expand_when_powered_on: v.expand_when_powered_on !== false,
       last_feature_full_width: v.last_feature_full_width !== false,
+      overlay_styles: ownStyles(v.overlay_styles),
     });
   }
 
@@ -5365,6 +5363,7 @@ class XtoolCardEditor extends HTMLElement {
           },
         ],
       },
+      ...overlayStylesField(this._hass, c.entity),
     ];
     this._form.data = {
       features_style: c.features_style ?? DEFAULT_FEATURES_STYLE,
@@ -5377,6 +5376,7 @@ class XtoolCardEditor extends HTMLElement {
       collapse_when_powered_off: c.collapse_when_powered_off !== false,
       expand_when_powered_on: c.expand_when_powered_on !== false,
       last_feature_full_width: c.last_feature_full_width !== false,
+      overlay_styles: Object.fromEntries(Object.values(OVERLAY_LOOKS).map((look) => [look.name, lookOf(c.overlay_styles, look)])),
     };
   }
 
@@ -5423,6 +5423,9 @@ function minimal(config, hass) {
   if (c.features_position === DEFAULT_FEATURES_POSITION) delete c.features_position;
   if (hass && same(c.state_content, defaultStateContent(hass, c.entity))) delete c.state_content;
   if (Array.isArray(c.features) && !c.features.length) delete c.features;
+  const styles = ownStyles(c.overlay_styles);
+  if (styles) c.overlay_styles = styles;
+  else delete c.overlay_styles;
   return c;
 }
 

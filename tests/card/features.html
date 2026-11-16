@@ -510,6 +510,10 @@
       .concat([...p2Camera.shadowRoot.querySelectorAll(".line > .slide")].filter((slide) => /crop|exposure/.test(slide.querySelector("hui-card-feature").context.entity_id)))
       .map((el) => { const b = el.getBoundingClientRect(); return `${Math.round(b.left)},${Math.round(b.top)},${Math.round(b.width)}`; }).join(" ");
     const overviewPlaces = stays(), overviewHeight = p2Camera.getBoundingClientRect().height;
+    const cellWidths = () => [...p2Camera.shadowRoot.querySelectorAll(".sections > .line")].map((line) => line.getBoundingClientRect().width);
+    const halfWidth = (p2Camera.shadowRoot.querySelector(".sections").getBoundingClientRect().width - 12) / 2;
+    check("P2 camera, sections", cellWidths().length === 4 && cellWidths().every((w) => Math.abs(w - halfWidth) < 1),
+      `four cells, each half the width: the keys, the crop preset and Exposure, the thickness with Measure, and Mode (${cellWidths().map(Math.round).join(", ")})`);
     check("P2 camera", !keyNamed(p2Camera, "overlay_laser_target") && !keyNamed(p2Camera, "switch.p2_overview_target") && !keyNamed(p2Camera, "thumbnail_refresh"),
       "no overlays (they are in the overlays feature) and no thumbnail refresh");
     keyNamed(p2Camera, "camera.p2_close").click();
@@ -517,6 +521,8 @@
     check("P2 camera, close", inputsOf(p2Camera) === "select-options=select.p2_close_crop,numeric-input:slider=number.p2_close_exposure,light-brightness=light.p2_close_light"
       && closeIcon(p2Camera)?.querySelector("ha-state-icon")?.stateObj === p2Hass.states["light.p2_close_light"] && closeIcon(p2Camera).title,
       `the close camera: its crop preset, exposure, and its fill light: the tile icon and the brightness slider; no Mode (${inputsOf(p2Camera)})`);
+    check("P2 camera, sections", cellWidths().length === 3 && cellWidths().every((w) => Math.abs(w - halfWidth) < 1),
+      `the close camera: the same two shared cells, and its fill light in a half cell (${cellWidths().map(Math.round).join(", ")})`);
     check("P2 camera, sections", stays() === overviewPlaces && Math.abs(p2Camera.getBoundingClientRect().height - overviewHeight) < 0.5,
       `the camera keys, Crop, the crop preset and Exposure keep their places and sizes, and the feature its height (${overviewPlaces} / ${stays()})`);
     check("P2 camera, sections", lineOf(closeIcon(p2Camera)) === lineOf(p2Camera.shadowRoot.querySelector(".line > .slide.slider:has(> hui-card-feature)") && [...p2Camera.shadowRoot.querySelectorAll(".line > .slide")].find((slide) => slide.querySelector("hui-card-feature").feature.type === "light-brightness")),
@@ -545,8 +551,8 @@
     p2Options.setConfig({ type: "custom:xtool-camera" });
     const p2Form = p2Options.querySelector("ha-form");
     const p2Controls = p2Form.schema.find((f) => f.name === "controls");
-    check("P2 camera, options", p2Controls.selector.select.options.map((o) => o.label).join() === "Camera buttons,Camera toggle,Custom crop,Thickness or distance,Measure thickness or distance,Mode,Crop,Exposure,Fill light close,Fill light close brightness"
-      && p2Controls.selector.select.reorder && p2Form.data.controls.join() === "camera_buttons,custom_crop,thickness_or_distance,measure_thickness_or_distance,mode,crop,exposure,fill_light_close,fill_light_close_brightness"
+    check("P2 camera, options", p2Controls.selector.select.options.map((o) => o.label).join() === "Camera buttons,Camera toggle,Custom crop,Thickness or distance,Mode,Crop,Exposure,Fill light close"
+      && p2Controls.selector.select.reorder && p2Form.data.controls.join() === "camera_buttons,custom_crop,thickness_or_distance,mode,crop,exposure,fill_light_close"
       && p2Form.schema.find((f) => f.name === "camera").selector.select.options.map((o) => o.label).join() === "Overview camera,Close camera",
       `the controls to choose and order, by their entities' names (${p2Controls.selector.select.options.map((o) => o.label).join(", ")})`);
     const onlyMode = addFeature({ type: "custom:xtool-camera", show: "names", controls: ["exposure", "mode"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
@@ -555,7 +561,11 @@
       && inputsOf(onlyMode) === "numeric-input:slider=number.p2_overview_exposure,select-options=select.p2_mode", "only the controls chosen, in the order chosen");
     const onlyIcon = addFeature({ type: "custom:xtool-camera", show: "names", camera: "close", controls: ["fill_light_close"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
-    check("P2 camera, options", closeIcon(onlyIcon) && inputsOf(onlyIcon) === "", "the close fill light's icon alone, without its slider");
+    check("P2 camera, options", closeIcon(onlyIcon) && inputsOf(onlyIcon) === "light-brightness=light.p2_close_light", "the close fill light is one choice: its icon and its slider");
+    const onlyThickness = addFeature({ type: "custom:xtool-camera", show: "names", controls: ["thickness_or_distance"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    await wait(60);
+    check("P2 camera, options", !!keyNamed(onlyThickness, "measure_thickness_or_distance") && !!onlyThickness.shadowRoot.querySelector('[data-control="thickness_or_distance"]'),
+      "Thickness or distance is one choice: the field and Measure");
 
     // Taps on the picture, as a phone sends them: pointer events, then touch and mouse events and a click
     const tapSequence = (target, x, y, kind) => {

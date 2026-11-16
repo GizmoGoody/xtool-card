@@ -673,9 +673,8 @@
 
     // The overlays' styles: the laser target drawn by the card, where the head is, while its switch is on
     const markHass = (more = {}) => p2("idle", { "switch.p2_overview_target": "on", "number.p2_laser_x": { state: "100", attributes: { position: 100 } }, "number.p2_laser_y": { state: "50", attributes: { position: 50 } }, ...more });
-    const marked = (look) => addCard("P2 laser target", { entity: "sensor.p2_status", features: [
+    const marked = (look) => addCard("P2 laser target", { entity: "sensor.p2_status", ...(look ? { overlay_styles: { laser_target: look } } : {}), features: [
       { type: "custom:xtool-camera", camera: "overview", controls: ["camera_buttons"] },
-      { type: "custom:xtool-overlays", ...(look ? { laser_target: look } : {}) },
     ] }, { hass: markHass(), height: 420 });
     const styledCard = marked({ color: "red", icon: "mdi:crosshairs-gps", size: 40 }), plainCard = marked();
     await wait(200);
@@ -693,6 +692,11 @@
     const plainCamera = deep(plainCard, "xtool-camera")[0];
     plainCamera.hass = markHass();
     check("overlays, style", plainCamera.shadowRoot.querySelectorAll(".shot .marks ha-icon").length === 0, "nothing of the card's own while its style follows the integration");
+    plainCard.setConfig({ ...plainCard._config, overlay_styles: { laser_target: { size: 30 } } });
+    await wait(30);
+    const restyled = deep(plainCard, "xtool-camera")[0];
+    check("overlays, style", restyled.shadowRoot.querySelectorAll(".shot .marks ha-icon").length === 1,
+      `a style changed in the editor shows at once, with no new state from the laser (same camera: ${restyled === plainCamera}, connected: ${plainCamera.isConnected})`);
 
     // The corners: the same expanded as collapsed
     const roundCard = (expanded) => {
