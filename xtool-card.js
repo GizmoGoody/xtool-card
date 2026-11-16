@@ -4261,14 +4261,18 @@ class XtoolCard extends HTMLElement {
           --ha-card-background: transparent; --card-background-color: transparent;
           --ha-card-box-shadow: none; --ha-card-border-color: transparent; --ha-card-backdrop-filter: none;
         }
-        /* The text on the body, and the controls' backing in each features style */
+        /* The text on the body, and the controls' backing in each features style.
+           Disabled text (a laser that is off or unreachable) as Material's on
+           that tone, so it stays readable whatever the theme's own is */
         .tile.dark {
           --primary-text-color: rgba(255, 255, 255, .95); --secondary-text-color: rgba(235, 235, 240, .7);
+          --disabled-text-color: rgba(255, 255, 255, .38);
           --xtool-text: rgba(255, 255, 255, .95); text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
           --xtool-feature-scrim: rgba(0, 0, 0, .45);
         }
         .tile.light {
           --primary-text-color: rgba(0, 0, 0, .85); --secondary-text-color: rgba(40, 40, 48, .62);
+          --disabled-text-color: rgba(0, 0, 0, .38);
           --xtool-text: rgba(0, 0, 0, .85); --xtool-feature-scrim: rgba(255, 255, 255, .45);
         }
         .tile.dark.solid { --xtool-feature-backing: #1e1f22; }

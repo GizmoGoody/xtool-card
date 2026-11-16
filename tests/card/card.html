@@ -279,6 +279,11 @@
     check("defaults", inner(defaultCard).config.features_position === "inline" && inner(defaultCard).config.state_content.join() === "state,engraving_lens,elapsed",
       `features beside the title; State content: the state, the engraving lens and the time it has run (${inner(defaultCard).config.state_content.join(", ")})`);
     check("defaults", inner(pictures.raster).config.state_content.join() === "state,elapsed", "a laser without an engraving lens sensor: the state and the time it has run");
+    // A laser that is off: its keys are disabled, in a disabled color readable on the style's tone
+    const lightKey = deep(styles.f2UltraUv, "xtool-job")[0];
+    const lightDisabled = lightKey && getComputedStyle(lightKey).getPropertyValue("--disabled-text-color").trim();
+    check("styles", lightDisabled === "rgba(0, 0, 0, .38)" || lightDisabled === "rgba(0,0,0,.38)" || lightDisabled === "rgba(0, 0, 0, 0.38)",
+      `the light style's disabled text is dark, whatever the theme's (${lightDisabled})`);
     check("defaults", defaultCard.shadowRoot.querySelectorAll(".area.console").length > 0 && deep(defaultCard, "xtool-job")[0]?.hasAttribute("xtool-console"),
       "features style: Console");
 
