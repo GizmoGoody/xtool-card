@@ -172,6 +172,30 @@
     cameraForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...cameraForm.data, full_width: true } } }));
     check("camera, full width", JSON.stringify(cameraFired) === JSON.stringify({ type: "custom:xtool-camera" }), "on, it is left out");
 
+    // The overlays' styles: one folded section for each the card can draw, kept only where it differs from the integration
+    const overlaysEditor = document.createElement("xtool-feature-editor");
+    let overlaysFired;
+    overlaysEditor.addEventListener("config-changed", (ev) => (overlaysFired = ev.detail.config));
+    overlaysEditor.hass = makeHass();
+    overlaysEditor.context = { entity_id: "sensor.p2_status" };
+    overlaysEditor.setConfig({ type: "custom:xtool-overlays" });
+    const overlaysForm = overlaysEditor.querySelector("ha-form");
+    const lookSection = overlaysForm.schema.find((s) => s.name === "laser_target");
+    check("overlays, style", lookSection?.type === "expandable" && lookSection.title === "Laser target"
+      && lookSection.schema.map((f) => f.label).join() === "Color,Icon,Size (px)"
+      && lookSection.schema[0].selector.ui_color.default_color === "integration" && JSON.stringify(overlaysForm.data.laser_target) === "{}",
+      `a Laser target section: Color (Integration by default), Icon and Size (${lookSection?.schema.map((f) => f.label).join()})`);
+    overlaysForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...overlaysForm.data, laser_target: { color: "red", icon: "", size: 40 } } } }));
+    check("overlays, style", JSON.stringify(overlaysFired) === JSON.stringify({ type: "custom:xtool-overlays", laser_target: { color: "red", size: 40 } }),
+      `what is changed is saved; a cleared icon is left out (${JSON.stringify(overlaysFired)})`);
+    overlaysForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...overlaysForm.data, laser_target: { color: "integration" } } } }));
+    check("overlays, style", JSON.stringify(overlaysFired) === JSON.stringify({ type: "custom:xtool-overlays" }), "back to the integration: the section is left out");
+    const f2Overlays = document.createElement("xtool-feature-editor");
+    f2Overlays.hass = makeHass();
+    f2Overlays.context = { entity_id: "sensor.f2_status" };
+    f2Overlays.setConfig({ type: "custom:xtool-overlays" });
+    check("overlays, style", !f2Overlays.querySelector("ha-form")?.schema.some((s) => s.type === "expandable"), "no style section for a laser without a Laser target overlay");
+
     // The tile card's options change
     tile.dispatchEvent(new CustomEvent("config-changed", { detail: { config: { type: "tile", entity: "sensor.f2_status", name: "Laser", show_entity_picture: true } } }));
     check("editor", fired.type === "custom:xtool-card" && fired.name === "Laser" && !("style" in fired) && !("show_entity_picture" in fired),

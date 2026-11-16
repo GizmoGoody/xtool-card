@@ -671,6 +671,29 @@
       "the P2 ring light: white while idle");
     check("status light", !tileOf(noLight).hasAttribute("xtool-light"), "none when turned off");
 
+    // The overlays' styles: the laser target drawn by the card, where the head is, while its switch is on
+    const markHass = (more = {}) => p2("idle", { "switch.p2_overview_target": "on", "number.p2_laser_x": { state: "100", attributes: { position: 100 } }, "number.p2_laser_y": { state: "50", attributes: { position: 50 } }, ...more });
+    const marked = (look) => addCard("P2 laser target", { entity: "sensor.p2_status", features: [
+      { type: "custom:xtool-camera", camera: "overview", controls: ["camera_buttons"] },
+      { type: "custom:xtool-overlays", ...(look ? { laser_target: look } : {}) },
+    ] }, { hass: markHass(), height: 420 });
+    const styledCard = marked({ color: "red", icon: "mdi:crosshairs-gps", size: 40 }), plainCard = marked();
+    await wait(200);
+    const markCamera = deep(styledCard, "xtool-camera")[0];
+    markCamera.hass = markHass();
+    const marks = () => [...markCamera.shadowRoot.querySelectorAll(".shot .marks ha-icon")];
+    const markImg = markCamera.shadowRoot.querySelector(".shot hui-image").shadowRoot.querySelector("img").getBoundingClientRect();
+    const markShot = markCamera.shadowRoot.querySelector(".shot").getBoundingClientRect();
+    const headX = markImg.left - markShot.left + (100 / 610) * markImg.width;
+    check("overlays, style", marks().length === 1 && marks()[0].icon === "mdi:crosshairs-gps" && marks()[0].style.getPropertyValue("--mdc-icon-size") === "40px"
+      && marks()[0].style.color.includes("--red-color") && Math.abs(parseFloat(marks()[0].style.left) - headX) < 1.5,
+      `the laser target in its icon, size and color, where the head is (${marks()[0]?.style.left} for ${Math.round(headX)})`);
+    markCamera.hass = markHass({ "switch.p2_overview_target": "off" });
+    check("overlays, style", marks().length === 0, "nothing while the Laser target overlay is off");
+    const plainCamera = deep(plainCard, "xtool-camera")[0];
+    plainCamera.hass = markHass();
+    check("overlays, style", plainCamera.shadowRoot.querySelectorAll(".shot .marks ha-icon").length === 0, "nothing of the card's own while its style follows the integration");
+
     // The corners: the same expanded as collapsed
     const roundCard = (expanded) => {
       const card = addCard(expanded ? "round, expanded" : "round, collapsed", { collapsible: true, expanded_at_load: expanded, ...jobFeatures }, { height: expanded ? 200 : 56 });

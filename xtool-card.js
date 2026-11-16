@@ -15,7 +15,8 @@
  *                             tap two corners on the picture to crop it; the deep camera's perspective; the
  *                             P2's mode, crop, exposure and close light (Home Assistant's own features), and
  *                             its overview camera's thickness or distance (a field) and Measure
- * - custom:xtool-overlays     a key for each overlay switch chosen, of the cameras' pictures
+ * - custom:xtool-overlays     a key for each overlay switch chosen, of the cameras' pictures, and a style (color,
+ *                             icon, size) for the ones the card can draw over them itself (the laser target)
  * - custom:xtool-safetypro-if2-fan the SafetyPro IF2 inline fan: Off, A (Auto) and a speed key that steps 1 to 4
  * - custom:xtool-position     the laser's position X,Y in a field (press and drag on it to slide both), Move and Home
  * - custom:xtool-focus        Autofocus, and the thickness to focus on in a field (typed, or slid on)
@@ -332,6 +333,33 @@ const OVERLAY_ORDER = [
 const DEFAULT_OVERLAYS = [
   "overlay_laser_target", "overlay_close_camera", "overlay_red_dot_close", "overlay_red_dot_quick", "overlay_slat_lines",
 ];
+
+// The overlays the card can draw over the picture in a style of its own
+// (see XtoolOverlays.editor and XtoolCamera._drawMarks), by translation key:
+// their option name and kind. Only those whose place the card knows: the
+// laser target is where the head is (the position numbers). The others'
+// places are the integration's.
+const OVERLAY_LOOKS = { overlay_laser_target: { name: "laser_target", kind: "point" } };
+// "Integration": a style left as the integration draws it
+const INTEGRATION = "integration";
+// The style options of each kind: a point is drawn as an icon
+const LOOK_FIELDS = {
+  point: [
+    {
+      name: "color", label: "Color",
+      helper: "Integration: the card draws nothing of its own. With Icon or Size changed, the card's Enabled color.",
+      selector: { ui_color: { default_color: INTEGRATION, extra_options: [{ value: INTEGRATION, label: "Integration" }, ...STATE_COLORS] } },
+    },
+    { name: "icon", label: "Icon", selector: { icon: { placeholder: "mdi:crosshairs" } } },
+    { name: "size", label: "Size (px)", selector: { number: { mode: "box", min: 8, max: 96, step: 1 } } },
+  ],
+};
+const MARK_DEFAULTS = { icon: "mdi:crosshairs", size: 24 };
+
+/** An overlay's style in the overlays feature's options, without what follows the integration (empty: none of its own). */
+function lookOf(config, look) {
+  return Object.fromEntries(Object.entries(config?.[look.name] ?? {}).filter(([, value]) => value !== undefined && value !== "" && value !== INTEGRATION));
+}
 
 /** An overlay's control (id: see cameraModel): its switch, named by its entity and its camera. */
 function overlayControl(id, entityId, camera, hass) {
@@ -2468,6 +2496,9 @@ class XtoolCamera extends XtoolFeature {
       .shot .target line, .shot .target circle { fill: none; stroke: ${ENABLED}; stroke-width: 2; vector-effect: non-scaling-stroke; }
       .shot .target .path { stroke-dasharray: 6 5; }
       .shot .target .now { fill: ${ENABLED}; }
+      /* The overlays the card draws in a style of its own (see _drawMarks) */
+      .shot .marks { position: absolute; inset: 0; pointer-events: none; }
+      .shot .marks ha-icon { position: absolute; transform: translate(-50%, -50%); display: flex; filter: drop-shadow(0 0 1px rgba(0, 0, 0, .9)); }
       .row:empty { display: none; }
       /* The controls below the picture, in sections (see _layout): bands as
          far apart as Home Assistant's features, each one line across, or two
@@ -2488,8 +2519,9 @@ class XtoolCamera extends XtoolFeature {
         <g class="reticle"><circle r="14"></circle><circle r="4"></circle>
           <line x1="-22" y1="0" x2="-8" y2="0"></line><line x1="8" y1="0" x2="22" y2="0"></line>
           <line x1="0" y1="-22" x2="0" y2="-8"></line><line x1="0" y1="8" x2="0" y2="22"></line></g>
-      </svg><span class="hint"></span><span class="time"></span>`;
+      </svg><span class="marks"></span><span class="hint"></span><span class="time"></span>`;
     this._target = this._shot.querySelector(".target");
+    this._marks = this._shot.querySelector(".marks");
     this._time = this._shot.querySelector(".time");
     this._area = this._shot.querySelector(".area");
     this._hint = this._shot.querySelector(".hint");
@@ -2553,6 +2585,7 @@ class XtoolCamera extends XtoolFeature {
     // hidden while empty): laid out again when it changes
     this._sizer = new ResizeObserver(() => {
       if (this.clientWidth !== this._laidOutAt) this._layout();
+      this._drawTarget();
     });
     this._sizer.observe(this);
   }
@@ -2643,6 +2676,7 @@ class XtoolCamera extends XtoolFeature {
    */
   _drawTarget() {
     if (!this._ready() || !this._target) return;
+    this._drawMarks();
     const camera = this._shownCamera;
     const overlay = camera?.overlays.find((o) => o.key === "overlay_laser_target");
     const crop = overlay && this._hass.states[overlay.entityId]?.state === "on" ? this._cropNow() : undefined;
@@ -2658,6 +2692,37 @@ class XtoolCamera extends XtoolFeature {
     this._target.querySelector(".now").setAttribute("cy", from.top);
     this._target.querySelector(".reticle").setAttribute("transform", `translate(${to.left} ${to.top})`);
     this._target.style.display = "";
+  }
+
+  /**
+   * The overlays the card draws in a style of its own, over the
+   * integration's: each of OVERLAY_LOOKS whose style the card's overlays
+   * feature changes, while the shown camera's switch for it is on, placed
+   * with the camera's crop. A point (the laser target, where the head is):
+   * its icon, in its color and size.
+   */
+  _drawMarks() {
+    const camera = this._shownCamera, crop = camera && this._cropNow();
+    const options = cardOf(this)?._config?.features?.find((f) => f?.type === `custom:${XtoolOverlays.type}`);
+    const { laser_x: x, laser_y: y } = this._device.roles;
+    const head = [x, y].map((id) => Number(this._hass.states[id]?.attributes.position ?? this._hass.states[id]?.state));
+    const marks = [];
+    for (const [key, look] of Object.entries(OVERLAY_LOOKS)) {
+      const own = lookOf(options, look);
+      const overlay = camera?.overlays.find((o) => o.key === key);
+      if (!crop || !Object.keys(own).length || this._hass.states[overlay?.entityId]?.state !== "on") continue;
+      const at = look.kind === "point" && head.every(Number.isFinite) ? this._placeOfMm(head, crop) : undefined;
+      if (at) marks.push({ ...MARK_DEFAULTS, ...own, at });
+    }
+    const icons = [...this._marks.children];
+    while (icons.length < marks.length) icons.push(this._marks.appendChild(document.createElement("ha-icon")));
+    icons.slice(marks.length).forEach((icon) => icon.remove());
+    marks.forEach(({ icon, size, color, at }, i) => {
+      const el = icons[i];
+      if (el.icon !== icon) el.icon = icon;
+      Object.assign(el.style, { left: `${at.left}px`, top: `${at.top}px`, color: color ? cssColor(color) : ENABLED });
+      el.style.setProperty("--mdc-icon-size", `${size}px`);
+    });
   }
 
   /** A point on the work surface (mm) in the picture box (px), as _pointOf reads one; undefined without a picture. */
@@ -3289,6 +3354,36 @@ class XtoolOverlays extends XtoolFeature {
     const camera = device.cameras.find((c) => c.overlays.some((overlay) => overlay.id === id));
     const overlay = camera?.overlays.find((o) => o.id === id);
     return { control: overlay && overlayControl(id, overlay.entityId, camera, hass), entityId: overlay?.entityId };
+  }
+
+  /**
+   * The controls, and below them a style for each overlay the card can draw
+   * (see OVERLAY_LOOKS) that one of the cameras has, folded away, named as
+   * its switch is.
+   */
+  static editor(hass, entityId) {
+    const base = super.editor(hass, entityId);
+    const overlays = deviceOf(hass, entityId).cameras.flatMap((camera) => camera.overlays);
+    const looks = Object.entries(OVERLAY_LOOKS).map(([key, look]) => ({ ...look, overlay: overlays.find((o) => o.key === key) })).filter((l) => l.overlay);
+    return {
+      schema: [
+        ...base.schema,
+        ...looks.map((look) => ({
+          type: "expandable", name: look.name, title: entityName(hass, look.overlay.entityId) ?? look.name, schema: LOOK_FIELDS[look.kind],
+        })),
+      ],
+      data: (c) => ({ ...base.data(c), ...Object.fromEntries(looks.map((look) => [look.name, lookOf(c, look)])) }),
+      // Only what differs from the integration is kept
+      save: (v) => {
+        const c = { ...v };
+        for (const look of looks) {
+          const own = lookOf(c, look);
+          if (Object.keys(own).length) c[look.name] = own;
+          else delete c[look.name];
+        }
+        return c;
+      },
+    };
   }
 
   /** Five by default: the overlays in DEFAULT_OVERLAYS, each of the first camera that has it, then others in order. */
