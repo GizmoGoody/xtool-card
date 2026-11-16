@@ -834,8 +834,8 @@
     tapAt(0.25, 0.2);
     check("camera, crop", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "xtool", service: "camera", data: {
       crop_width: 100, crop_height: 120, crop_center_x: 0, crop_center_y: 0, entity_id: "camera.f2_main" } })
-      && area.hidden && cropped.shadowRoot.querySelector(".hint").textContent === "Tap a corner to start selection of a crop area",
-      `the opposite corner crops to the rectangle between them, in mm on the work surface, and Crop stays on for another (${JSON.stringify(lastCall(hass).data)})`);
+      && area.hidden && cropped.shadowRoot.querySelector(".hint").textContent === "Cropping",
+      `the opposite corner crops to the rectangle between them, in mm on the work surface, and the hint says Cropping until the crop numbers change (${JSON.stringify(lastCall(hass).data)})`);
     await wait(30);
     check("camera, crop", [...cropped.shadowRoot.querySelectorAll(".shot hui-image")].filter((i) => !i.hidden)[0] === before,
       "until the integration has the new picture, the old one stays");

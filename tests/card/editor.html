@@ -68,7 +68,7 @@
     check("laser", fired.entity === "sensor.f2_status", "and back");
     check("editor", styleForm.data.style === "f2_ultra_uv", "the style is shown");
     const styleChoices = styleForm.schema.find((f) => f.name === "style").selector.select.options;
-    check("editor", styleChoices.map((o) => `${o.value}=${o.label}`).join() === "none=None (the theme's card),f2_ultra_uv=F2 Ultra UV,p2=P2",
+    check("editor", styleChoices.map((o) => `${o.value}=${o.label}`).join() === "none=None (theme),f2_ultra_uv=F2 Ultra UV,p2=P2",
       `the styles, by the model each is drawn from (${styleChoices.map((o) => o.label).join(", ")})`);
 
     // Randomize reflections: a new pattern for the window's reflections

@@ -2676,6 +2676,8 @@ class XtoolCamera extends XtoolFeature {
       else if (returned.length) this._renewImages(returned);
       else this._newPictures(before, hass);
     }
+    // The crop sent has taken effect (or the camera put another in its place)
+    if (this._cropSent && JSON.stringify(this._cropNow()) !== this._cropSent) this._cropSent = undefined;
     this._showCamera();
     this._drawTarget();
   }
@@ -2877,6 +2879,8 @@ class XtoolCamera extends XtoolFeature {
   // First tap: a corner; second tap: the opposite corner, which sets the crop
   _cropTap(ev) {
     const crop = this._crop();
+    // A crop on its way: taps wait for it
+    if (this._cropSent) return;
     const point = crop && this._pointOf(ev, crop);
     if (!point) return;
     if (!this._first) {
@@ -2891,6 +2895,9 @@ class XtoolCamera extends XtoolFeature {
     this._showHint();
     const width = Math.abs(point.x - first.x), height = Math.abs(point.y - first.y);
     if (!width || !height) return;
+    // Until the camera's crop numbers change, the hint says it is cropping
+    this._cropSent = JSON.stringify(crop);
+    this._showHint();
     this._sendCrop({
       width: Math.round(width), height: Math.round(height),
       center_x: Math.round((point.x + first.x) / 2), center_y: Math.round((point.y + first.y) / 2),
@@ -2926,6 +2933,7 @@ class XtoolCamera extends XtoolFeature {
 
   _stopCropping() {
     this._cropping = false;
+    this._cropSent = undefined;
     this._first = undefined;
     this._area.hidden = true;
     this._showHint();
@@ -2997,7 +3005,8 @@ class XtoolCamera extends XtoolFeature {
   _showHint() {
     const crop = this._cropping ? this._crop() : undefined;
     this._shot.classList.toggle("cropping", !!crop);
-    this._hint.textContent = !crop ? "" : this._first ? "Tap the opposite corner of the custom crop area" : "Tap a corner to start selection of a crop area";
+    this._hint.textContent = !crop ? "" : this._cropSent ? "Cropping" : this._first ? "Tap the opposite corner of the custom crop area"
+      : "Tap a corner to start selection of a crop area";
   }
 
   _currentCamera(cameras) {
@@ -3745,7 +3754,7 @@ function findDeep(root, selector, depth = 5) {
 
 // The xTool styles: a body and a window, light or dark (for the text on the
 // body), and the body's base color without grain (for Flat)
-const STYLES = [["none", "None (the theme's card)"], ["f2_ultra_uv", "F2 Ultra UV"], ["p2", "P2"]];
+const STYLES = [["none", "None (theme)"], ["f2_ultra_uv", "F2 Ultra UV"], ["p2", "P2"]];
 const TONE = { f2_ultra_uv: "light", p2: "dark" };
 const DEFAULT_PATTERN = 4242;
 
@@ -5034,7 +5043,7 @@ class XtoolCardEditor extends HTMLElement {
     this._laserForm.data = { device: this._hass?.entities?.[c.entity]?.device_id };
     this._styleForm.schema = [{
       name: "style", label: "xTool style",
-      helper: "The machine's window behind the title and its body behind the rest.",
+      helper: "The card's style can be left to match your theme's style or a variety of xTool machine styles.",
       selector: select(STYLES),
     }];
     this._styleForm.data = { style: c.style };
