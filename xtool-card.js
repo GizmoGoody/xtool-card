@@ -903,13 +903,15 @@ const KEY_CSS = `
     box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -2px 2px rgba(0,0,0,.3), 0 2px 3px rgba(0,0,0,.5);
     transition: transform 120ms ease-in-out, box-shadow 120ms ease-in-out;
   }
-  :host([xtool-console]) .key:active,
-  :host([xtool-console]) .key[aria-pressed="true"] {
+  :host([xtool-console]) .key:not(:disabled):active,
+  :host([xtool-console]) .key:not(:disabled)[aria-pressed="true"] {
     /* Pressed in: the same size, set lower, lit from above */
     transform: translateY(1px);
     background-image: linear-gradient(180deg, rgba(0,0,0,.28), rgba(0,0,0,.06) 40%, rgba(255,255,255,.1));
     box-shadow: inset 0 3px 6px rgba(0,0,0,.55), inset 0 1px 2px rgba(0,0,0,.4), inset 0 -1px 0 rgba(255,255,255,.25);
   }
+  /* A key that cannot be used now lies flat: not raised, and it does not press in */
+  :host([xtool-console]) .key:disabled { background-image: none; box-shadow: none; transform: none; }
 `;
 
 // What a feature's keys show: their icons, their names, or both. A key
@@ -1017,7 +1019,9 @@ const FEATURE_CSS = `
     width: 100%; min-width: 0; margin: 0; padding: 0 4px; border: 0; outline: none; background: transparent;
     font: inherit; color: inherit; text-align: center;
   }
-  .field.disabled { opacity: .45; cursor: default; }
+  /* Unavailable or unknown: as Home Assistant's own controls, in its disabled colors */
+  .field.disabled { cursor: default; color: var(--disabled-text-color, #bdbdbd); }
+  .field.disabled::before { background: var(--disabled-color, #bdbdbd); opacity: .2; }
   /* A read-out: a field, tinted and its icon in its state's color */
   .field.readout { cursor: pointer; gap: 6px; padding: 0 4px; font-size: var(--ha-font-size-s, 12px); min-width: 0; }
   .field.readout::before { background: var(--c, ${ENABLED}); }
@@ -1041,8 +1045,10 @@ const FEATURE_CSS = `
   .key[aria-pressed="true"]::before { opacity: 1; }
   .key[aria-pressed="true"] { color: var(--xtool-on-color, #fff); }
   .key:focus-visible { outline: 2px solid var(--c, ${ENABLED}); outline-offset: 2px; }
-  .key:disabled { cursor: default; opacity: .45; }
-  .key:disabled::before { opacity: .12; }
+  /* Unavailable or unknown (or not usable now): as Home Assistant's own
+     control buttons, its disabled color behind and its disabled text color */
+  .key:disabled { cursor: default; color: var(--disabled-text-color, #bdbdbd); }
+  .key:disabled::before, .key:disabled:hover::before { background: var(--disabled-color, #bdbdbd); opacity: .2; }
   .key > * { position: relative; }
   .key ha-icon, .key ha-state-icon { flex: none; --mdc-icon-size: 22px; }
   /* The icon (or name) with the chevron for where the part sits centered under it */
@@ -3961,7 +3967,11 @@ class XtoolCard extends HTMLElement {
           color: #fff;
         }
         .badge.on { display: grid; }
-        .badge ha-state-icon { display: flex; --mdc-icon-size: 12px; }
+        .badge { overflow: hidden; line-height: 0; }
+        .badge ha-state-icon {
+          position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+          --mdc-icon-size: 12px; --ha-icon-display: flex;
+        }
         .styled .badge { --xtool-badge-ring: rgba(0, 0, 0, .55); }
       </style>
       <div class="frame">
