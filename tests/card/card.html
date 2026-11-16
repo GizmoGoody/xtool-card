@@ -678,8 +678,9 @@
       "the P2 ring light: white while idle");
     check("status light", !tileOf(noLight).hasAttribute("xtool-light"), "none when turned off");
 
-    // The overlays' styles: the laser target drawn by the card, where the head is, while its switch is on
-    const markHass = (more = {}) => p2("idle", { "switch.p2_overview_target": "on", "number.p2_laser_x": { state: "100", attributes: { position: 100 } }, "number.p2_laser_y": { state: "50", attributes: { position: 50 } }, ...more });
+    // The overlays' styles: the laser target drawn by the card where its switch's position says, while it is on
+    const targetAttributes = (more = {}) => ({ position: { target: [[100, 50]] }, style: { color: [0, 0, 255], line: 3, style: "solid", icon: "mdi:crosshairs", size: 10 }, ...more });
+    const markHass = (more = {}) => p2("idle", { "switch.p2_overview_target": { state: "on", attributes: targetAttributes() }, ...more });
     const marked = (look) => addCard("P2 laser target", { entity: "sensor.p2_status", ...(look ? { overlay_styles: { laser_target: look } } : {}), features: [
       { type: "custom:xtool-camera", camera: "overview", controls: ["camera_buttons"] },
     ] }, { hass: markHass(), height: 420 });
@@ -691,10 +692,13 @@
     const markImg = markCamera.shadowRoot.querySelector(".shot hui-image").shadowRoot.querySelector("img").getBoundingClientRect();
     const markShot = markCamera.shadowRoot.querySelector(".shot").getBoundingClientRect();
     const headX = markImg.left - markShot.left + (100 / 610) * markImg.width;
-    check("overlays, style", marks().length === 1 && marks()[0].icon === "mdi:crosshairs-gps" && marks()[0].style.getPropertyValue("--mdc-icon-size") === "40px"
+    check("overlays, style", marks().length === 1 && marks()[0].getAttribute("icon") === "mdi:crosshairs-gps" && marks()[0].style.getPropertyValue("--mdc-icon-size") === "40px"
       && marks()[0].style.color.includes("--red-color") && Math.abs(parseFloat(marks()[0].style.left) - headX) < 1.5,
       `the laser target in its icon, size and color, where the head is (${marks()[0]?.style.left} for ${Math.round(headX)})`);
-    markCamera.hass = markHass({ "switch.p2_overview_target": "off" });
+    markCamera.hass = markHass({ "switch.p2_overview_target": { state: "on", attributes: targetAttributes({ position: { target: [[200, 50]] } }) } });
+    const movedX = markImg.left - markShot.left + (200 / 610) * markImg.width;
+    check("overlays, style", Math.abs(parseFloat(marks()[0]?.style.left) - movedX) < 1.5, `it follows the position (${marks()[0]?.style.left} for ${Math.round(movedX)})`);
+    markCamera.hass = markHass({ "switch.p2_overview_target": { state: "off", attributes: targetAttributes() } });
     check("overlays, style", marks().length === 0, "nothing while the Laser target overlay is off");
     const plainCamera = deep(plainCard, "xtool-camera")[0];
     plainCamera.hass = markHass();
@@ -704,6 +708,29 @@
     const restyled = deep(plainCard, "xtool-camera")[0];
     check("overlays, style", restyled.shadowRoot.querySelectorAll(".shot .marks ha-icon").length === 1,
       `a style changed in the editor shows at once, with no new state from the laser (same camera: ${restyled === plainCamera}, connected: ${plainCamera.isConnected})`);
+    // With the camera's Overlays select on Card, the card draws every overlay that is on, in the integration's style
+    plainCard.setConfig({ ...plainCard._config, overlay_styles: undefined });
+    await wait(30);
+    let byCard = deep(plainCard, "xtool-camera")[0];
+    byCard.hass = markHass({ "select.p2_overview_overlays": "card" });
+    const cardIcons = [...byCard.shadowRoot.querySelectorAll(".shot .marks ha-icon")];
+    const slatLines = [...byCard.shadowRoot.querySelectorAll(".shot .looks line")];
+    const pxPerMm = markImg.width / 610;
+    check("overlays, by the card", cardIcons.length === 1 && cardIcons[0].getAttribute("icon") === "mdi:crosshairs" && cardIcons[0].style.color === "rgb(0, 0, 255)"
+      && Math.abs(parseFloat(cardIcons[0].style.getPropertyValue("--mdc-icon-size")) - 10 * pxPerMm) < 0.5,
+      `the laser target in the integration's icon, color and size (10 mm: ${cardIcons[0]?.style.getPropertyValue("--mdc-icon-size")} for ${(10 * pxPerMm).toFixed(1)}px)`);
+    check("overlays, by the card", slatLines.length === 2 && slatLines[0].getAttribute("stroke") === "rgb(0,200,255)"
+      && byCard.shadowRoot.querySelector(".shot .looks text")?.textContent === "7",
+      `the slat lines and their numbers (${slatLines.length} lines, ${slatLines[0]?.getAttribute("stroke")})`);
+    plainCard.setConfig({ ...plainCard._config, overlay_styles: { slat_lines: { color: "red", line: 4, style: "dashed" } } });
+    await wait(30);
+    byCard = deep(plainCard, "xtool-camera")[0];
+    byCard.hass = markHass({ "select.p2_overview_overlays": "card" });
+    const dashed = byCard.shadowRoot.querySelector(".shot .looks line");
+    check("overlays, by the card", dashed?.getAttribute("stroke").includes("--red-color") && dashed.getAttribute("stroke-width") === "4" && dashed.getAttribute("stroke-dasharray") === "12 8",
+      `the card's own options over the integration's (${dashed?.getAttribute("stroke")}, ${dashed?.getAttribute("stroke-width")}, ${dashed?.getAttribute("stroke-dasharray")})`);
+    byCard.hass = markHass({ "select.p2_overview_overlays": "card", "switch.p2_overview_slats": "off" });
+    check("overlays, by the card", !byCard.shadowRoot.querySelector(".shot .looks line"), "nothing of an overlay that is off");
 
     // The corners: the same expanded as collapsed
     const roundCard = (expanded) => {

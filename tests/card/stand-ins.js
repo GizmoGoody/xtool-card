@@ -51,7 +51,7 @@ const CATEGORIES = {
   "switch.f2_flame": "config", "switch.f2_gap": "config", "switch.f2_moved": "config", "switch.f2_access_control": "config",
   "switch.f2_beep": "config", "switch.f2_sleep": "config", "switch.if2_buzzer": "config",
   "switch.p2_buzzer": "config", "switch.p2_exhaust_setting": "config", "select.p2_flame_level": "config",
-  "update.p2_firmware": "diagnostic",
+  "update.p2_firmware": "diagnostic", "select.p2_overview_overlays": "config",
 };
 
 // The entities' own names, by translation key, as the integration's translations give them
@@ -151,8 +151,12 @@ const P2_OVERVIEW_CAMERA = [
   ["number.p2_overview_crop_center_y", "crop_center_y", "152.5", { min: 0, max: 305, step: 0.5, unit_of_measurement: "mm" }],
   ["number.p2_overview_exposure", "exposure", "128", { min: 0, max: 255, step: 1 }],
   ["number.p2_overview_thumbnail", "thumbnail_refresh", "300", { min: 5, max: 600, step: 1, unit_of_measurement: "s" }],
-  ["switch.p2_overview_target", "overlay_laser_target", "off"],
-  ["switch.p2_overview_slats", "overlay_slat_lines", "on"],
+  // Where the integration draws an overlay's marks (in the crop's mm) and how
+  ["switch.p2_overview_target", "overlay_laser_target", "off", {
+    position: { target: [[100, 50]] }, style: { color: [0, 0, 255], line: 3, style: "solid", icon: "mdi:crosshairs", size: 10 } }],
+  ["switch.p2_overview_slats", "overlay_slat_lines", "on", {
+    position: { slats: [[200, -40, 200, 340, ""], [300, -40, 300, 340, "7"]] }, style: { color: [0, 200, 255], line: 1, style: "solid", icon: null, size: null } }],
+  ["select.p2_overview_overlays", "overlays", "integration", { options: ["integration", "card"] }],
   ["switch.p2_overview_close", "overlay_close_camera", "off"],
 ];
 const P2_CLOSE_CAMERA = [

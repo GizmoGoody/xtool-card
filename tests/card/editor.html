@@ -185,12 +185,17 @@
     const lookSection = stylesSection?.schema.find((s) => s.name === "laser_target");
     check("overlays, style", stylesSection?.type === "expandable" && stylesSection.title === "Overlay styles" && lookSection?.type === "expandable"
       && lookSection.title === "Laser target" && lookSection.schema.map((f) => f.label).join() === "Color,Icon,Size (px)"
-      && lookSection.schema[0].selector.ui_color.default_color === "integration" && JSON.stringify(stylesForm.data.overlay_styles) === JSON.stringify({ laser_target: {} }),
-      `Overlay styles, with a Laser target section: Color (Integration by default), Icon and Size (${lookSection?.schema.map((f) => f.label).join()})`);
+      && lookSection.schema[0].selector.ui_color.default_color === "integration" && lookSection.schema[1].selector.icon.placeholder === "mdi:crosshairs",
+      `Overlay styles, with a Laser target section: Color (Integration by default), Icon (the integration's as its placeholder) and Size (${lookSection?.schema.map((f) => f.label).join()})`);
+    const slatSection = stylesSection?.schema.find((s) => s.name === "slat_lines");
+    check("overlays, style", slatSection?.title === "Slat lines" && slatSection.schema.map((f) => f.label).join() === "Color,Line (px),Style"
+      && slatSection.schema[2].selector.select.options.map((o) => o.value).join() === "integration,solid,dashed,dotted"
+      && JSON.stringify(stylesForm.data.overlay_styles) === JSON.stringify({ laser_target: {}, slat_lines: { style: "integration" } }),
+      `each overlay with a position, by its kind: lines have Color, Line and Style, Integration first (${slatSection?.schema.map((f) => f.label).join()}; ${JSON.stringify(stylesForm.data.overlay_styles)})`);
     stylesForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...stylesForm.data, overlay_styles: { laser_target: { color: "red", icon: "", size: 40 } } } } }));
     check("overlays, style", JSON.stringify(stylesFired.overlay_styles) === JSON.stringify({ laser_target: { color: "red", size: 40 } }),
       `what is changed is saved; a cleared icon is left out (${JSON.stringify(stylesFired.overlay_styles)})`);
-    stylesForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...stylesForm.data, overlay_styles: { laser_target: { color: "integration" } } } } }));
+    stylesForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...stylesForm.data, overlay_styles: { laser_target: { color: "integration" }, slat_lines: { style: "integration" } } } } }));
     check("overlays, style", !("overlay_styles" in stylesFired), "back to the integration: left out");
     check("overlays, style", !form.schema.some((s) => s.name === "overlay_styles"), "none for a laser without a Laser target overlay");
 

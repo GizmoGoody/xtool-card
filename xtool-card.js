@@ -308,6 +308,9 @@ const ROLES = {
   crop: roleSpec(["crop_preset"], ["select"], "camera"),
   exposure: roleSpec(["exposure"], ["number"], "camera"),
   mode: roleSpec(["processing_mode"], ["select"], "camera"),
+  // Who draws a camera's overlays: the integration on the picture, or the
+  // card (see XtoolCamera._drawLooks)
+  overlays: roleSpec(["overlays"], ["select"], "camera"),
 };
 const CROP_ROLES = ["crop_width", "crop_height", "crop_center_x", "crop_center_y"];
 
@@ -333,52 +336,92 @@ const DEFAULT_OVERLAYS = [
   "overlay_laser_target", "overlay_close_camera", "overlay_red_dot_close", "overlay_red_dot_quick", "overlay_slat_lines",
 ];
 
-// The overlays the card can draw over the picture in a style of its own
-// (the card's Overlay styles, see overlayStylesField and
-// XtoolCamera._drawMarks), by translation key:
-// their option name and kind. Only those whose place the card knows: the
-// laser target is where the head is (the position numbers). The others'
-// places are the integration's.
-const OVERLAY_LOOKS = { overlay_laser_target: { name: "laser_target", kind: "point" } };
+// The overlays the card can draw over the picture (see
+// XtoolCamera._drawLooks): each overlay switch whose position attribute says
+// where its marks are, by kind (the attribute's key). The integration's
+// style attribute says how it draws them; the card's Overlay styles
+// (overlay_styles, by the overlay's key without overlay_) change that.
+// Each kind's options:
+const LOOK_OPTIONS = {
+  areas: ["color", "line", "style", "icon", "size"],  // outlines, a dot at the origin and the centre
+  slats: ["color", "line", "style"],
+  target: ["color", "icon", "size"],
+  close: ["color", "line", "style"],  // a ring
+  quick: ["color", "line", "style"],  // a turned ellipse
+};
 // "Integration": a style left as the integration draws it
 const INTEGRATION = "integration";
-// The style options of each kind: a point is drawn as an icon
-const LOOK_FIELDS = {
-  point: [
-    {
-      name: "color", label: "Color",
-      helper: "Integration: the card draws nothing of its own. With Icon or Size changed, the card's Enabled color.",
-      selector: { ui_color: { default_color: INTEGRATION, extra_options: [{ value: INTEGRATION, label: "Integration" }, ...STATE_COLORS] } },
-    },
-    { name: "icon", label: "Icon", selector: { icon: { placeholder: "mdi:crosshairs" } } },
-    { name: "size", label: "Size (px)", selector: { number: { mode: "box", min: 8, max: 96, step: 1 } } },
-  ],
-};
-const MARK_DEFAULTS = { icon: "mdi:crosshairs", size: 24 };
+const LINE_STYLES = [["solid", "Solid"], ["dashed", "Dashed"], ["dotted", "Dotted"]];
+
+/** An overlay switch's kind (see LOOK_OPTIONS); undefined when it says nothing of where its marks are. */
+function lookKind(stateObj) {
+  return Object.keys(stateObj?.attributes?.position ?? {}).find((kind) => LOOK_OPTIONS[kind]);
+}
+
+/** An overlay's name in the card's Overlay styles: its key without overlay_ (laser_target). */
+const lookName = (key) => key.slice(OVERLAY_PREFIX.length);
+
+/**
+ * The overlays of a laser's cameras the card can draw, once each: their
+ * name, kind and the integration's style (of the first camera that has it).
+ */
+function overlayLooks(hass, entity) {
+  if (!entity || !hass?.entities?.[entity]) return [];
+  const looks = new Map();
+  for (const overlay of deviceOf(hass, entity).cameras.flatMap((camera) => camera.overlays)) {
+    const stateObj = hass.states[overlay.entityId], kind = lookKind(stateObj);
+    if (kind && !looks.has(overlay.key)) {
+      looks.set(overlay.key, { name: lookName(overlay.key), kind, entityId: overlay.entityId, style: stateObj.attributes.style ?? {} });
+    }
+  }
+  return [...looks.values()];
+}
 
 /** An overlay's style in the card's Overlay styles, without what follows the integration (empty: none of its own). */
-function lookOf(styles, look) {
-  return Object.fromEntries(Object.entries(styles?.[look.name] ?? {}).filter(([, value]) => value !== undefined && value !== "" && value !== INTEGRATION));
+function lookOf(styles, name) {
+  return Object.fromEntries(Object.entries(styles?.[name] ?? {}).filter(([, value]) => value !== undefined && value !== "" && value !== INTEGRATION));
 }
 
 /** The card's Overlay styles as it keeps them: only the overlays, and their options, that differ from the integration. */
 function ownStyles(styles) {
-  const own = Object.fromEntries(Object.values(OVERLAY_LOOKS).map((look) => [look.name, lookOf(styles, look)]).filter(([, look]) => Object.keys(look).length));
+  const own = Object.fromEntries(Object.keys(styles ?? {}).map((name) => [name, lookOf(styles, name)]).filter(([, look]) => Object.keys(look).length));
   return Object.keys(own).length ? own : undefined;
+}
+
+/** A style option's field; left empty (or Integration), the integration's. */
+function lookField(option, style) {
+  const integration = { value: INTEGRATION, label: "Integration" };
+  switch (option) {
+    case "color":
+      return { name: "color", label: "Color", selector: { ui_color: { default_color: INTEGRATION, extra_options: [integration, ...STATE_COLORS] } } };
+    case "line":
+      return { name: "line", label: "Line (px)", helper: "Empty: Integration", selector: { number: { mode: "box", min: 1, max: 20, step: 1 } } };
+    case "style":
+      return {
+        name: "style", label: "Style",
+        selector: { select: { mode: "dropdown", options: [integration, ...LINE_STYLES.map(([value, label]) => ({ value, label }))] } },
+      };
+    case "icon":
+      return { name: "icon", label: "Icon", selector: { icon: { placeholder: style.icon ?? "" } } };
+    default:
+      return { name: "size", label: "Size (px)", helper: "Empty: Integration", selector: { number: { mode: "box", min: 4, max: 96, step: 1 } } };
+  }
 }
 
 /**
  * The card editor's Overlay styles: folded away, a section for each overlay
- * the card can draw (see OVERLAY_LOOKS) that one of the laser's cameras has,
- * named as its switch is; none without one.
+ * the card can draw (see overlayLooks), named as its switch is; none
+ * without one.
  */
 function overlayStylesField(hass, entity) {
-  const overlays = entity && hass?.entities?.[entity] ? deviceOf(hass, entity).cameras.flatMap((camera) => camera.overlays) : [];
-  const looks = Object.entries(OVERLAY_LOOKS).map(([key, look]) => ({ ...look, overlay: overlays.find((o) => o.key === key) })).filter((l) => l.overlay);
+  const looks = overlayLooks(hass, entity);
   if (!looks.length) return [];
   return [{
     type: "expandable", name: "overlay_styles", title: "Overlay styles",
-    schema: looks.map((look) => ({ type: "expandable", name: look.name, title: entityName(hass, look.overlay.entityId) ?? look.name, schema: LOOK_FIELDS[look.kind] })),
+    schema: looks.map((look) => ({
+      type: "expandable", name: look.name, title: entityName(hass, look.entityId) ?? look.name,
+      schema: LOOK_OPTIONS[look.kind].map((option) => lookField(option, look.style)),
+    })),
   }];
 }
 
@@ -2522,8 +2565,14 @@ class XtoolCamera extends XtoolFeature {
       .shot .target line, .shot .target circle { fill: none; stroke: ${ENABLED}; stroke-width: 2; vector-effect: non-scaling-stroke; }
       .shot .target .path { stroke-dasharray: 6 5; }
       .shot .target .now { fill: ${ENABLED}; }
-      /* The overlays the card draws in a style of its own (see _drawMarks) */
-      .shot .marks { position: absolute; inset: 0; pointer-events: none; }
+      /* The overlays the card draws (see _drawLooks) */
+      .shot .looks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; }
+      .shot .looks * { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+      .shot .looks .label {
+        fill: #fff; stroke: rgba(0, 0, 0, .85); stroke-width: 3px; paint-order: stroke; text-anchor: middle;
+        font-size: var(--ha-font-size-s, 12px); font-weight: bold;
+      }
+      .shot .marks { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
       .shot .marks ha-icon { position: absolute; transform: translate(-50%, -50%); display: flex; filter: drop-shadow(0 0 1px rgba(0, 0, 0, .9)); }
       .row:empty { display: none; }
       /* The controls below the picture, in cells of two columns (see
@@ -2546,13 +2595,14 @@ class XtoolCamera extends XtoolFeature {
     this._shot = document.createElement("button");
     this._shot.type = "button";
     this._shot.className = "shot";
-    this._shot.innerHTML = `<span class="area" hidden></span><svg class="target" style="display: none">
+    this._shot.innerHTML = `<svg class="looks"></svg><span class="marks"></span><span class="area" hidden></span><svg class="target" style="display: none">
         <line class="path"></line><circle class="now" r="3"></circle>
         <g class="reticle"><circle r="14"></circle><circle r="4"></circle>
           <line x1="-22" y1="0" x2="-8" y2="0"></line><line x1="8" y1="0" x2="22" y2="0"></line>
           <line x1="0" y1="-22" x2="0" y2="-8"></line><line x1="0" y1="8" x2="0" y2="22"></line></g>
-      </svg><span class="marks"></span><span class="hint"></span><span class="time"></span>`;
+      </svg><span class="hint"></span><span class="time"></span>`;
     this._target = this._shot.querySelector(".target");
+    this._looks = this._shot.querySelector(".looks");
     this._marks = this._shot.querySelector(".marks");
     this._time = this._shot.querySelector(".time");
     this._area = this._shot.querySelector(".area");
@@ -2713,7 +2763,7 @@ class XtoolCamera extends XtoolFeature {
    */
   _drawTarget() {
     if (!this._ready() || !this._target) return;
-    this._drawMarks();
+    this._drawLooks();
     const camera = this._shownCamera;
     const overlay = camera?.overlays.find((o) => o.key === "overlay_laser_target");
     const crop = overlay && this._hass.states[overlay.entityId]?.state === "on" ? this._cropNow() : undefined;
@@ -2732,49 +2782,86 @@ class XtoolCamera extends XtoolFeature {
   }
 
   /**
-   * The overlays the card draws in a style of its own, over the
-   * integration's: each of OVERLAY_LOOKS whose style the card's Overlay
-   * styles change, while the shown camera's switch for it is on, placed
-   * with the camera's crop. A point (the laser target, where the head is):
-   * its icon, in its color and size.
+   * The overlays the card draws, over the picture: while the shown camera's
+   * switch for one is on, and either the camera's Overlays select gives
+   * them to the card or the card's Overlay styles change its style. Each
+   * where its switch's position attribute says, in its style attribute's
+   * style with the card's own options over it (line and size in screen
+   * pixels), placed with the camera's crop. Drawn again only when changed.
    */
-  _drawMarks() {
+  _drawLooks() {
     const camera = this._shownCamera, crop = camera && this._cropNow();
+    const view = crop && this._onPicture(crop);
     const styles = cardOf(this)?._config?.overlay_styles;
-    const { laser_x: x, laser_y: y } = this._device.roles;
-    const head = [x, y].map((id) => Number(this._hass.states[id]?.attributes.position ?? this._hass.states[id]?.state));
-    const marks = [];
-    for (const [key, look] of Object.entries(OVERLAY_LOOKS)) {
-      const own = lookOf(styles, look);
-      const overlay = camera?.overlays.find((o) => o.key === key);
-      if (!crop || !Object.keys(own).length || this._hass.states[overlay?.entityId]?.state !== "on") continue;
-      const at = look.kind === "point" && head.every(Number.isFinite) ? this._placeOfMm(head, crop) : undefined;
-      if (at) marks.push({ ...MARK_DEFAULTS, ...own, at });
+    const byCard = this._hass.states[camera?.settings.overlays]?.state === "card";
+    let shapes = "", icons = "";
+    for (const overlay of view ? camera.overlays : []) {
+      const stateObj = this._hass.states[overlay.entityId], kind = lookKind(stateObj);
+      const own = lookOf(styles, lookName(overlay.key));
+      if (!kind || stateObj.state !== "on" || (!byCard && !Object.keys(own).length)) continue;
+      const given = stateObj.attributes.style ?? {};
+      const color = own.color ? cssColor(own.color) : Array.isArray(given.color) ? `rgb(${given.color.join(",")})` : ENABLED;
+      const line = Number(own.line ?? (given.line ?? 2) * view.pxPerPixel);
+      const size = Number(own.size ?? (given.size ?? 0) * view.pxPerMm);
+      const icon = String(own.icon ?? given.icon ?? "").replace(/[^\w:-]/g, "");
+      const dash = { dashed: `${3 * line} ${2 * line}`, dotted: `0 ${2 * line}` }[own.style ?? given.style] ?? "none";
+      const stroke = `stroke="${color}" stroke-width="${line}" stroke-dasharray="${dash}"`;
+      const at = (x, y) => view.place(x, y);
+      const mark = (p) => {
+        if (icon && size > 0) icons += `<ha-icon icon="${icon}" style="left:${p.left}px;top:${p.top}px;color:${color};--mdc-icon-size:${size}px"></ha-icon>`;
+      };
+      for (const m of stateObj.attributes.position[kind] ?? []) {
+        if (kind === "areas") {
+          const [x, y, w, h] = m, a = at(x, y), b = at(x + w, y + h);
+          shapes += `<rect x="${a.left}" y="${a.top}" width="${b.left - a.left}" height="${b.top - a.top}" ${stroke}/>`;
+          mark(a);
+          mark(at(x + w / 2, y + h / 2));
+        } else if (kind === "slats") {
+          const [x0, y0, x1, y1, label] = m, a = at(x0, y0), b = at(x1, y1);
+          shapes += `<line x1="${a.left}" y1="${a.top}" x2="${b.left}" y2="${b.top}" ${stroke}/>`;
+          if (label) shapes += `<text class="label" x="${b.left}" y="${Math.min(b.top, view.height) - 4}">${String(label).replace(/[<&]/g, "")}</text>`;
+        } else if (kind === "target") {
+          mark(at(m[0], m[1]));
+        } else {
+          // A ring or a turned ellipse whose inside is the dot's size
+          const [x, y, length, width = length, angle = 0] = kind === "close" ? [m[0], m[1], m[2]] : m, c = at(x, y);
+          const rx = (length * view.pxPerMm + line) / 2, ry = (width * view.pxPerMm + line) / 2;
+          shapes += `<ellipse cx="${c.left}" cy="${c.top}" rx="${rx}" ry="${ry}" transform="rotate(${angle} ${c.left} ${c.top})" ${stroke}/>`;
+        }
+      }
     }
-    const icons = [...this._marks.children];
-    while (icons.length < marks.length) icons.push(this._marks.appendChild(document.createElement("ha-icon")));
-    icons.slice(marks.length).forEach((icon) => icon.remove());
-    marks.forEach(({ icon, size, color, at }, i) => {
-      const el = icons[i];
-      if (el.icon !== icon) el.icon = icon;
-      Object.assign(el.style, { left: `${at.left}px`, top: `${at.top}px`, color: color ? cssColor(color) : ENABLED });
-      el.style.setProperty("--mdc-icon-size", `${size}px`);
-    });
+    if (shapes !== this._shapesDrawn) this._looks.innerHTML = this._shapesDrawn = shapes;
+    if (icons !== this._iconsDrawn) this._marks.innerHTML = this._iconsDrawn = icons;
   }
 
-  /** A point on the work surface (mm) in the picture box (px), as _pointOf reads one; undefined without a picture. */
-  _placeOfMm([x, y], crop) {
+  /**
+   * How a crop's mm fall on the picture box: place(x, y) in px (as _pointOf
+   * reads a point), the box's height, and the picture's scale (px per mm,
+   * and per pixel of the picture as sent); undefined without a picture or
+   * with a side of the crop left whole (its size in mm is not known).
+   */
+  _onPicture(crop) {
     const img = this._image?.shadowRoot?.querySelector("img");
     if (!img?.naturalWidth || !(crop.width > 0) || !(crop.height > 0)) return undefined;
     const box = img.getBoundingClientRect(), shot = this._shot.getBoundingClientRect();
+    const ratio = shot.width / this._shot.offsetWidth || 1;
     const scale = Math.max(box.width / img.naturalWidth, box.height / img.naturalHeight);
     const shownW = img.naturalWidth * scale, shownH = img.naturalHeight * scale;
-    const u = (x - crop.center_x) / crop.width + 0.5, v = (y - crop.center_y) / crop.height + 0.5;
-    const ratio = shot.width / this._shot.offsetWidth || 1;
+    const left = box.left - shot.left + (box.width - shownW) / 2, top = box.top - shot.top + (box.height - shownH) / 2;
     return {
-      left: (box.left - shot.left + (box.width - shownW) / 2 + u * shownW) / ratio,
-      top: (box.top - shot.top + (box.height - shownH) / 2 + v * shownH) / ratio,
+      place: (x, y) => ({
+        left: (left + ((x - crop.center_x) / crop.width + 0.5) * shownW) / ratio,
+        top: (top + ((y - crop.center_y) / crop.height + 0.5) * shownH) / ratio,
+      }),
+      height: shot.height / ratio,
+      pxPerMm: shownW / crop.width / ratio,
+      pxPerPixel: scale / ratio,
     };
+  }
+
+  /** A point on the work surface (mm) in the picture box (px); undefined without a picture. */
+  _placeOfMm([x, y], crop) {
+    return this._onPicture(crop)?.place(x, y);
   }
 
   /**
@@ -4280,7 +4367,7 @@ class XtoolCard extends HTMLElement {
     const edge = progressOptions(config).edge;
     if (!EDGES.some(([id]) => id === edge)) throw new Error(`Unknown progress edge: ${edge}`);
     this._config = { ...config, style };
-    // The cameras draw the overlays in the card's Overlay styles (see XtoolCamera._drawMarks)
+    // The cameras draw the overlays in the card's Overlay styles (see XtoolCamera._drawLooks)
     TARGETS.dispatchEvent(new Event("change"));
     this._open = config.collapsible === false ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded_at_load !== false;
     this._wasOff = undefined;
@@ -5385,7 +5472,9 @@ class XtoolCardEditor extends HTMLElement {
       collapse_when_powered_off: c.collapse_when_powered_off !== false,
       expand_when_powered_on: c.expand_when_powered_on !== false,
       last_feature_full_width: c.last_feature_full_width !== false,
-      overlay_styles: Object.fromEntries(Object.values(OVERLAY_LOOKS).map((look) => [look.name, lookOf(c.overlay_styles, look)])),
+      // Style shows Integration until one of its own is chosen
+      overlay_styles: Object.fromEntries(overlayLooks(this._hass, c.entity).map((look) => [look.name,
+        { ...(LOOK_OPTIONS[look.kind].includes("style") ? { style: INTEGRATION } : {}), ...lookOf(c.overlay_styles, look.name) }])),
     };
   }
 
