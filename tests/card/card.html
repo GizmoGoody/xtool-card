@@ -585,6 +585,13 @@
     }
     // Core's pattern around a camera across the card: a feature left alone before it takes the full width too
     const p2Places = placesOf(layouts.p2Max);
+    // The camera's cells as far apart as the features side by side
+    const featureBoxes = deep(layouts.p2Max, "hui-card-feature").map((el) => el.getBoundingClientRect()).filter((b) => b.width);
+    const besideGap = featureBoxes.flatMap((a) => featureBoxes.filter((b) => Math.abs(b.top - a.top) < 1 && b.left > a.right).map((b) => b.left - a.right))[0];
+    const p2Cells = [...deep(layouts.p2Max, "xtool-camera")[0].shadowRoot.querySelectorAll(".sections > .line")].map((el) => el.getBoundingClientRect());
+    const cellGap = p2Cells.length > 1 ? p2Cells[1].left - p2Cells[0].right : undefined;
+    check("layout, camera cells", besideGap > 0 && Math.abs(cellGap - besideGap) < 0.5,
+      `the camera's half-width cells are as far apart as features side by side (${cellGap} and ${besideGap} px)`);
     check("layout, camera full width", describe(p2Places) === "configuration:left safety:right lights:full camera:full overlays:left position:right",
       `P2: the lights, left alone before the camera, take the full width (${describe(p2Places)})`);
     check("layout, camera full width", describe(placesOf(layouts.f2Max))

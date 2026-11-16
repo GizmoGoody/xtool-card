@@ -2530,10 +2530,16 @@ class XtoolCamera extends XtoolFeature {
          _layout), as far apart as Home Assistant's features */
       .row.sections {
         display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); height: auto;
-        row-gap: var(--ha-card-feature-gap, 12px); column-gap: var(--feature-button-spacing, 12px);
+        /* Rows and columns as far apart as Home Assistant's feature grid
+           (hui-card-features) sets features: its column gap, which it hands
+           its features as --feature-column-gap */
+        row-gap: var(--ha-card-feature-gap, 12px);
+        column-gap: var(--feature-column-gap, var(--ha-card-feature-column-gap, var(--ha-card-feature-gap, 12px)));
       }
       .sections > .line { min-width: 0; }
       .sections > .line.whole, .sections > .spacer { grid-column: 1 / -1; }
+      /* Within a cell, keys are as far apart as in any feature */
+      .sections > .line { column-gap: var(--feature-button-spacing, 12px); }
       .sections > .spacer { height: calc(var(--rows) * var(--feature-height, 42px) + (var(--rows) - 1) * var(--ha-card-feature-gap, 12px)); }
       .line > *, .line > .group > * { height: var(--feature-height, 42px); }
       ${LIGHT_CSS}`;
@@ -2850,7 +2856,10 @@ class XtoolCamera extends XtoolFeature {
     // Each cell is a row of its own: only one with a field flows (see below)
     box.classList.remove("flow");
     const cameras = this._device.cameras;
+    // The cells are as far apart as features side by side (see the
+    // sections' CSS); keys within a cell, as within any feature
     const gap = parseFloat(getComputedStyle(box).columnGap) || 0;
+    const keyGap = parseFloat(getComputedStyle(box).getPropertyValue("--feature-button-spacing")) || 12;
     const half = (full - gap) / 2;
     const units = [];
     for (const id of this._chosen()) {
@@ -2867,10 +2876,10 @@ class XtoolCamera extends XtoolFeature {
       const out = [];
       for (const ids of list) {
         const last = out.at(-1), kind = kindOf(ids);
-        if (last && last.kind === kind && ["keys", "input"].includes(kind) && this._sizeOf([...last.ids, ...ids], gap).min <= half + 0.5) last.ids.push(...ids);
+        if (last && last.kind === kind && ["keys", "input"].includes(kind) && this._sizeOf([...last.ids, ...ids], keyGap).min <= half + 0.5) last.ids.push(...ids);
         else out.push({ kind, ids: [...ids] });
       }
-      return out.map((cell) => ({ ids: cell.ids, span: this._sizeOf(cell.ids, gap).min <= half + 0.5 ? 1 : 2 }));
+      return out.map((cell) => ({ ids: cell.ids, span: this._sizeOf(cell.ids, keyGap).min <= half + 0.5 ? 1 : 2 }));
     };
     const every = cells(units.filter(everywhere).map((u) => u.ids));
     const owns = cameras.map((camera) => cells(units.filter((u) => !everywhere(u)).map((u) => u.ids.filter((id) => this._has(camera, id))).filter((ids) => ids.length)));
