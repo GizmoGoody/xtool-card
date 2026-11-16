@@ -31,7 +31,7 @@
  *   trail while it works, burned-in pause bars, a burned-in check when it
  *   finishes, and so on), shown through the tile card's "show entity
  *   picture" option. The picture is built in memory; no files are written,
- * - one badge on the picture for the most urgent safety state, at its top
+ * - one badge on the picture for the first chosen status that applies (alarm, safety, firmware), at its top
  *   right, and one for the connection (how Home Assistant reaches the
  *   laser, or that it is unavailable), at its bottom right,
  * - a progress edge along one side of the card, or around it,
@@ -3965,7 +3965,7 @@ class XtoolCard extends HTMLElement {
         }
         #pct.on { display: block; }
 
-        /* The badges on the picture: safety at the top right, the connection at the bottom right */
+        /* The badges on the picture: the status at the top right, the connection at the bottom right */
         .badge {
           position: absolute; z-index: 3; width: 18px; height: 18px; margin: -9px 0 0 -9px; box-sizing: border-box;
           display: none; place-items: center; border-radius: 50%; pointer-events: none;
@@ -4363,9 +4363,9 @@ class XtoolCard extends HTMLElement {
 
   _updateBadge() {
     const ready = this._hass && this._job;
-    const safety = this._showBadge(this._badge, ready ? this._badgeNow() : undefined);
+    const status = this._showBadge(this._badge, ready ? this._badgeNow() : undefined);
     const link = this._showBadge(this._link, ready ? this._linkNow() : undefined);
-    if (safety || link) this._placeBadge();
+    if (status || link) this._placeBadge();
   }
 
   /** Show a badge (or hide it, for none); whether it shows. */
@@ -4383,7 +4383,7 @@ class XtoolCard extends HTMLElement {
     return true;
   }
 
-  // The badges sit on the picture's edge: safety up and to the right, the connection down and to the right
+  // The badges sit on the picture's edge: the status up and to the right, the connection down and to the right
   _placeBadge() {
     const icon = this._tile?.shadowRoot?.querySelector("ha-tile-icon");
     if (!icon) {
