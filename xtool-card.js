@@ -2794,6 +2794,9 @@ class XtoolCamera extends XtoolFeature {
     const view = crop && this._onPicture(crop);
     const styles = cardOf(this)?._config?.overlay_styles;
     const byCard = this._hass.states[camera?.settings.overlays]?.state === "card";
+    const { laser_x: hx, laser_y: hy } = this._device.roles;
+    let head = [hx, hy].map((id) => Number(this._hass.states[id]?.attributes.position ?? this._hass.states[id]?.state));
+    if (!head.every(Number.isFinite)) head = undefined;
     let shapes = "", icons = "";
     for (const overlay of view ? camera.overlays : []) {
       const stateObj = this._hass.states[overlay.entityId], kind = lookKind(stateObj);
@@ -2821,7 +2824,10 @@ class XtoolCamera extends XtoolFeature {
           shapes += `<line x1="${a.left}" y1="${a.top}" x2="${b.left}" y2="${b.top}" ${stroke}/>`;
           if (label) shapes += `<text class="label" x="${b.left}" y="${Math.min(b.top, view.height) - 4}">${String(label).replace(/[<&]/g, "")}</text>`;
         } else if (kind === "target") {
-          mark(at(m[0], m[1]));
+          // Where the head is now (the position numbers, read with every
+          // update of the laser), as the move preview draws it; the
+          // attribute's is the picture's, which is older
+          mark(at(...(head ?? m)));
         } else {
           // A ring or a turned ellipse whose inside is the dot's size
           const [x, y, length, width = length, angle = 0] = kind === "close" ? [m[0], m[1], m[2]] : m, c = at(x, y);

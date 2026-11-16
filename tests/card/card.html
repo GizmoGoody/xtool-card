@@ -695,9 +695,9 @@
     check("overlays, style", marks().length === 1 && marks()[0].getAttribute("icon") === "mdi:crosshairs-gps" && marks()[0].style.getPropertyValue("--mdc-icon-size") === "40px"
       && marks()[0].style.color.includes("--red-color") && Math.abs(parseFloat(marks()[0].style.left) - headX) < 1.5,
       `the laser target in its icon, size and color, where the head is (${marks()[0]?.style.left} for ${Math.round(headX)})`);
-    markCamera.hass = markHass({ "switch.p2_overview_target": { state: "on", attributes: targetAttributes({ position: { target: [[200, 50]] } }) } });
+    markCamera.hass = markHass({ "number.p2_laser_x": { state: "200", attributes: { position: 200 } } });
     const movedX = markImg.left - markShot.left + (200 / 610) * markImg.width;
-    check("overlays, style", Math.abs(parseFloat(marks()[0]?.style.left) - movedX) < 1.5, `it follows the position (${marks()[0]?.style.left} for ${Math.round(movedX)})`);
+    check("overlays, style", Math.abs(parseFloat(marks()[0]?.style.left) - movedX) < 1.5, `it follows the head position numbers, which update more often than the picture (${marks()[0]?.style.left} for ${Math.round(movedX)})`);
     markCamera.hass = markHass({ "switch.p2_overview_target": { state: "off", attributes: targetAttributes() } });
     check("overlays, style", marks().length === 0, "nothing while the Laser target overlay is off");
     const plainCamera = deep(plainCard, "xtool-camera")[0];
