@@ -535,6 +535,23 @@
     check("enabled color", layouts.f2Max.style.getPropertyValue("--xtool-enabled-color") === "var(--purple-color)"
       && !layouts.odd.style.getPropertyValue("--xtool-enabled-color"),
       "Enabled color: given to every feature in the card; without it, the features use the theme's Info color");
+    // Home Assistant sends a new hass for every change of any entity: only this laser's reach the tile
+    {
+      const card = layouts.p2Max, tile = card.shadowRoot.querySelector("hui-tile-card");
+      const shown = tile.hass, base = card.hass;
+      const other = { ...base, states: { ...base.states, "sensor.elsewhere": { entity_id: "sensor.elsewhere", state: "1", attributes: {} } } };
+      card.hass = other;
+      check("updates", tile.hass === shown, "another entity's change: the tile keeps the hass it has (nothing it shows changed)");
+      const own = { ...other, states: { ...other.states, "switch.p2_buzzer": { ...other.states["switch.p2_buzzer"], state: "on" } } };
+      card.hass = own;
+      const inner = tile.hass.states;
+      check("updates", tile.hass !== shown && inner["switch.p2_buzzer"].state === "on" && inner["sensor.p2_status"].attributes.entity_picture
+        && Object.keys(inner).length === Object.keys(own.states).length && inner["sensor.elsewhere"] === own.states["sensor.elsewhere"],
+        "the laser's own change: a new hass, whose states read through to Home Assistant's (none copied), with the state picture on the laser's entity");
+      card.hass = own;
+      check("updates", tile.hass.states === inner, "the same hass again: the same states");
+      card.hass = base;
+    }
     for (const [name, card] of [["F2 Ultra UV", layouts.f2Max], ["P2", layouts.p2Max]]) {
       const places = placesOf(card);
       const cam = places.find((p) => p.type === "camera");

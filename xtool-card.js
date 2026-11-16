@@ -127,8 +127,18 @@ const phaseColor = (phase, laser) => (phase === "processing" ? LASER_COLORS[lase
  * resolved by the browser). Null while the element is not on the page.
  */
 let colorProbe;
+// Text colors found, by element and color, until the theme or the card's colors change (see colorsChanged)
+let textColors = new WeakMap();
+const colorsChanged = () => (textColors = new WeakMap());
 function textOn(el, cssValue) {
   if (!el.isConnected) return null;
+  let known = textColors.get(el);
+  if (!known) textColors.set(el, (known = new Map()));
+  if (!known.has(cssValue)) known.set(cssValue, textColorOf(el, cssValue));
+  return known.get(cssValue);
+}
+
+function textColorOf(el, cssValue) {
   const root = el.shadowRoot ?? el;
   let probe = root.querySelector(":scope > .color-probe");
   if (!probe) {
@@ -627,6 +637,8 @@ function buildDevice(hass, id) {
   return {
     id, device: hass.devices?.[id], entities: deviceEntities(hass, id), children, roles, cameras,
     profile: profileOf(hass.devices?.[id]?.model),
+    // Every entity of the laser and its devices (see changedFor)
+    ids: all.map((e) => e.entity_id),
   };
 }
 
@@ -650,7 +662,7 @@ function deviceOf(hass, entityId) {
   const entities = hass?.entities;
   const id = entities?.[entityId]?.device_id;
   if (!id) {
-    noDevice ??= Object.freeze({ id: undefined, entities: [], children: [], roles: {}, cameras: [], profile: profileOf("") });
+    noDevice ??= Object.freeze({ id: undefined, entities: [], children: [], roles: {}, cameras: [], profile: profileOf(""), ids: [] });
     return noDevice;
   }
   const devices = hass.devices ?? NO_DEVICES;
@@ -660,6 +672,23 @@ function deviceOf(hass, entityId) {
   if (!byId) byDevices.set(devices, (byId = new Map()));
   if (!byId.has(id)) byId.set(id, buildDevice(hass, id));
   return byId.get(id);
+}
+
+// What else in hass the card and the features show: the registries, the
+// theme, the language, the user and the connection
+const HASS_PARTS = ["entities", "devices", "themes", "selectedTheme", "locale", "language", "user", "connected", "config"];
+
+/**
+ * Whether a new hass changes anything shown for this entity and its laser:
+ * Home Assistant sends one for every change of any entity, and on a large
+ * install nearly all of them are of other entities.
+ */
+function changedFor(before, hass, entityId) {
+  if (!before || !hass) return before !== hass;
+  if (before === hass) return false;
+  if (HASS_PARTS.some((part) => before[part] !== hass[part])) return true;
+  if (before.states[entityId] !== hass.states[entityId]) return true;
+  return deviceOf(hass, entityId).ids.some((id) => before.states[id] !== hass.states[id]);
 }
 
 const isXtool = (hass, entityId) => hass?.entities?.[entityId]?.platform === DOMAIN;
@@ -1973,7 +2002,9 @@ class XtoolElement extends HTMLElement {
   }
 
   set hass(hass) {
+    const before = this._hass;
     this._hass = hass;
+    if (this._config && this._context && !changedFor(before, hass, this._entityId)) return;
     this._render();
   }
 
@@ -2397,11 +2428,6 @@ class XtoolCamera extends XtoolFeature {
         margin-bottom: var(--ha-card-feature-gap, 12px);
       }
       .shot hui-image { display: block; }
-      .shot hui-image[hidden] { display: none; }
-      /* A new picture loading over the shown one: in the layout, so Home
-         Assistant's image fetches it (it fetches only while it is on screen),
-         but not seen until it has loaded */
-      .shot hui-image.next { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
       .shot.cropping { cursor: crosshair; }
       .shot .area {
         position: absolute; pointer-events: none; box-sizing: border-box;
@@ -2446,7 +2472,6 @@ class XtoolCamera extends XtoolFeature {
     this._time = this._shot.querySelector(".time");
     this._area = this._shot.querySelector(".area");
     this._hint = this._shot.querySelector(".hint");
-    this._images = new Map();
     // A tap is a pointer pressed and let go in about one place. On touch,
     // the browser then also sends mouse events and a click (iOS among
     // them, sometimes late or not at all): that click is the same tap, so
@@ -2604,7 +2629,7 @@ class XtoolCamera extends XtoolFeature {
 
   /** A point on the work surface (mm) in the picture box (px), as _pointOf reads one; undefined without a picture. */
   _placeOfMm([x, y], crop) {
-    const img = this._images.get(this._camera)?.shadowRoot?.querySelector("img");
+    const img = this._image?.shadowRoot?.querySelector("img");
     if (!img?.naturalWidth || !(crop.width > 0) || !(crop.height > 0)) return undefined;
     const box = img.getBoundingClientRect(), shot = this._shot.getBoundingClientRect();
     const scale = Math.max(box.width / img.naturalWidth, box.height / img.naturalHeight);
@@ -2646,13 +2671,8 @@ class XtoolCamera extends XtoolFeature {
     }).filter(Boolean));
   }
 
-  /**
-   * Show a camera: shown before, its image shows its last picture at once,
-   * and fetches a new one as it shows again (Home Assistant's image does):
-   * with its address dropped, that is a new photo.
-   */
+  /** Show another camera. */
   _pick(entityId) {
-    if (this._images.has(entityId) && entityId !== this._camera) this._forgetPicture(entityId);
     this._picked = entityId;
     this._key = undefined;
     this._render();
@@ -2662,19 +2682,18 @@ class XtoolCamera extends XtoolFeature {
    * Home Assistant's image stops fetching photos when the connection to
    * Home Assistant drops, and after it returns does not start again while
    * it stays on screen (its spinner shows for good). A camera that was
-   * unavailable can leave it on its broken picture. Either way, each
-   * camera's image is made anew (see _renewImages).
+   * unavailable can leave it on its broken picture. Either way, the image
+   * is made anew.
    */
   set hass(hass) {
     const before = this._hass;
     super.hass = hass;
-    if (before) {
+    if (before && !changedFor(before, hass, this._entityId)) return;
+    if (before && this._image) {
+      const camera = this._image.cameraImage;
       const back = before.connected === false && hass.connected !== false;
-      const returned = [...(this._images?.keys() ?? [])]
-        .filter((camera) => before.states[camera]?.state === "unavailable" && hass.states[camera] && hass.states[camera].state !== "unavailable");
-      if (back) this._renewImages([...this._images.keys()]);
-      else if (returned.length) this._renewImages(returned);
-      else this._newPictures(before, hass);
+      const returned = before.states[camera]?.state === "unavailable" && hass.states[camera] && hass.states[camera].state !== "unavailable";
+      if (back || returned) this._dropImage();
     }
     // The crop sent has taken effect (or the camera put another in its place)
     if (this._cropSent && JSON.stringify(this._cropNow()) !== this._cropSent) this._cropSent = undefined;
@@ -2682,29 +2701,10 @@ class XtoolCamera extends XtoolFeature {
     this._drawTarget();
   }
 
-  /**
-   * A camera's access token changes when the integration has a new picture
-   * for it (after a change to an overlay, a crop, a mode, or on its own
-   * schedule): the shown camera shows it at once, the others when shown.
-   */
-  _newPictures(before, hass) {
-    for (const camera of this._images.keys()) {
-      const was = before.states[camera]?.attributes.access_token, now = hass.states[camera]?.attributes.access_token;
-      if (!was || !now || was === now) continue;
-      if (camera === this._camera) this._reloadImage(camera);
-      else this._forgetPicture(camera);
-    }
-  }
-
-  /** Make these cameras' images anew: the shown one at once, the others when shown again. */
-  _renewImages(cameras) {
-    for (const camera of cameras) {
-      this._next?.get(camera)?.remove();
-      this._next?.delete(camera);
-      this._images.get(camera)?.remove();
-      this._images.delete(camera);
-      this._forgetPicture(camera);
-    }
+  /** Remove the image: taken off the page, Home Assistant's image stops fetching (and closes a live stream). */
+  _dropImage() {
+    this._image?.remove();
+    this._image = undefined;
     this._watched = undefined;
   }
 
@@ -2864,7 +2864,7 @@ class XtoolCamera extends XtoolFeature {
 
   /** The tapped point on the work surface (mm), or undefined off the picture or for a whole-photo side. */
   _pointOf(ev, crop) {
-    const img = this._images.get(this._camera)?.shadowRoot?.querySelector("img");
+    const img = this._image?.shadowRoot?.querySelector("img");
     if (!img?.naturalWidth || !(crop.width > 0) || !(crop.height > 0)) return undefined;
     const box = img.getBoundingClientRect();
     // The picture fills its box (cover): find the part of it that is shown
@@ -2951,57 +2951,6 @@ class XtoolCamera extends XtoolFeature {
     this._hass.callService("select", "select_option", { entity_id: entityId, option });
   }
 
-  /**
-   * Show a camera's latest photo now: a new Home Assistant image fetches it
-   * at once, and replaces the old one when its picture has loaded.
-   */
-  _reloadImage(camera) {
-    const old = this._images.get(camera);
-    if (!old || !this._hass) return;
-    this._forgetPicture(camera);
-    // A reload still loading for this camera gives way to this one
-    this._next?.get(camera)?.remove();
-    this._next ??= new Map();
-    const image = document.createElement("hui-image");
-    Object.assign(image, { entity: camera, cameraImage: camera, fitMode: "cover", hass: this._hass, cameraView: this._view });
-    image.classList.add("next");
-    old.after(image);
-    this._next.set(camera, image);
-    let done = false;
-    const finish = (loaded) => {
-      if (done) return;
-      done = true;
-      if (this._next.get(camera) === image) this._next.delete(camera);
-      // Switched away and back, reloaded again, or no picture: keep the old one
-      if (!loaded || this._images.get(camera) !== old || !image.isConnected) {
-        image.remove();
-        return;
-      }
-      image.classList.remove("next");
-      old.remove();
-      this._images.set(camera, image);
-      this._showCamera();
-      if (camera === this._camera) this._arrived();
-    };
-    Promise.resolve(image.updateComplete).then(() => {
-      image.shadowRoot?.addEventListener("load", () => finish(true), true);
-      const img = image.shadowRoot?.querySelector("img");
-      if (img?.complete && img.naturalWidth) finish(true);
-    });
-    // Home Assistant's image gives up on a picture after 10 s
-    setTimeout(() => finish(false), 10000);
-  }
-
-  /**
-   * Home Assistant keeps a camera's picture address for 9 s, and the
-   * browser shows the picture it has for an address it has seen: drop this
-   * camera's, so the next fetch asks for a new photo.
-   */
-  _forgetPicture(camera) {
-    const addresses = this._hass?._cameraTmbUrl;
-    if (addresses) addresses[camera] = undefined;
-  }
-
   _showHint() {
     const crop = this._cropping ? this._crop() : undefined;
     this._shot.classList.toggle("cropping", !!crop);
@@ -3033,17 +2982,17 @@ class XtoolCamera extends XtoolFeature {
       }
       return;
     }
-    // One of Home Assistant's images for each camera shown: switching back
-    // shows that camera's last picture at once while a new one comes
-    if (!this._images.has(this._camera)) {
-      const image = document.createElement("hui-image");
-      Object.assign(image, { entity: this._camera, cameraImage: this._camera, fitMode: "cover" });
-      this._images.set(this._camera, image);
-      this._shot.prepend(image);
+    // One Home Assistant image, for the camera shown, as its picture cards
+    // have: it fetches a new photo every 10 s while it is on screen (or
+    // streams, in the Live view); another camera gets an image of its own
+    if (this._image?.cameraImage !== this._camera) {
+      this._dropImage();
+      this._image = document.createElement("hui-image");
+      Object.assign(this._image, { entity: this._camera, cameraImage: this._camera, fitMode: "cover" });
+      this._shot.prepend(this._image);
     }
-    for (const [camera, image] of this._images) image.hidden = camera !== this._camera;
-    this._image = this._images.get(this._camera);
-    Object.assign(this._image, { hass: this._hass, cameraView: this._view });
+    if (this._image.hass !== this._hass) this._image.hass = this._hass;
+    if (this._image.cameraView !== this._view) this._image.cameraView = this._view;
     this._showHint();
     this._shot.setAttribute("aria-label", `${this._shownCamera?.label ?? ""} camera: ${this._cropping ? "crop" : "open"}`);
     this._watchPictures();
@@ -3885,6 +3834,27 @@ const progressOptions = (config) => ({ ...PROGRESS_DEFAULTS, ...(config?.progres
 // XtoolCardEditor).
 const PREVIEW_OPEN = new Map();
 
+/** Whether two flat objects hold the same values (the job's attributes). */
+function sameValues(a, b) {
+  if (!a || !b) return a === b;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
+}
+
+/**
+ * Home Assistant's states with one state object in place of the entity's,
+ * without copying the others: every other entity reads through to them.
+ */
+function statesWith(states, entityId, stateObj) {
+  return new Proxy(states, {
+    get: (target, key, receiver) => (key === entityId ? stateObj : Reflect.get(target, key, receiver)),
+    getOwnPropertyDescriptor: (target, key) => {
+      const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
+      return key === entityId && descriptor ? { ...descriptor, value: stateObj } : descriptor;
+    },
+  });
+}
+
 class XtoolCard extends HTMLElement {
   constructor() {
     super();
@@ -4083,7 +4053,10 @@ class XtoolCard extends HTMLElement {
       });
     }
     this._picture = undefined;
-    if (this._hass) this.hass = this._hass;
+    // Everything is shown anew for the new configuration
+    const hass = this._hass;
+    this._hass = undefined;
+    if (hass) this.hass = hass;
     this._layout();
   }
 
@@ -4106,8 +4079,12 @@ class XtoolCard extends HTMLElement {
   }
 
   set hass(hass) {
+    const before = this._hass;
     this._hass = hass;
     if (!this._config) return;
+    if (before?.themes !== hass.themes) colorsChanged();
+    // Nothing of this laser changed: the tile and its features have nothing new to show
+    if (this._tile && !changedFor(before, hass, this._config.entity)) return;
     // The default State content follows the laser's entities (see defaultStateContent)
     const content = JSON.stringify(tileConfig(this._config, hass).state_content);
     if (this._tile && content !== this._content) this._tile.setConfig(innerTileConfig(this._config, this._open, hass));
@@ -4273,17 +4250,20 @@ class XtoolCard extends HTMLElement {
       });
     }
     const extra = this._attributes();
-    const extraKey = JSON.stringify(extra);
-    if (this._sourceState !== stateObj || this._lastPicture !== this._picture || this._lastExtra !== extraKey) {
+    if (this._sourceState !== stateObj || this._lastPicture !== this._picture || !sameValues(this._lastExtra, extra)) {
       this._sourceState = stateObj;
       this._lastPicture = this._picture;
-      this._lastExtra = extraKey;
+      this._lastExtra = extra;
       this._innerState = { ...stateObj, attributes: { ...stateObj.attributes, ...extra, entity_picture: this._picture } };
     }
-    return { ...hass, states: { ...hass.states, [entity]: this._innerState } };
+    if (this._outerHass === hass && this._innerFor === this._innerState) return this._inner;
+    this._outerHass = hass;
+    this._innerFor = this._innerState;
+    this._inner = { ...hass, states: statesWith(hass.states, entity, this._innerState) };
+    return this._inner;
   }
 
-  // While a job runs and the elapsed time is shown, update it every second
+  
   _tick() {
     const shown = [].concat(this._config?.state_content ?? []).includes("elapsed");
     const run = this.isConnected && shown && this._job?.phase === "processing";
