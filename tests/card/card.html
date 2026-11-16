@@ -235,6 +235,14 @@
     check("connection", on(badges.ethernet) && linkOn(badges.ethernet) && link(badges.ethernet).title === "Connection: ethernet"
       && link(badges.ethernet).style.background.includes("--xtool-enabled-color"), "the P2 on Ethernet, in the enabled color, beside the lid badge");
     check("connection", link(badges.wifi).title === "Connection: wifi", "the P2 on Wi-Fi");
+    const shows = (el) => el.querySelector("ha-state-icon");
+    check("badge icons", shows(link(badges.ethernet)).stateObj?.entity_id === "sensor.p2_connection" && !shows(link(badges.ethernet)).icon,
+      "the connection badge shows the Connection sensor's own icon");
+    check("badge icons", shows(link(badges.offline)).icon === "mdi:lan-disconnect", "unavailable: Home Assistant's disconnected icon");
+    check("badge icons", shows(badge(badges.safetyOff)).stateObj?.entity_id === "switch.f2_moved",
+      "a safety check off: that switch's own icon, which tells which check");
+    check("badge icons", shows(badge(badges.key)).stateObj?.entity_id === "binary_sensor.f2_safety_key", "the safety key: its sensor's own icon");
+    check("badge icons", shows(badge(pictures.fire)).icon === "mdi:fire" && !shows(badge(pictures.fire)).stateObj, "a fire warning: Home Assistant's fire icon");
     check("connection", !linkOn(badges.noLink) && !linkOn(badges.offlineNoLink) && !on(badges.offlineNoLink), "turned off: no connection badge, even while unavailable");
     {
       const top = badge(badges.ethernet).getBoundingClientRect(), bottom = link(badges.ethernet).getBoundingClientRect();

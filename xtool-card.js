@@ -3781,21 +3781,6 @@ const TRACK = "var(--disabled-color, rgba(127, 127, 127, .35))";
 
 // Where the badges sit, as a share of the picture's radius (the same spacing as the SVS card's)
 const BADGE_RING = 16.7 / 20;
-// Badge symbols, drawn on a 24-unit grid
-const BADGE_PATHS = {
-  alarm: "M12 3 22 20H2z M12 9.5v4.5 M12 17h.01",
-  fire: FLAME,
-  unavailable: "M3 3l18 18 M8.5 16.5a5 5 0 0 1 7 0 M5 12.6a10 10 0 0 1 4-2.4 M19 12.6a10 10 0 0 0-2.2-1.6 M12 20h.01",
-  safety_key: "M7.5 11a4.5 4.5 0 1 0 0 9 4.5 4.5 0 1 0 0-9 M10.7 12.3 20 3 M17 6l3 3 M14.5 8.5l2 2",
-  lid: "M3 7l9-4 9 4 M5 9.5h14V20H5z",
-  safety_checks: "M3 3l18 18 M19 13V6l-7-3-4 1.7 M5.2 6.5V11c0 4.5 3 8.2 6.8 10 1.4-.7 2.7-1.6 3.7-2.7",
-  firmware: "M12 4v11 M7 10l5 5 5-5 M5 20h14",
-  // The connection badge's, by the Connection sensor's state
-  ethernet: "M4 5h16v11h-4v3H8v-3H4z M9 9v3 M12 9v3 M15 9v3",
-  wifi: "M2 8.5a15 15 0 0 1 20 0 M5.5 12.3a10 10 0 0 1 13 0 M9 16a5 5 0 0 1 6 0 M12 20h.01",
-  usb: "M9 2h6v5H9z M6 7h12v6a6 6 0 0 1-12 0z M12 19v3",
-};
-const CONNECTIONS = ["ethernet", "wifi", "usb"];
 
 // Options this card adds to the tile card's
 const OWN_KEYS = ["style", "features_style", "enabled_color", "pattern", "status_badge", "connection_badge", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on",
@@ -3976,16 +3961,14 @@ class XtoolCard extends HTMLElement {
           color: #fff;
         }
         .badge.on { display: grid; }
-        .badge svg { width: 11px; height: 11px; }
+        .badge ha-state-icon { display: flex; --mdc-icon-size: 12px; }
         .styled .badge { --xtool-badge-ring: rgba(0, 0, 0, .55); }
       </style>
       <div class="frame">
         <div class="clip under"><div id="body"></div><div id="window"></div><div id="areas"></div></div>
         <div class="clip over"><div id="edge"><div class="sweep"></div></div><span id="pct"></span></div>
-        <span class="badge status" role="img"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor"
-          stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="badge connection" role="img"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor"
-          stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="badge status" role="img"><ha-state-icon aria-hidden="true"></ha-state-icon></span>
+        <span class="badge connection" role="img"><ha-state-icon aria-hidden="true"></ha-state-icon></span>
       </div>`;
     this._frame = this.shadowRoot.querySelector(".frame");
     this._statesProvider = new StatesProvider(this._frame);
@@ -4298,28 +4281,30 @@ class XtoolCard extends HTMLElement {
   _statusBadgeNow() {
     const hass = this._hass, id = this._config.entity;
     const chosen = Array.isArray(this._config.status_badge) ? this._config.status_badge : defaultStatusBadges(hass, id);
-    const stateOf = (role) => {
-      const entityId = deviceOf(hass, id).roles[role];
-      return entityId ? hass.states[entityId]?.state : undefined;
-    };
+    const { roles } = deviceOf(hass, id);
+    const stateOf = (role) => (roles[role] ? hass.states[roles[role]]?.state : undefined);
     const phase = this._job.phase;
     const error = "var(--error-color, #db4437)", warning = "var(--warning-color, #ffa600)";
-    // Each option: what applies now, as [applies, symbol, color, label], most urgent first
+    // The first safety check that is off: its own icon tells which
+    const checkOff = SAFETY_CHECKS.find((role) => stateOf(role) === "off");
+    // Each option: what applies now, as [applies, icon, color, label], most
+    // urgent first. The icon is an entity's own (as Home Assistant shows it)
+    // or, for a phase of the job, one of Home Assistant's icons
     const options = {
       alarm: [
-        [phase === "fire", "fire", error, "Fire warning"],
-        [phase === "overheat", "alarm", error, "Laser overheat"],
-        [stateOf("alarm") === "on" || phase === "error", "alarm", error, "Alarm"],
+        [phase === "fire", { icon: "mdi:fire" }, error, "Fire warning"],
+        [phase === "overheat", { icon: "mdi:thermometer-alert" }, error, "Laser overheat"],
+        [stateOf("alarm") === "on", { entity: roles.alarm }, error, "Alarm"],
+        [phase === "error", { icon: "mdi:alert" }, error, "Alarm"],
       ],
-      safety_key: [[stateOf("safety_key") === "off", "safety_key", warning, "Safety key removed"]],
-      lid: [[stateOf("lid") === "on", "lid", warning, "Lid open"]],
-      safety_checks: [[SAFETY_CHECKS.some((role) => stateOf(role) === "off"),
-        "safety_checks", warning, "A safety check is off"]],
-      firmware: [[stateOf("firmware") === "on", "firmware", "var(--info-color, #039be5)", "Firmware update available"]],
+      safety_key: [[stateOf("safety_key") === "off", { entity: roles.safety_key }, warning, "Safety key removed"]],
+      lid: [[stateOf("lid") === "on", { entity: roles.lid }, warning, "Lid open"]],
+      safety_checks: [[!!checkOff, { entity: roles[checkOff] }, warning, "A safety check is off"]],
+      firmware: [[stateOf("firmware") === "on", { entity: roles.firmware }, "var(--info-color, #039be5)", "Firmware update available"]],
     };
     for (const option of chosen) {
       const hit = (options[option] ?? []).find(([applies]) => applies);
-      if (hit) return { path: BADGE_PATHS[hit[1]], color: hit[2], label: hit[3] };
+      if (hit) return { icon: hit[1].icon, stateObj: hit[1].entity && hass.states[hit[1].entity], color: hit[2], label: hit[3] };
     }
     return undefined;
   }
@@ -4358,10 +4343,11 @@ class XtoolCard extends HTMLElement {
     if (this._config.connection_badge === false) return undefined;
     const hass = this._hass, id = this._config.entity;
     const status = statusOf(hass, id);
-    if (!status || hass.states[status]?.state === "unavailable") return { path: BADGE_PATHS.unavailable, color: "#616161", label: "Unavailable" };
+    if (!status || hass.states[status]?.state === "unavailable") return { icon: "mdi:lan-disconnect", color: "#616161", label: "Unavailable" };
+    // The Connection sensor's own icon (Ethernet, Wi-Fi, USB), as Home Assistant shows it
     const stateObj = hass.states[deviceOf(hass, id).roles.connection];
-    if (!CONNECTIONS.includes(stateObj?.state)) return undefined;
-    return { path: BADGE_PATHS[stateObj.state], color: ENABLED, label: `Connection: ${hass.formatEntityState(stateObj)}` };
+    if (!stateObj || ["unknown", "unavailable"].includes(stateObj.state)) return undefined;
+    return { stateObj, color: ENABLED, label: `Connection: ${hass.formatEntityState(stateObj)}` };
   }
 
   _updateBadges() {
@@ -4380,7 +4366,11 @@ class XtoolCard extends HTMLElement {
       return false;
     }
     el.style.background = badge.color;
-    el.querySelector("path").setAttribute("d", badge.path);
+    // Home Assistant's state icon: the entity's own icon, or the icon given
+    const icon = el.querySelector("ha-state-icon");
+    if (icon.hass !== this._hass) icon.hass = this._hass;
+    if (icon.stateObj !== badge.stateObj) icon.stateObj = badge.stateObj;
+    if (icon.icon !== badge.icon) icon.icon = badge.icon;
     el.title = badge.label;
     el.setAttribute("aria-label", badge.label);
     return true;

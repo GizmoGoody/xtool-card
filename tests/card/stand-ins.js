@@ -374,6 +374,17 @@ customElements.define("ha-state-icon", class extends HTMLElement {
   get stateObj() {
     return this._stateObj;
   }
+
+  // An icon given in place of the entity's
+  set icon(icon) {
+    this._icon = icon;
+    if (icon) this.setAttribute("icon", icon);
+    else this.removeAttribute("icon");
+  }
+
+  get icon() {
+    return this._icon;
+  }
 });
 
 // ha-tile-icon: Home Assistant's tile icon (the tile card loads it), with
