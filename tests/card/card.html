@@ -249,7 +249,7 @@
     check("fire warning", on(pictures.fire) && badge(pictures.fire).title === "Fire warning", "the fire badge comes first");
     const icon = badges.key.shadowRoot.querySelector("hui-tile-card").shadowRoot.querySelector("ha-tile-icon").getBoundingClientRect();
     const b = badge(badges.key).getBoundingClientRect();
-    check("safety key out", Math.abs(b.left + b.width / 2 - (icon.left + icon.width * .854)) < 3, "the badge sits on the picture's edge");
+    check("safety key out", Math.abs(b.left + b.width / 2 - (icon.left + icon.width * (.5 + .5 * 16.7 / 20 * .7071))) < 1, "the badge sits tucked in from the picture's edge");
 
     // Progress edge
     const edge = (card) => card.shadowRoot.getElementById("edge");

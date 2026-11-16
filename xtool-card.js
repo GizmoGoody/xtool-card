@@ -3779,6 +3779,8 @@ const BAR_DIRECTION = {
 };
 const TRACK = "var(--disabled-color, rgba(127, 127, 127, .35))";
 
+// Where the badges sit, as a share of the picture's radius (the same spacing as the SVS card's)
+const BADGE_RING = 16.7 / 20;
 // Badge symbols, drawn on a 24-unit grid
 const BADGE_PATHS = {
   alarm: "M12 3 22 20H2z M12 9.5v4.5 M12 17h.01",
@@ -4384,7 +4386,9 @@ class XtoolCard extends HTMLElement {
     return true;
   }
 
-  // The badges sit on the picture's edge: the status badge up and to the right, the connection badge down and to the right
+  // The badges sit tucked in from the picture's edge, on a circle at
+  // BADGE_RING of its radius: the status badge up and to the right, the
+  // connection badge down and to the right
   _placeBadges() {
     const icon = this._tile?.shadowRoot?.querySelector("ha-tile-icon");
     if (!icon) {
@@ -4402,9 +4406,10 @@ class XtoolCard extends HTMLElement {
     const scale = frame.width / this._frame.offsetWidth || 1;
     const r = box.width / 2 / scale;
     const cx = (box.left - frame.left) / scale + r, cy = (box.top - frame.top) / scale + r;
-    this._statusBadge.style.left = this._connectionBadge.style.left = `${cx + r * .7071}px`;
-    this._statusBadge.style.top = `${cy - r * .7071}px`;
-    this._connectionBadge.style.top = `${cy + r * .7071}px`;
+    const ring = r * BADGE_RING;
+    this._statusBadge.style.left = this._connectionBadge.style.left = `${cx + ring * .7071}px`;
+    this._statusBadge.style.top = `${cy - ring * .7071}px`;
+    this._connectionBadge.style.top = `${cy + ring * .7071}px`;
   }
 
   /** The progress edge, as configured, for the job's phase. */
