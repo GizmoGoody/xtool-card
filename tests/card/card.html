@@ -679,7 +679,7 @@
     check("status light", !tileOf(noLight).hasAttribute("xtool-light"), "none when turned off");
 
     // The overlays' styles: the laser target drawn by the card where its switch's position says, while it is on
-    const targetAttributes = (more = {}) => ({ position: { target: [[100, 50]] }, style: { color: [0, 0, 255], line: 3, style: "solid", icon: "mdi:crosshairs", size: 10 }, ...more });
+    const targetAttributes = (more = {}) => ({ position: { target: [{ x: 100, y: 50 }] }, style: { color: [0, 0, 255], line: 3, style: "solid", icon: "mdi:crosshairs", size: 10 }, ...more });
     const markHass = (more = {}) => p2("idle", { "switch.p2_overview_target": { state: "on", attributes: targetAttributes() }, ...more });
     const marked = (look) => addCard("P2 laser target", { entity: "sensor.p2_status", ...(look ? { overlay_styles: { laser_target: look } } : {}), features: [
       { type: "custom:xtool-camera", camera: "overview", controls: ["camera_buttons"] },
@@ -729,6 +729,15 @@
     const dashed = byCard.shadowRoot.querySelector(".shot .looks line");
     check("overlays, by the card", dashed?.getAttribute("stroke").includes("--red-color") && dashed.getAttribute("stroke-width") === "4" && dashed.getAttribute("stroke-dasharray") === "12 8",
       `the card's own options over the integration's (${dashed?.getAttribute("stroke")}, ${dashed?.getAttribute("stroke-width")}, ${dashed?.getAttribute("stroke-dasharray")})`);
+    // Uncropped (crop numbers of 0): placed by the camera's view, which says what the picture shows
+    const uncroppedHass = markHass({ "select.p2_overview_overlays": "card", "number.p2_overview_crop_width": "0", "number.p2_overview_crop_height": "0" });
+    uncroppedHass.states["camera.p2_overview"] = { ...uncroppedHass.states["camera.p2_overview"],
+      attributes: { ...uncroppedHass.states["camera.p2_overview"].attributes, view: { x: -305, y: 0, width: 1220, height: 305 } } };
+    byCard.hass = uncroppedHass;
+    const wideX = markImg.left - markShot.left + ((100 + 305) / 1220) * markImg.width;
+    const wideIcon = byCard.shadowRoot.querySelector(".shot .marks ha-icon");
+    check("overlays, by the card", Math.abs(parseFloat(wideIcon?.style.left) - wideX) < 1.5,
+      `uncropped, placed by the camera's view (${wideIcon?.style.left} for ${Math.round(wideX)})`);
     byCard.hass = markHass({ "select.p2_overview_overlays": "card", "switch.p2_overview_slats": "off" });
     check("overlays, by the card", !byCard.shadowRoot.querySelector(".shot .looks line"), "nothing of an overlay that is off");
 

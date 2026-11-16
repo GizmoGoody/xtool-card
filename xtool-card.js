@@ -2718,8 +2718,8 @@ class XtoolCamera extends XtoolFeature {
 
   /** Set the position numbers to the held point (whole mm, within their limits); Move then takes the laser there. */
   _aim(at) {
-    const crop = this._cropNow();
-    const point = crop && this._pointOf(at, crop);
+    const view = this._viewNow();
+    const point = view && this._pointOf(at, view);
     if (!point) return;
     const { laser_x: x, laser_y: y } = this._device.roles;
     for (const [entityId, value] of [[x, point.x], [y, point.y]]) {
@@ -2766,9 +2766,9 @@ class XtoolCamera extends XtoolFeature {
     this._drawLooks();
     const camera = this._shownCamera;
     const overlay = camera?.overlays.find((o) => o.key === "overlay_laser_target");
-    const crop = overlay && this._hass.states[overlay.entityId]?.state === "on" ? this._cropNow() : undefined;
-    const way = crop && this._targetNow();
-    const from = way && this._placeOfMm(way.from, crop), to = way && this._placeOfMm(way.to, crop);
+    const view = overlay && this._hass.states[overlay.entityId]?.state === "on" ? this._viewNow() : undefined;
+    const way = view && this._targetNow();
+    const from = way && this._placeOfMm(way.from, view), to = way && this._placeOfMm(way.to, view);
     if (!from || !to) {
       this._target.style.display = "none";
       return;
@@ -2790,8 +2790,8 @@ class XtoolCamera extends XtoolFeature {
    * pixels), placed with the camera's crop. Drawn again only when changed.
    */
   _drawLooks() {
-    const camera = this._shownCamera, crop = camera && this._cropNow();
-    const view = crop && this._onPicture(crop);
+    const camera = this._shownCamera, shown = camera && this._viewNow();
+    const view = shown && this._onPicture(shown);
     const styles = cardOf(this)?._config?.overlay_styles;
     const byCard = this._hass.states[camera?.settings.overlays]?.state === "card";
     const { laser_x: hx, laser_y: hy } = this._device.roles;
@@ -2815,22 +2815,22 @@ class XtoolCamera extends XtoolFeature {
       };
       for (const m of stateObj.attributes.position[kind] ?? []) {
         if (kind === "areas") {
-          const [x, y, w, h] = m, a = at(x, y), b = at(x + w, y + h);
+          const { x, y, width: w, height: h } = m, a = at(x, y), b = at(x + w, y + h);
           shapes += `<rect x="${a.left}" y="${a.top}" width="${b.left - a.left}" height="${b.top - a.top}" ${stroke}/>`;
           mark(a);
           mark(at(x + w / 2, y + h / 2));
         } else if (kind === "slats") {
-          const [x0, y0, x1, y1, label] = m, a = at(x0, y0), b = at(x1, y1);
+          const { x0, y0, x1, y1, label } = m, a = at(x0, y0), b = at(x1, y1);
           shapes += `<line x1="${a.left}" y1="${a.top}" x2="${b.left}" y2="${b.top}" ${stroke}/>`;
           if (label) shapes += `<text class="label" x="${b.left}" y="${Math.min(b.top, view.height) - 4}">${String(label).replace(/[<&]/g, "")}</text>`;
         } else if (kind === "target") {
           // Where the head is now (the position numbers, read with every
           // update of the laser), as the move preview draws it; the
           // attribute's is the picture's, which is older
-          mark(at(...(head ?? m)));
+          mark(at(...(head ?? [m.x, m.y])));
         } else {
           // A ring or a turned ellipse whose inside is the dot's size
-          const [x, y, length, width = length, angle = 0] = kind === "close" ? [m[0], m[1], m[2]] : m, c = at(x, y);
+          const { x, y, diameter, length = diameter, width = diameter, angle = 0 } = m, c = at(x, y);
           const rx = (length * view.pxPerMm + line) / 2, ry = (width * view.pxPerMm + line) / 2;
           shapes += `<ellipse cx="${c.left}" cy="${c.top}" rx="${rx}" ry="${ry}" transform="rotate(${angle} ${c.left} ${c.top})" ${stroke}/>`;
         }
@@ -2841,14 +2841,28 @@ class XtoolCamera extends XtoolFeature {
   }
 
   /**
-   * How a crop's mm fall on the picture box: place(x, y) in px (as _pointOf
-   * reads a point), the box's height, and the picture's scale (px per mm,
-   * and per pixel of the picture as sent); undefined without a picture or
-   * with a side of the crop left whole (its size in mm is not known).
+   * The area the shown camera's picture shows ({ x, y, width, height }, mm):
+   * the camera's view attribute (the P2's, for any crop), or else its crop
+   * numbers (the F2's cameras, which have no view attribute); undefined
+   * while not known, or with a side of the crop left whole.
    */
-  _onPicture(crop) {
+  _viewNow() {
+    const view = this._hass.states[this._shownCamera?.entityId]?.attributes.view;
+    if (view) return view.width > 0 && view.height > 0 ? view : undefined;
+    const crop = this._cropNow();
+    if (!crop || !(crop.width > 0) || !(crop.height > 0)) return undefined;
+    return { x: crop.center_x - crop.width / 2, y: crop.center_y - crop.height / 2, width: crop.width, height: crop.height };
+  }
+
+  /**
+   * How an area's mm (see _viewNow) fall on the picture box: place(x, y) in
+   * px (as _pointOf reads a point), the box's height, and the picture's
+   * scale (px per mm, and per pixel of the picture as sent); undefined
+   * without a picture.
+   */
+  _onPicture(view) {
     const img = this._image?.shadowRoot?.querySelector("img");
-    if (!img?.naturalWidth || !(crop.width > 0) || !(crop.height > 0)) return undefined;
+    if (!img?.naturalWidth) return undefined;
     const box = img.getBoundingClientRect(), shot = this._shot.getBoundingClientRect();
     const ratio = shot.width / this._shot.offsetWidth || 1;
     const scale = Math.max(box.width / img.naturalWidth, box.height / img.naturalHeight);
@@ -2856,18 +2870,18 @@ class XtoolCamera extends XtoolFeature {
     const left = box.left - shot.left + (box.width - shownW) / 2, top = box.top - shot.top + (box.height - shownH) / 2;
     return {
       place: (x, y) => ({
-        left: (left + ((x - crop.center_x) / crop.width + 0.5) * shownW) / ratio,
-        top: (top + ((y - crop.center_y) / crop.height + 0.5) * shownH) / ratio,
+        left: (left + (x - view.x) / view.width * shownW) / ratio,
+        top: (top + (y - view.y) / view.height * shownH) / ratio,
       }),
       height: shot.height / ratio,
-      pxPerMm: shownW / crop.width / ratio,
+      pxPerMm: shownW / view.width / ratio,
       pxPerPixel: scale / ratio,
     };
   }
 
   /** A point on the work surface (mm) in the picture box (px); undefined without a picture. */
-  _placeOfMm([x, y], crop) {
-    return this._onPicture(crop)?.place(x, y);
+  _placeOfMm([x, y], view) {
+    return this._onPicture(view)?.place(x, y);
   }
 
   /**
@@ -3203,9 +3217,9 @@ class XtoolCamera extends XtoolFeature {
   }
 
   /** The tapped point on the work surface (mm), or undefined off the picture or for a whole-photo side. */
-  _pointOf(ev, crop) {
+  _pointOf(ev, view) {
     const img = this._image?.shadowRoot?.querySelector("img");
-    if (!img?.naturalWidth || !(crop.width > 0) || !(crop.height > 0)) return undefined;
+    if (!img?.naturalWidth) return undefined;
     const box = img.getBoundingClientRect();
     // The picture fills its box (cover): find the part of it that is shown
     const scale = Math.max(box.width / img.naturalWidth, box.height / img.naturalHeight);
@@ -3213,7 +3227,7 @@ class XtoolCamera extends XtoolFeature {
     const u = (ev.clientX - box.left - (box.width - shownW) / 2) / shownW;
     const v = (ev.clientY - box.top - (box.height - shownH) / 2) / shownH;
     if (u < 0 || u > 1 || v < 0 || v > 1) return undefined;
-    return { x: crop.center_x + (u - 0.5) * crop.width, y: crop.center_y + (v - 0.5) * crop.height, ...this._placeOf(ev) };
+    return { x: view.x + u * view.width, y: view.y + v * view.height, ...this._placeOf(ev) };
   }
 
   // First tap: a corner; second tap: the opposite corner, which sets the crop
@@ -3221,7 +3235,8 @@ class XtoolCamera extends XtoolFeature {
     const crop = this._crop();
     // A crop on its way: taps wait for it
     if (this._cropSent) return;
-    const point = crop && this._pointOf(ev, crop);
+    const view = crop && this._viewNow();
+    const point = view && this._pointOf(ev, view);
     if (!point) return;
     if (!this._first) {
       this._first = point;

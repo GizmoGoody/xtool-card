@@ -612,7 +612,9 @@
         crop_width: 305, crop_height: 183, crop_center_x: 305, crop_center_y: 153, entity_id: "camera.p2_overview" }),
         `the second tap sets the crop (${JSON.stringify(lastCall(tapHass).data)})`);
       // Crop stays on after a crop is set: two more taps set another
-      const cropped = makeHass({ "number.p2_overview_crop_width": "305", "select.p2_overview_crop": "custom" });
+      // The new crop, and the camera's view of it (with the next picture)
+      const cropped = makeHass({ "number.p2_overview_crop_width": "305", "select.p2_overview_crop": "custom",
+        "camera.p2_overview": { state: "idle", attributes: { view: { x: 152.5, y: 0, width: 305, height: 305 } } } });
       tapper.hass = cropped;
       await wait(150);
       check(`tap, ${kind}`, keyNamed(tapper, "custom_crop").getAttribute("aria-pressed") === "true", "Crop stays on after a crop is set");
