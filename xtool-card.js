@@ -3007,6 +3007,9 @@ class XtoolCamera extends XtoolFeature {
    * to keys, and inputs next to inputs, share a cell while they fit in half.
    * The camera's own cells take as many rows as the camera with the most
    * (an empty space below the fewer), so nothing below the feature moves.
+   * When the every-camera cells leave the right half of their last row
+   * free and each camera's own controls fit in one half, the shown
+   * camera's cell takes that half instead of a row of its own.
    */
   _layout() {
     const box = this._row, full = this.clientWidth;
@@ -3071,14 +3074,19 @@ class XtoolCamera extends XtoolFeature {
       }
       return row + (col ? 1 : 0);
     };
-    // Every camera's controls keep rows of their own, above the shown camera's
-    const spare = Math.max(0, ...owns.map((own) => rowsOf(own))) - rowsOf(mine);
+    // Every camera's controls keep rows of their own, above the shown
+    // camera's; but when they leave the right half of their last row free
+    // and each camera's own controls fit in one half, those take that half
+    // (a simpler camera, such as the F2 Ultra UV's, then needs one row)
+    const halfFree = every.length > 0 && rowsOf([...every, { span: 1 }]) === rowsOf(every);
+    const share = halfFree && owns.every((own) => own.length <= 1 && (own[0]?.span ?? 1) === 1);
+    const spare = share ? 0 : Math.max(0, ...owns.map((own) => rowsOf(own))) - rowsOf(mine);
     const lines = [...every, ...mine].map((cell, i) => {
       const line = this._cells[i] ??= Object.assign(document.createElement("div"), { className: "row line" });
       line.classList.toggle("whole", cell.span === 2);
       line.classList.toggle("squeeze", !!cell.squeeze);
-      // The shown camera's controls start a row of their own
-      line.classList.toggle("first", i === every.length);
+      // The shown camera's controls start a row of their own, unless they share the free half
+      line.classList.toggle("first", i === every.length && !share);
       const items = cell.ids.flatMap((id) => this._itemsOf(id));
       showSlides(line, items);
       // A cell with a field lays its keys out as a field's row does (see ROW_CSS: flow)

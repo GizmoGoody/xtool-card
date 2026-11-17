@@ -931,6 +931,22 @@
     await wait(60);
     check("camera, show", keysOf(namedCamera).map((k) => k.textContent).slice(0, 2).join() === "Main,Deep" && keysOf(namedCamera).slice(0, 2).every((k) => !k.querySelector("ha-state-icon")),
       "Show: Names, for the camera buttons too");
+    // The F2 Ultra UV: the camera toggle (every camera) and one key per camera share one row
+    const oneRow = addFeature({ type: "custom:xtool-camera", camera: "main", controls: ["camera_toggle", "custom_crop", "perspective"] }, { hass });
+    await wait(80);
+    const rowOf = () => {
+      const lines = [...oneRow.shadowRoot.querySelectorAll(".sections > .line")].map((l) => l.getBoundingClientRect());
+      const box = oneRow.shadowRoot.querySelector(".sections").getBoundingClientRect();
+      return { lines, keys: keysOf(oneRow).map((k) => k.dataset.key).join(), oneRow: lines.length === 2 && Math.abs(lines[0].top - lines[1].top) < 1
+        && lines[0].right < lines[1].left && Math.abs(box.height - lines[0].height) < 1 };
+    };
+    const mainRow = rowOf();
+    keyNamed(oneRow, "camera_toggle").click();
+    await wait(80);
+    const deepRow = rowOf();
+    check("camera, one row", mainRow.oneRow && mainRow.keys === "camera_toggle,custom_crop" && deepRow.oneRow && deepRow.keys === "camera_toggle,perspective"
+      && Math.abs(mainRow.lines[1].left - deepRow.lines[1].left) < 1,
+      `every camera's toggle on the left, the shown camera's own key on the right, in one row for both cameras (${mainRow.keys} | ${deepRow.keys})`);
     cameraOptions.setConfig({ type: "custom:xtool-camera" });
     const cameraChoices = cameraOptions.querySelector("ha-form").schema.find((f) => f.name === "camera").selector.select.options.map((o) => o.value);
     check("camera, options", cameraChoices.join() === "main,deep" && cameraOptions.querySelector("ha-form").data.camera === "main",
