@@ -5831,7 +5831,7 @@ if (!customElements.get(CARD_TYPE)) {
     name: "xTool",
     description: "A tile card for an xTool laser: its state as a picture, a progress edge, status and connection badges, and an optional xTool style.",
     preview: true,
-    documentationURL: "https://github.com/thecodingdad/ha-xtool#dashboard-card",
+    documentationURL: "https://github.com/GizmoGoody/xtool-card#configuration",
   });
   console.info(`%c XTOOL CARD %c ${VERSION} `, "color: #fff; background: #555; font-weight: bold", "color: #fff; background: #e0681f");
 }
