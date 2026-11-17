@@ -527,17 +527,20 @@
       `the camera keys, Crop, the crop preset and Exposure keep their places and sizes, and the feature its height (${overviewPlaces} / ${stays()})`);
     check("P2 camera, sections", lineOf(closeIcon(p2Camera)) === lineOf(p2Camera.shadowRoot.querySelector(".line > .slide.slider:has(> hui-card-feature)") && [...p2Camera.shadowRoot.querySelectorAll(".line > .slide")].find((slide) => slide.querySelector("hui-card-feature").feature.type === "light-brightness")),
       "the fill light's slider stays beside its icon");
-    // A phone's width: every camera's controls (the camera keys, Crop and Exposure) stay in a row of their own, one line across, above the shown camera's
+    // A phone's width: every camera's controls (the camera keys, Crop and Exposure) stay in rows of their own, above the shown camera's,
+    // each in a half-width cell (never across the middle) unless it cannot fit in half
     const phone = addFeature({ type: "custom:xtool-camera", show: "icons", camera: "overview",
       controls: ["camera_toggle", "custom_crop", "crop", "exposure", "thickness_or_distance", "mode", "fill_light_close"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     phone.parentElement.style.width = "350px";
     await wait(80);
     const phoneLines = [...phone.shadowRoot.querySelectorAll(".sections > .line")];
     const entityOf = (line) => [...line.querySelectorAll("hui-card-feature")].map((f) => f.context.entity_id.split(".")[1]).join("+") || [...line.querySelectorAll(".key")].map((k) => k.dataset.key).join("+");
-    const firstTop = phoneLines[0]?.getBoundingClientRect().top;
-    check("P2 camera, phone", phoneLines[0]?.classList.contains("whole") && /crop/.test(entityOf(phoneLines[0])) && /exposure/.test(entityOf(phoneLines[0]))
-      && phoneLines.slice(1).every((line) => line.getBoundingClientRect().top > firstTop + 1),
-      `the camera keys, Crop and Exposure on the first line, the rest below it (${phoneLines.map((l) => `${entityOf(l)}@${Math.round(l.getBoundingClientRect().top - firstTop)}`).join(", ")})`);
+    const isEvery = (line) => /camera_toggle|custom_crop|_crop$|exposure/.test(entityOf(line));
+    const phoneHalf = (phone.shadowRoot.querySelector(".sections").getBoundingClientRect().width - 12) / 2;
+    const lastEvery = Math.max(...phoneLines.filter(isEvery).map((l) => l.getBoundingClientRect().bottom));
+    check("P2 camera, phone", phoneLines.filter(isEvery).length === 3 && phoneLines.every((l) => Math.abs(l.getBoundingClientRect().width - phoneHalf) < 1)
+      && phoneLines.filter((l) => !isEvery(l)).every((l) => l.getBoundingClientRect().top > lastEvery),
+      `half-width cells; the camera keys, Crop and Exposure above the rest (${phoneLines.map((l) => `${entityOf(l)}:${Math.round(l.getBoundingClientRect().width)}@${Math.round(l.getBoundingClientRect().top)}`).join(", ")})`);
     phone.parentElement.remove();
     // An input whose entity has no value to show is left out, not drawn blank
     p2Camera.hass = makeHass({ "number.p2_close_exposure": "unknown", "select.p2_close_crop": "gone" });
