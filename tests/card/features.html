@@ -236,7 +236,7 @@
     check("lights, options", lightForm.data.controls.join() === "fill_light_back_brightness" && lightForm.schema[0].selector.select.reorder
       && lightForm.schema[0].selector.select.options.map((o) => o.label).join() === "Fill light (front),Fill light (front) brightness,Fill light (back),Fill light (back) brightness"
       && lightForm.data.off_at_minimum === false && minimum.label === "Off at minimum"
-      && minimum.helper === "Setting a light's slider to its minimum (1%) turns the light off.",
+      && minimum.helper === "Moving a light's slider to its minimum (1%) turns the light off.",
       "four choices on the F2 Ultra UV, each light by its name and its brightness, and Off at minimum (off by default)");
     check("lights", window.customCardFeatures.find((f) => f.type === "xtool-lights")?.name === "xTool lights", "named xTool lights");
     const noLights = makeHass();

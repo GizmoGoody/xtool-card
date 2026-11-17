@@ -12,11 +12,11 @@
 <pre id="report" data-result="running">running</pre>
 <script>
   runChecks(async () => {
-    // A new card from the card picker: the first laser, in its own style
+    // A new card from the card picker: the first laser; its model's style is the default, not written
     const stub = customElements.get("xtool-card").getStubConfig(makeHass());
-    check("new card", stub.entity === "sensor.f2_status" && stub.style === "f2_ultra_uv", "the F2 Ultra UV, in the F2 Ultra UV style");
+    check("new card", stub.entity === "sensor.f2_status" && !("style" in stub), "the F2 Ultra UV, its style (the model's) not written");
     check("new card", stub.features.map((f) => f.type).join() === "custom:xtool-job,custom:xtool-controls", "with the Job and Controls features");
-    check("new card", Object.keys(stub).join() === "entity,style,features" && stub.features.every((f) => Object.keys(f).join() === "type"),
+    check("new card", Object.keys(stub).join() === "entity,features" && stub.features.every((f) => Object.keys(f).join() === "type"),
       `every other option at its default, not written (${Object.keys(stub).join(", ")})`);
     // A P2 without job buttons (as the integration has it): no Job feature
     const p2Only = makeHass();
@@ -25,8 +25,8 @@
       .filter(([id, e]) => !jobButtons.includes(id) && !(e.platform === "xtool" && e.translation_key === "status" && id !== "sensor.p2_status")));
     for (const id of jobButtons) delete p2Only.states[id];
     const p2Stub = customElements.get("xtool-card").getStubConfig(p2Only);
-    check("new card", p2Stub.entity === "sensor.p2_status" && p2Stub.style === "p2_grey" && p2Stub.features.map((f) => f.type).join() === "custom:xtool-controls",
-      `the P2, in the P2 style, with Controls only: it has no job buttons (${JSON.stringify(p2Stub)})`);
+    check("new card", p2Stub.entity === "sensor.p2_status" && !("style" in p2Stub) && p2Stub.features.map((f) => f.type).join() === "custom:xtool-controls",
+      `the P2, with Controls only: it has no job buttons (${JSON.stringify(p2Stub)})`);
     const noLaser = makeHass();
     noLaser.entities = {};
     check("new card", JSON.stringify(customElements.get("xtool-card").getStubConfig(noLaser)) === JSON.stringify({ entity: "" }), "without an xTool laser: the entity alone, to choose");
@@ -36,7 +36,7 @@
     let fired;
     editor.addEventListener("config-changed", (ev) => (fired = ev.detail.config));
     editor.hass = makeHass();
-    editor.setConfig({ type: "custom:xtool-card", entity: "sensor.f2_status", style: "f2_ultra_uv", features: [{ type: "custom:xtool-job" }] });
+    editor.setConfig({ type: "custom:xtool-card", entity: "sensor.f2_status", features: [{ type: "custom:xtool-job" }] });
     document.getElementById("cards").append(editor);
     await wait(150);
 
@@ -49,7 +49,7 @@
     const cardHelpers = [];
     const collect = (schema) => (schema ?? []).forEach((f) => { if (f.helper) cardHelpers.push(f.helper); collect(f.schema); });
     collect([...styleForm.schema, ...form.schema]);
-    check("editor notes", cardHelpers.some((h) => h.includes("progress sensor")) && !cardHelpers.some((h) => /F2|P2|Ultra|deep camera/.test(h)),
+    check("editor notes", cardHelpers.some((h) => h.includes("report progress")) && !cardHelpers.some((h) => /F2|P2|Ultra|deep camera/.test(h)),
       "no note names a model or its camera");
     check("status light", form.data.status_light === true, "the status light is on by default");
     form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "f2_ultra_uv", status_light: false } } }));
@@ -66,7 +66,7 @@
     check("laser", fired.entity === "sensor.p2_status", "choosing a laser sets its Status sensor");
     laserForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { device: "dev_f2" } } }));
     check("laser", fired.entity === "sensor.f2_status", "and back");
-    check("editor", styleForm.data.style === "f2_ultra_uv", "the style is shown");
+    check("editor", styleForm.data.style === "f2_ultra_uv", "the model's style is shown when none is written");
     const styleChoices = styleForm.schema.find((f) => f.name === "style").selector.select.options;
     const choiceText = styleChoices.map((o) => `${o.value}=${o.label}`).join();
     check("editor", choiceText.startsWith("none=None (theme),d1=D1,d1_pro_grey=D1 Pro (Grey),d1_pro_red=D1 Pro (Red),")
@@ -80,7 +80,7 @@
     check("reflections", randomize?.textContent === "Randomize reflections" && editor.shadowRoot.getElementById("row").style.display === "",
       "Randomize reflections is offered with a style");
     randomize.click();
-    check("reflections", Number.isInteger(fired.pattern) && fired.pattern >= 1 && fired.style === "f2_ultra_uv" && !("features_style" in fired),
+    check("reflections", Number.isInteger(fired.pattern) && fired.pattern >= 1 && !("style" in fired) && !("features_style" in fired),
       `a click saves a new pattern (${fired.pattern}) and keeps the other options`);
     check("editor", form.data.status_badge.join() === "alarm,safety_key,safety_checks" && form.data.connection_badge === true, "the default badges are shown: of the defaults, those the F2 Ultra UV has (it has no lid sensor)");
     const badgeField = form.schema.find((s) => s.name === "status_badge");
@@ -108,7 +108,7 @@
     check("badges", badgeFired.connection_badge === false, "the connection badge turned off is written");
     badgeEditor.remove();
     check("editor", badgeField.selector.select.reorder === true && badgeField.selector.select.multiple === true, "the badges can be put in order");
-    check("editor", badgeField.label === "Status badge (in priority order)" && badgeField.helper === "The first one that applies shows at the top right of the picture.", "and are labeled as in priority order");
+    check("editor", badgeField.label === "Status badge" && badgeField.helper === "Shown at the top right of the picture. When several apply, the first in this list shows.", "and the note says the first that applies shows");
     form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "f2_ultra_uv", status_badge: ["lid", "alarm", "safety_key"] } } }));
     check("editor", fired.status_badge.join() === "lid,alarm,safety_key", "the order chosen is the order saved");
 
@@ -132,23 +132,25 @@
 
     // The xTool options change
     form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "none", status_badge: ["alarm"], progress_edge: { edge: "bottom" } } } }));
-    check("editor", !("style" in fired) && !("features_style" in fired) && !("pattern" in fired), "no style written for None, and no features style or pattern without an xTool style");
+    check("editor", fired.style === "none" && !("features_style" in fired) && !("pattern" in fired), "None is written (the model has a style), and no features style or pattern without an xTool style");
     check("reflections", editor.shadowRoot.getElementById("row").style.display === "none", "no Randomize reflections without a style");
     check("editor", fired.status_badge.join() === "alarm" && JSON.stringify(fired.progress_edge) === JSON.stringify({ edge: "bottom" }),
       `badges and the progress edge are saved, the edge with only the options that differ from the defaults (${JSON.stringify(fired.progress_edge)})`);
     check("editor", !editor.shadowRoot.getElementById("form").schema.some((s) => s.name === "features_style"), "the features style is hidden");
 
     // Tap to show or hide the features
-    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "none", collapsible: true, expanded_at_load: false } } }));
-    check("editor", !("collapsible" in fired) && fired.expanded_at_load === false && !("collapse_when_powered_off" in fired) && !("expand_when_powered_on" in fired),
+    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "none", collapsible: true, expanded_at_load: true } } }));
+    check("editor", !("collapsible" in fired) && fired.expanded_at_load === true && !("collapse_when_powered_off" in fired) && !("expand_when_powered_on" in fired),
       "the collapse options are saved; Collapsible, Collapse when powered off and Expand when powered on, on by default, are left out");
+    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "none", collapsible: true, expanded_at_load: false } } }));
+    check("editor", !("expanded_at_load" in fired), "Expanded at load is off by default: off, it is left out");
     check("editor", editor.shadowRoot.getElementById("form").data.collapsible === true, "Collapsible is on by default");
     const formSchema = editor.shadowRoot.getElementById("form").schema;
     check("editor", formSchema.find((s) => s.name === "expanded_at_load")?.label === "Expanded at load", "Expanded at load is offered");
     const powerOptions = formSchema.map((s) => s.name).filter((n) => ["collapse_when_powered_off", "expand_when_powered_on"].includes(n));
     check("editor", formSchema.find((s) => s.name === "collapse_when_powered_off")?.label === "Collapse when powered off"
-      && formSchema.find((s) => s.name === "expand_when_powered_on")?.label === "Expand when powered on" && powerOptions.join() === "collapse_when_powered_off,expand_when_powered_on",
-      "Collapse when powered off is offered, with Expand when powered on after it");
+      && formSchema.find((s) => s.name === "expand_when_powered_on")?.label === "Expand when powered on" && powerOptions.join() === "expand_when_powered_on,collapse_when_powered_off",
+      "Expand when powered on is offered, with Collapse when powered off after it");
     form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { style: "none", collapsible: false } } }));
     check("editor", fired.collapsible === false && !("expanded_at_load" in fired) && !("collapse_when_powered_off" in fired) && !("expand_when_powered_on" in fired)
       && !editor.shadowRoot.getElementById("form").schema.some((s) => s.name === "expanded_at_load"), "turned off, it is saved, and the options under it are removed");
@@ -223,13 +225,16 @@
 
     // The tile card's options change
     tile.dispatchEvent(new CustomEvent("config-changed", { detail: { config: { type: "tile", entity: "sensor.f2_status", name: "Laser", show_entity_picture: true } } }));
-    check("editor", fired.type === "custom:xtool-card" && fired.name === "Laser" && !("style" in fired) && !("show_entity_picture" in fired),
+    check("editor", fired.type === "custom:xtool-card" && fired.name === "Laser" && fired.style === "none" && !("show_entity_picture" in fired),
       "the tile options are kept with the card's own");
     // The tile card's options the card gives defaults: Features position beside the title, and the laser's own State content
     check("editor", tile.config.features_position === "inline" && tile.config.state_content.join() === "state,engraving_lens,elapsed",
       `the tile editor shows the card's defaults (${tile.config.features_position}; ${tile.config.state_content.join(", ")})`);
     tile.dispatchEvent(new CustomEvent("config-changed", { detail: { config: { ...tile.config, name: "Laser 2" } } }));
     check("editor", fired.name === "Laser 2" && !("features_position" in fired) && !("state_content" in fired), "and leaves them out while they are the defaults");
+    tile.dispatchEvent(new CustomEvent("config-changed", { detail: { config: { ...tile.config, name: { type: "device" }, vertical: false } } }));
+    check("editor", !("name" in fired) && !("vertical" in fired) && JSON.stringify(tile.config.name) === JSON.stringify({ type: "device" }),
+      `the device's name and Vertical off, the defaults, are left out, and the tile editor shows the device's name (${JSON.stringify(fired)})`);
     tile.dispatchEvent(new CustomEvent("config-changed", { detail: { config: { ...tile.config, features_position: "bottom", state_content: ["state"] } } }));
     check("editor", fired.features_position === "bottom" && fired.state_content.join() === "state", "but saves other choices");
     check("editor", !editor.shadowRoot.getElementById("form").schema.some((s) => s.name === "last_feature_full_width"),

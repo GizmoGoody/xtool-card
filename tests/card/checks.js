@@ -34,8 +34,15 @@ window.deep = (el, selector) => {
   return [...new Set(out)];
 };
 
-/** Add an xTool card to the page. */
-window.addCard = (title, config, { height = 120, width = 420, hass } = {}) => {
+/**
+ * Add an xTool card to the page: without an xTool style and expanded at
+ * load unless the test sets them (the card's defaults are the model's style
+ * and collapsed: see the "defaults" checks, which use addDefaultCard).
+ */
+window.addCard = (title, config, options) => addDefaultCard(title, { style: "none", expanded_at_load: true, ...config }, options);
+
+/** Add an xTool card to the page, with the card's own defaults. */
+window.addDefaultCard = (title, config, { height = 120, width = 420, hass } = {}) => {
   const figure = document.createElement("figure");
   figure.innerHTML = `<figcaption>${title}</figcaption>`;
   const cell = document.createElement("div");

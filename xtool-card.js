@@ -400,7 +400,7 @@ function lookField(option, style) {
     case "color":
       return { name: "color", label: "Color", selector: { ui_color: { default_color: INTEGRATION, extra_options: [integration, ...STATE_COLORS] } } };
     case "line":
-      return { name: "line", label: "Line (px)", helper: "Empty: Integration", selector: { number: { mode: "box", min: 1, max: 20, step: 1 } } };
+      return { name: "line", label: "Line (px)", helper: "Leave empty to use the integration's.", selector: { number: { mode: "box", min: 1, max: 20, step: 1 } } };
     case "style":
       return {
         name: "style", label: "Style",
@@ -409,7 +409,7 @@ function lookField(option, style) {
     case "icon":
       return { name: "icon", label: "Icon", selector: { icon: { placeholder: style.icon ?? "" } } };
     default:
-      return { name: "size", label: "Size (px)", helper: "Empty: Integration", selector: { number: { mode: "box", min: 4, max: 96, step: 1 } } };
+      return { name: "size", label: "Size (px)", helper: "Leave empty to use the integration's.", selector: { number: { mode: "box", min: 4, max: 96, step: 1 } } };
   }
 }
 
@@ -2383,7 +2383,7 @@ class XtoolJob extends XtoolFeature {
   static keyOptions = { pressed: undefined };
   static form = {
     label: "Controls",
-    helper: "Start / Pause is one button: Pause while the job runs, Start (or Resume) otherwise.",
+    helper: "Start / Pause is one key: Pause while a job runs, Start or Resume otherwise.",
     options: [{ name: "ask_before_cancelling", label: "Ask before cancelling a job" }],
   };
 }
@@ -2427,10 +2427,10 @@ class XtoolSafety extends XtoolFeature {
   static controls = ["flame_alarm", "stops_when_enclosure_opened", "stops_when_moved", "safety_key", "lid", "baseplate", "access_control"];
   static form = {
     label: "Controls",
-    helper: "Turning a check off always asks first. The safety key, lid and baseplate are only shown: a tap opens them.",
+    helper: "Turning a check off always asks first. The safety key, lid and baseplate cannot be changed here; tap one for its details.",
     options: [{
       name: "disabled_color", label: "Disabled color", default: DISABLED_COLOR,
-      helper: "For a check that is off, and a lid, key or baseplate that is not safe.",
+      helper: "The color of a check that is off, and of a safety key, lid or baseplate that is not safe.",
       selector: { ui_color: { default_color: DISABLED_COLOR, extra_options: STATE_COLORS } },
     }],
   };
@@ -2519,8 +2519,8 @@ class XtoolCamera extends XtoolFeature {
       selector: { select: { ...controlsField.selector.select, options: controlsField.selector.select.options.filter((o) => keep(o.value)) } },
     });
     const controlsFields = split ? [
-      listOf("all_cameras", "All cameras", "In place when you switch cameras.", every),
-      listOf("per_camera", "Per camera", "Shown with the camera that has them.", (id) => !every(id)),
+      listOf("all_cameras", "All cameras", "These stay in place when you switch cameras.", every),
+      listOf("per_camera", "Per camera", "Each shows only with the camera that has it.", (id) => !every(id)),
     ] : [controlsField];
     return {
       schema: [
@@ -2530,19 +2530,19 @@ class XtoolCamera extends XtoolFeature {
         },
         {
           name: "camera_view", label: "Camera view",
-          helper: "As in Home Assistant's picture cards. Auto: snapshots, refreshed by Home Assistant. Live: the camera's stream.",
+          helper: "Auto: snapshots that Home Assistant refreshes. Live: the camera's stream.",
           selector: select(CAMERA_VIEWS),
         },
         ...controlsFields,
-        displayField("For the camera's keys."),
+        displayField(),
         {
           name: "show_last_updated", label: "Show the last updated time",
-          helper: "Along the bottom of the picture, in the Auto view, in the card's Time format (under Content).",
+          helper: "In the Auto view, along the bottom of the picture, in the card's Time format (under Content).",
           selector: { boolean: {} },
         },
         {
           name: "full_width", label: "Full width",
-          helper: "With the features beside the title: the picture takes both columns. Off: one column, with the features after it beside it.",
+          helper: "The features sit beside the title in two columns. On: the picture stretches across both. Off: it takes one column, and the next feature sits beside it.",
           selector: { boolean: {} },
         },
       ],
@@ -3494,7 +3494,7 @@ class XtoolLights extends XtoolElement {
     label: "Controls",
     options: [{
       name: "off_at_minimum", label: "Off at minimum", default: false,
-      helper: "Setting a light's slider to its minimum (1%) turns the light off.",
+      helper: "Moving a light's slider to its minimum (1%) turns the light off.",
     }],
   };
 
@@ -3614,7 +3614,7 @@ class XtoolSafetyproIf2Fan extends XtoolFeature {
   static label = "SafetyPro IF2 fan";
   static pickerName = "xTool SafetyPro IF2 fan";
   static controls = ["fan_off", "fan_auto", "fan_speed"];
-  static form = { label: "Controls", helper: "The speed key shows the speed, and a tap steps to the next." };
+  static form = { label: "Controls", helper: "The speed key shows the current speed; tap it for the next speed." };
 
   static supports(device) {
     return !!(device.roles.if2_fan_entity ?? device.roles.if2_gear_select);
@@ -4251,14 +4251,21 @@ const TONE = Object.fromEntries(Object.entries(LOOKS).map(([id, look]) => [id, l
 const FLAT = Object.fromEntries(Object.entries(LOOKS).map(([id, look]) => [id, look.flat]));
 
 /**
- * The style a new card gets for its laser's model (its name in Home
- * Assistant): that model's first style, else its base model's (the F2
- * Ultra UV (Class 1) is drawn as the F2 Ultra UV), else none.
+ * The style a card gets unless one is chosen, from its laser's model (its
+ * name in Home Assistant): the first style of the model whose words are
+ * all in the name, the one with the most words winning, else none. So the
+ * F2 Ultra UV (Class 1) is drawn as the F2 Ultra UV, "Omni Printer O1" as
+ * the O1 Omni Printer, and a model without a style as its base model's.
  */
+const wordsOf = (text) => `${text ?? ""}`.toLowerCase().split(/[^a-z0-9.]+/).filter(Boolean);
 function modelStyle(model) {
-  const name = `${model ?? ""}`.replace(/^xTool\s+/i, "").trim().toLowerCase();
-  const style = (n) => MODEL_STYLES.find(([, m]) => m.toLowerCase() === n)?.[0];
-  return style(name) ?? style(name.replace(/\s*\([^)]*\)$/, "")) ?? "none";
+  const words = new Set(wordsOf(model));
+  let best;
+  for (const [id, name] of MODEL_STYLES) {
+    const own = wordsOf(name);
+    if (own.every((word) => words.has(word)) && own.length > (best?.length ?? 0)) best = { id, length: own.length };
+  }
+  return best?.id ?? "none";
 }
 const DEFAULT_PATTERN = 4242;
 
@@ -4331,12 +4338,17 @@ const TRACK = "var(--disabled-color, rgba(127, 127, 127, .35))";
 // Where the badges sit, as a share of the picture's radius (the same spacing as the SVS card's)
 const BADGE_RING = 16.7 / 20;
 
+/** The card's style: the one chosen, else its laser model's (none until Home Assistant is known). */
+const styleOf = (config, hass) => config?.style ?? (hass ? deviceOf(hass, config?.entity).profile.style : "none");
+
 // Options this card adds to the tile card's
 const OWN_KEYS = ["style", "features_style", "enabled_color", "pattern", "status_badge", "connection_badge", "status_light", "progress_edge", "collapsible", "expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on",
   "last_feature_full_width", "overlay_styles"];
 
 // The card's defaults for the tile card's options it sets otherwise
 const DEFAULT_FEATURES_POSITION = "inline";
+// The laser's name (its device's), not the Status sensor's
+const DEFAULT_NAME = { type: "device" };
 
 /**
  * The State content shown unless one is chosen: the state, the engraving
@@ -4351,6 +4363,7 @@ function tileConfig(config, hass) {
   const tile = { ...config, type: "tile", show_entity_picture: true };
   for (const key of OWN_KEYS) delete tile[key];
   tile.features_position ??= DEFAULT_FEATURES_POSITION;
+  tile.name ??= DEFAULT_NAME;
   tile.state_content ??= defaultStateContent(hass, config.entity);
   return tile;
 }
@@ -4557,22 +4570,23 @@ class XtoolCard extends HTMLElement {
   }
 
   /**
-   * A new card: the first xTool laser in Home Assistant, in its model's
-   * style, with Job and Controls where the laser has controls for them;
-   * every other option at its default (see minimal).
+   * A new card: the first xTool laser in Home Assistant, with Job and
+   * Controls where the laser has controls for them; every other option at
+   * its default (its model's style: see styleOf; see minimal).
    */
   static getStubConfig(hass) {
     const entity = xtoolStatusSensors(hass)[0];
     if (!entity) return { entity: "" };
     const device = deviceOf(hass, entity);
     const features = [XtoolJob, XtoolControls].filter((f) => f.supports(device, hass)).map((f) => ({ type: `custom:${f.type}` }));
-    return minimal({ entity, style: device.profile.style, ...(features.length ? { features } : {}) }, hass);
+    return minimal({ entity, ...(features.length ? { features } : {}) }, hass);
   }
 
   setConfig(config) {
     if (!config?.entity) throw new Error("Choose an xTool entity, such as the laser's Status sensor");
-    const style = config.style ?? "none";
-    if (!STYLES.some(([id]) => id === style)) throw new Error(`Unknown style: ${style}`);
+    if (config.style !== undefined && !STYLES.some(([id]) => id === config.style)) throw new Error(`Unknown style: ${config.style}`);
+    // Unless one is chosen, the laser model's style, once Home Assistant is known (see set hass)
+    const style = styleOf(config, this._hass);
     if (config.features_style !== undefined && !FEATURES_STYLES.some(([id]) => id === config.features_style)) {
       throw new Error(`Unknown features_style: ${config.features_style}`);
     }
@@ -4582,9 +4596,10 @@ class XtoolCard extends HTMLElement {
     const edge = progressOptions(config).edge;
     if (!EDGES.some(([id]) => id === edge)) throw new Error(`Unknown progress edge: ${edge}`);
     this._config = { ...config, style };
+    this._ownConfig = config;
     // The cameras draw the overlays in the card's Overlay styles (see XtoolCamera._drawLooks)
     TARGETS.dispatchEvent(new Event("change"));
-    this._open = config.collapsible === false ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded_at_load !== false;
+    this._open = config.collapsible === false ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded_at_load === true;
     this._wasOff = undefined;
     const tile = innerTileConfig(this._config, this._open, this._hass);
     if (this._tile) {
@@ -4630,6 +4645,12 @@ class XtoolCard extends HTMLElement {
     this._hass = hass;
     if (!this._config) return;
     if (before?.themes !== hass.themes) colorsChanged();
+    // The model's style, when none is chosen, can be known only now
+    const style = styleOf(this._ownConfig, hass);
+    if (style !== this._config.style) {
+      this._config = { ...this._config, style };
+      this._layout();
+    }
     // Nothing of this laser changed: the tile and its features have nothing new to show
     if (this._tile && !changedFor(before, hass, this._config.entity)) return;
     // The default State content follows the laser's entities (see defaultStateContent)
@@ -5528,7 +5549,7 @@ class XtoolCardEditor extends HTMLElement {
       status_light: v.status_light !== false,
       progress_edge: { ...PROGRESS_DEFAULTS, ...(v.progress_edge ?? {}) },
       collapsible: v.collapsible !== false,
-      expanded_at_load: v.expanded_at_load !== false,
+      expanded_at_load: v.expanded_at_load === true,
       collapse_when_powered_off: v.collapse_when_powered_off !== false,
       expand_when_powered_on: v.expand_when_powered_on !== false,
       last_feature_full_width: v.last_feature_full_width !== false,
@@ -5603,7 +5624,8 @@ class XtoolCardEditor extends HTMLElement {
 
   _render() {
     const c = this._config;
-    const styled = !!TONE[c.style];
+    const style = styleOf(c, this._hass);
+    const styled = !!TONE[style];
     this._laserForm.schema = [{
       name: "device", label: "Laser", required: true,
       selector: { device: { integration: DOMAIN, entity: [{ integration: DOMAIN, domain: "sensor", device_class: "enum" }] } },
@@ -5611,50 +5633,50 @@ class XtoolCardEditor extends HTMLElement {
     this._laserForm.data = { device: this._hass?.entities?.[c.entity]?.device_id };
     this._styleForm.schema = [{
       name: "style", label: "xTool style",
-      helper: "The card's style can be left to match your theme's style or a variety of xTool machine styles.",
+      helper: "Defaults to your laser model's style. None follows your theme.",
       selector: select(STYLES),
     }];
-    this._styleForm.data = { style: c.style };
+    this._styleForm.data = { style };
     this.shadowRoot.getElementById("row").style.display = styled ? "" : "none";
     this._form.schema = [
       ...(styled ? [{
         name: "features_style", label: "Features style",
-        helper: "Match style: the controls sit on the body. Flat: on a patch of the body's base color. Console: in a channel pressed into the body.",
+        helper: "Match style: the controls sit on the body. Flat: on a plain patch of the body's color. Console: in a channel pressed into the body.",
         selector: select(FEATURES_STYLES),
       }] : []),
       {
         name: "enabled_color", label: "Enabled color",
-        helper: "For every key that is on and every slider. The job's keys and Safety's problems keep their own colors.",
+        helper: "The color of keys that are on, and of sliders. Job keys and Safety warnings keep their own colors.",
         selector: { ui_color: { default_color: ENABLED_COLOR, extra_options: STATE_COLORS } },
       },
       {
         name: "collapsible", label: "Collapsible",
-        helper: "A tap on the card shows or hides the features, instead of its Tap behavior (under Interactions). Icon tap behavior still works.",
+        helper: "Tapping the card shows or hides its features, in place of the card's Tap behavior (under Interactions). Tapping the icon still works as set.",
         selector: { boolean: {} },
       },
       ...(c.collapsible !== false ? [
         { name: "expanded_at_load", label: "Expanded at load", selector: { boolean: {} } },
-        { name: "collapse_when_powered_off", label: "Collapse when powered off", selector: { boolean: {} } },
         { name: "expand_when_powered_on", label: "Expand when powered on", selector: { boolean: {} } },
+        { name: "collapse_when_powered_off", label: "Collapse when powered off", selector: { boolean: {} } },
       ] : []),
       ...((c.features_position ?? DEFAULT_FEATURES_POSITION) === "inline" ? [{
         name: "last_feature_full_width", label: "Last feature full width",
-        helper: "With the features beside the title: a last feature alone in its row takes both columns.",
+        helper: "The features sit beside the title in two columns. When the last one ends up alone in its row, it stretches across both columns instead of leaving the other empty.",
         selector: { boolean: {} },
       }] : []),
       {
-        name: "status_badge", label: "Status badge (in priority order)",
-        helper: "The first one that applies shows at the top right of the picture.",
+        name: "status_badge", label: "Status badge",
+        helper: "Shown at the top right of the picture. When several apply, the first in this list shows.",
         selector: { select: { multiple: true, reorder: true, mode: "dropdown", options: statusBadgesOf(this._hass, c.entity).map(([value, label]) => ({ value, label })) } },
       },
       {
         name: "connection_badge", label: "Connection badge",
-        helper: "At the bottom right of the picture: how Home Assistant reaches the laser (Ethernet, Wi-Fi or USB), or that it is unavailable.",
+        helper: "Shown at the bottom right of the picture: how Home Assistant reaches the laser (Ethernet, Wi-Fi or USB), or that the laser is unavailable.",
         selector: { boolean: {} },
       },
       {
         name: "status_light", label: "Status light",
-        helper: "A thin ring around the picture in the color and pattern of the machine's own status light.",
+        helper: "A thin ring around the picture that copies the color and pattern of the laser's own status light.",
         selector: { boolean: {} },
       },
       {
@@ -5671,13 +5693,13 @@ class XtoolCardEditor extends HTMLElement {
           { name: "direction", label: "Direction", selector: select(DIRECTIONS) },
           {
             name: "color", label: "Color",
-            helper: "Follows the state: the laser's working color, amber when paused, green when finished. Thresholds: green above 60%, amber above 20%, red below. You can also type a color.",
+            helper: "Follows the state: the laser's working color, amber when paused, green when finished. Thresholds: green above 60%, amber above 20%, red below. Or type any color.",
             selector: select([["state", "Follows the state"], ["thresholds", "Thresholds"]], { custom_value: true }),
           },
           { name: "show_percentage", label: "Show the percentage", selector: { boolean: {} } },
           {
             name: "show_while", label: "Show while",
-            helper: "Without a progress sensor, the edge sweeps while a job runs.",
+            helper: "For a laser that does not report progress, the edge sweeps back and forth instead of filling.",
             selector: { select: { multiple: true, mode: "list", options: SHOW_WHILE.map(([value, label]) => ({ value, label })) } },
           },
         ],
@@ -5691,7 +5713,7 @@ class XtoolCardEditor extends HTMLElement {
       status_light: c.status_light !== false,
       progress_edge: progressOptions(c),
       collapsible: c.collapsible !== false,
-      expanded_at_load: c.expanded_at_load !== false,
+      expanded_at_load: c.expanded_at_load === true,
       collapse_when_powered_off: c.collapse_when_powered_off !== false,
       expand_when_powered_on: c.expand_when_powered_on !== false,
       last_feature_full_width: c.last_feature_full_width !== false,
@@ -5723,8 +5745,12 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
  */
 function minimal(config, hass) {
   const c = { ...config };
-  const styled = STYLES.some(([id]) => id === c.style) && c.style !== "none";
-  if (!styled) delete c.style;
+  if (!STYLES.some(([id]) => id === c.style)) delete c.style;
+  // Without Home Assistant, the model's style is not known: its options are kept
+  const styled = c.style || hass ? styleOf(c, hass) !== "none" : true;
+  // The style is left out when it is the laser model's (the card's default);
+  // None is kept for a model that has a style
+  if (hass && c.style === styleOf({ entity: c.entity }, hass)) delete c.style;
   if (!styled || c.features_style === DEFAULT_FEATURES_STYLE || !FEATURES_STYLES.some(([id]) => id === c.features_style)) delete c.features_style;
   if (!styled || !Number.isFinite(c.pattern) || c.pattern === DEFAULT_PATTERN) delete c.pattern;
   if (!Array.isArray(c.status_badge) || (hass && same(c.status_badge, defaultStatusBadges(hass, c.entity)))) delete c.status_badge;
@@ -5738,10 +5764,14 @@ function minimal(config, hass) {
   // Expanded at load, Collapse when powered off and Expand when powered on
   // matter only for a collapsible card
   if (c.collapsible !== false) delete c.collapsible;
-  for (const key of ["expanded_at_load", "collapse_when_powered_off", "expand_when_powered_on"]) if (c.collapsible === false || c[key] !== false) delete c[key];
+  if (c.collapsible === false || c.expanded_at_load !== true) delete c.expanded_at_load;
+  for (const key of ["collapse_when_powered_off", "expand_when_powered_on"]) if (c.collapsible === false || c[key] !== false) delete c[key];
   // Last feature full width matters only with the features beside the title
   if (c.last_feature_full_width !== false || (c.features_position ?? DEFAULT_FEATURES_POSITION) !== "inline") delete c.last_feature_full_width;
   if (c.features_position === DEFAULT_FEATURES_POSITION) delete c.features_position;
+  if (same(c.name, DEFAULT_NAME)) delete c.name;
+  // The tile card's own default, which its editor writes out
+  if (c.vertical === false) delete c.vertical;
   if (hass && same(c.state_content, defaultStateContent(hass, c.entity))) delete c.state_content;
   if (Array.isArray(c.features) && !c.features.length) delete c.features;
   const styles = ownStyles(c.overlay_styles);

@@ -103,6 +103,9 @@
   // The defaults: Console, the first feature beside the title, the laser's own State content
   const defaultCard = addCard("defaults", { style: "p2_grey", features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] },
     { hass: f2("idle"), height: rowsHeight(2) });
+  // Nothing set: the model's style, the device's name, collapsed at load
+  const bareCard = addDefaultCard("defaults, nothing set", { features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }] },
+    { hass: f2("idle"), height: rowsHeight(2) });
 
   // Collapsing to the title
   try { localStorage.clear(); } catch (err) { /* no storage: the card still works */ }
@@ -282,7 +285,10 @@
     const inner = (card) => card.shadowRoot.querySelector("hui-tile-card");
 
     // The defaults
-    check("defaults", inner(defaultCard).config.features_position === "inline" && inner(defaultCard).config.state_content.join() === "state,engraving_lens,elapsed",
+    check("defaults", bareCard._config.style === "f2_ultra_uv" && bareCard.shadowRoot.querySelector(".frame.styled")
+      && JSON.stringify(inner(bareCard).config.name) === JSON.stringify({ type: "device" }) && inner(bareCard).config.features.length === 1,
+      `nothing set: the F2 Ultra UV style, the device's name, collapsed at load to the first feature beside the title (${bareCard._config.style}, ${JSON.stringify(inner(bareCard).config.name)}, ${inner(bareCard).config.features.length})`);
+    check("defaults", inner(defaultCard).config.features_position === "inline" &&inner(defaultCard).config.state_content.join() === "state,engraving_lens,elapsed",
       `features beside the title; State content: the state, the engraving lens and the time it has run (${inner(defaultCard).config.state_content.join(", ")})`);
     check("defaults", inner(pictures.raster).config.state_content.join() === "state,elapsed", "a laser without an engraving lens sensor: the state and the time it has run");
     // A laser that is off: its keys are disabled, in a disabled color readable on the style's tone
