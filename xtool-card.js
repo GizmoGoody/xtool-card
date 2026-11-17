@@ -2619,6 +2619,7 @@ class XtoolCamera extends XtoolFeature {
       }
       .sections > .line { min-width: 0; }
       .sections > .line.whole, .sections > .spacer { grid-column: 1 / -1; }
+      .sections > .line.first { grid-column-start: 1; }
       /* Within a cell, keys are as far apart as in any feature */
       .sections > .line { column-gap: var(--feature-button-spacing, 12px); }
       .sections > .spacer { height: calc(var(--rows) * var(--feature-height, 42px) + (var(--rows) - 1) * var(--ha-card-feature-gap, 12px)); }
@@ -2993,7 +2994,8 @@ class XtoolCamera extends XtoolFeature {
    * The chosen controls below the picture, in a grid of two columns, so a
    * camera switch moves nothing that stays:
    * - Every camera: the units every camera has (the camera keys, and such
-   *   as Crop and Exposure, for the camera shown), first, never moving.
+   *   as Crop and Exposure, for the camera shown), first, never moving, in
+   *   rows of their own (one line across when they fit, see _layout).
    * - Shown camera: the units only some cameras have, after them, swapped
    *   as a whole for the camera shown.
    * A unit is a control with its partners (see CAMERA_PARTNERS), in the
@@ -3035,7 +3037,7 @@ class XtoolCamera extends XtoolFeature {
       }
       return out.map((cell) => ({ ids: cell.ids, span: this._sizeOf(cell.ids, keyGap).min <= half + 0.5 ? 1 : 2 }));
     };
-    const every = cells(units.filter(everywhere).map((u) => u.ids));
+    let every = cells(units.filter(everywhere).map((u) => u.ids));
     const owns = cameras.map((camera) => cells(units.filter((u) => !everywhere(u)).map((u) => u.ids.filter((id) => this._has(camera, id))).filter((ids) => ids.length)));
     const mine = owns[cameras.findIndex((camera) => camera.entityId === this._camera)] ?? [];
     // The rows the cells take, as the grid places them (a whole-width cell after a half starts a row)
@@ -3053,10 +3055,17 @@ class XtoolCamera extends XtoolFeature {
       }
       return row + (col ? 1 : 0);
     };
-    const spare = Math.max(0, ...owns.map((own) => rowsOf([...every, ...own]))) - rowsOf([...every, ...mine]);
+    // Every camera's controls keep rows of their own, above the shown
+    // camera's: on one line when they fit across the whole width, rather
+    // than in more rows of halves
+    const everyIds = every.flatMap((cell) => cell.ids);
+    if (rowsOf(every) > 1 && this._sizeOf(everyIds, keyGap).min <= full + 0.5) every = [{ ids: everyIds, span: 2 }];
+    const spare = Math.max(0, ...owns.map((own) => rowsOf(own))) - rowsOf(mine);
     const lines = [...every, ...mine].map((cell, i) => {
       const line = this._cells[i] ??= Object.assign(document.createElement("div"), { className: "row line" });
       line.classList.toggle("whole", cell.span === 2);
+      // The shown camera's controls start a row of their own
+      line.classList.toggle("first", i === every.length);
       const items = cell.ids.flatMap((id) => this._itemsOf(id));
       showSlides(line, items);
       // A cell with a field lays its keys out as a field's row does (see ROW_CSS: flow)
