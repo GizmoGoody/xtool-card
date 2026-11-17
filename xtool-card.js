@@ -1057,7 +1057,7 @@ function itemMin(el, gap) {
 function fitRow(row) {
   const width = row.clientWidth;
   if (!width) return;
-  if (getComputedStyle(row).flexWrap === "wrap") {
+  if (getComputedStyle(row).flexWrap === "wrap" || row.classList.contains("squeeze")) {
     for (const item of row.children) item.removeAttribute("data-dropped");
     return;
   }
@@ -2620,6 +2620,8 @@ class XtoolCamera extends XtoolFeature {
       .sections > .line { min-width: 0; }
       .sections > .line.whole, .sections > .spacer { grid-column: 1 / -1; }
       .sections > .line.first { grid-column-start: 1; }
+      /* Every camera's controls in the top row: each half narrows its items rather than dropping any */
+      .sections > .line.squeeze > *, .sections > .line.squeeze > .group > * { min-width: 0 !important; }
       /* Within a cell, keys are as far apart as in any feature */
       .sections > .line { column-gap: var(--feature-button-spacing, 12px); }
       .sections > .spacer { height: calc(var(--rows) * var(--feature-height, 42px) + (var(--rows) - 1) * var(--ha-card-feature-gap, 12px)); }
@@ -2994,8 +2996,9 @@ class XtoolCamera extends XtoolFeature {
    * The chosen controls below the picture, in a grid of two columns, so a
    * camera switch moves nothing that stays:
    * - Every camera: the units every camera has (the camera keys, and such
-   *   as Crop and Exposure, for the camera shown), first, never moving, in
-   *   rows of their own.
+   *   as Crop and Exposure, for the camera shown), first, never moving: with
+   *   more than one camera, the top row alone, in the order chosen, split
+   *   between its two halves.
    * - Shown camera: the units only some cameras have, after them, swapped
    *   as a whole for the camera shown.
    * A unit is a control with its partners (see CAMERA_PARTNERS), in the
@@ -3037,7 +3040,20 @@ class XtoolCamera extends XtoolFeature {
       }
       return out.map((cell) => ({ ids: cell.ids, span: this._sizeOf(cell.ids, keyGap).min <= half + 0.5 ? 1 : 2 }));
     };
-    const every = cells(units.filter(everywhere).map((u) => u.ids));
+    // With more than one camera, every camera's controls take the top row
+    // alone, in the order chosen: split between its two halves where they
+    // fit best, each half narrowing its items as needed (see .squeeze)
+    const everyUnits = units.filter(everywhere).map((u) => u.ids);
+    let every = cells(everyUnits);
+    if (cameras.length > 1 && everyUnits.length > 1) {
+      let best;
+      for (let k = 1; k < everyUnits.length; k++) {
+        const left = everyUnits.slice(0, k).flat(), right = everyUnits.slice(k).flat();
+        const need = Math.max(this._sizeOf(left, keyGap).min, this._sizeOf(right, keyGap).min);
+        if (!best || need < best.need) best = { need, left, right };
+      }
+      every = [{ ids: best.left, span: 1, squeeze: true }, { ids: best.right, span: 1, squeeze: true }];
+    }
     const owns = cameras.map((camera) => cells(units.filter((u) => !everywhere(u)).map((u) => u.ids.filter((id) => this._has(camera, id))).filter((ids) => ids.length)));
     const mine = owns[cameras.findIndex((camera) => camera.entityId === this._camera)] ?? [];
     // The rows the cells take, as the grid places them (a whole-width cell after a half starts a row)
@@ -3055,12 +3071,12 @@ class XtoolCamera extends XtoolFeature {
       }
       return row + (col ? 1 : 0);
     };
-    // Every camera's controls keep rows of their own, above the shown
-    // camera's (a half left empty beside a last half of theirs)
+    // Every camera's controls keep rows of their own, above the shown camera's
     const spare = Math.max(0, ...owns.map((own) => rowsOf(own))) - rowsOf(mine);
     const lines = [...every, ...mine].map((cell, i) => {
       const line = this._cells[i] ??= Object.assign(document.createElement("div"), { className: "row line" });
       line.classList.toggle("whole", cell.span === 2);
+      line.classList.toggle("squeeze", !!cell.squeeze);
       // The shown camera's controls start a row of their own
       line.classList.toggle("first", i === every.length);
       const items = cell.ids.flatMap((id) => this._itemsOf(id));
