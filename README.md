@@ -10,7 +10,7 @@ A Home Assistant dashboard card for xTool lasers. It is Home Assistant's own **t
 - **Collapsing** to the title row with a tap, and following the laser's power.
 - **xTool features**, added like any tile feature: Job, Controls, Configuration, Safety, Lights, Camera, Overlays, Position, Focus and SafetyPro IF2 fan.
 
-The card needs the **dev build** of the [xTool Laser integration](https://github.com/GizmoGoody/ha-xtool) for the entities it shows and controls (see [The xTool Laser integration](#the-xtool-laser-integration)).
+The card needs the [xTool Laser integration](https://github.com/thecodingdad/ha-xtool) for the entities it shows and controls. Some features wait for integration changes that are not released yet (see [The xTool Laser integration](#the-xtool-laser-integration)).
 
 | F2 Ultra UV | P2 |
 | --- | --- |
@@ -139,9 +139,35 @@ Add them like any tile feature, under **Features** in the editor. Only the featu
 
 ## The xTool Laser integration
 
-The card needs the **dev build** of the xTool Laser integration, from [GizmoGoody/ha-xtool](https://github.com/GizmoGoody/ha-xtool). Install it as that repository's README describes. The dev build holds the integration changes below, which are waiting for review in the original integration, [thecodingdad/ha-xtool](https://github.com/thecodingdad/ha-xtool). Its latest release, v2.8.0 (November 3, 2026), has none of them, and the card is not built for it.
+Install the [xTool Laser integration](https://github.com/thecodingdad/ha-xtool) from the Marketplace (or HACS), as its README describes. The editor offers only the features a laser has the entities for, so a feature that waits for an integration change does not appear until that change is released.
 
-The pull requests were opened between November 8 and 17, 2026. The maintainer has not reviewed or merged any of them yet. Once they are merged and released, the card will move to the original integration.
+**Works with the current release (v2.8.0, November 3, 2026):**
+
+- The state picture, progress edge, status light, xTool styles and collapsing.
+- The status badge: alarm, safety key, lid and firmware update.
+- **Job**: pause, resume and cancel.
+- **Controls**, **Configuration** and **Lights**: power, exhaust and cooling fans, fill lights, red dot, safety lock, buzzer and sleep, on the lasers that have them.
+- **Safety**: flame alarm, the stop when opened or moved checks, safety key and lid.
+- **Camera**: the camera pictures, without crop or perspective.
+- **SafetyPro IF2 fan**, though speeds can bounce back until #71 is merged.
+
+**Waits for an integration pull request:**
+
+| Card feature | Pull request |
+| --- | --- |
+| The P2: almost everything, including its status, cameras, crop presets, Position, Measure, its fill lights and red dots, and the **Overlays** feature | #60 |
+| **Overlay styles** (the card drawing the P2 overlays) and the Red dot close ring | #78 |
+| The connection badge (Ethernet, Wi-Fi or USB); until then it shows only Unavailable | #70 (F2 Ultra UV), #60 (P2) |
+| **Focus**, and the engraving lens in the state content | #70 |
+| Camera crop, perspective and the Calibration image on the F2 Ultra UV | #74 |
+| A faster camera picture, and how often it refreshes | #73 |
+| Keys that stay as tapped instead of flipping back until the next poll | #52 |
+| Steady SafetyPro IF2 2.0 fan speeds and Auto | #71 |
+| Initializing while the laser starts, and readings unavailable while it is off | #72 |
+
+The pull requests in the original integration were opened between November 8 and 17, 2026. The maintainer has not reviewed or merged any of them yet.
+
+**The pull requests:**
 
 | Pull request | What it brings to the card | Depends on |
 | --- | --- | --- |
@@ -157,7 +183,7 @@ The pull requests were opened between November 8 and 17, 2026. The maintainer ha
 | [#68 Small fixes](https://github.com/thecodingdad/ha-xtool/pull/68) | Fill light brightness as in xTool Studio, and tidier device pages | |
 | [#55 Access control](https://github.com/thecodingdad/ha-xtool/pull/55) | The Access control switch, named as in xTool Studio and only on the units that have it | |
 
-Each pull request with a dependency contains the commits of the ones it depends on, so they can be merged in this order: #71, then #52; #70 and #73, then #74; #69; then #60, then #78. The others can be merged at any time.
+Each pull request with a dependency contains the commits of the ones it depends on, so the maintainer can merge them in this order: #71, then #52; #70 and #73, then #74; #69; then #60, then #78. The others can be merged at any time.
 
 ## Troubleshooting
 
