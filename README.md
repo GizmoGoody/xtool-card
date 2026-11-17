@@ -12,8 +12,8 @@ The card needs the [xTool Laser integration](https://github.com/thecodingdad/ha-
 
 | F2 Ultra UV | P2 |
 | --- | --- |
-| ![F2 Ultra UV, collapsed](docs/screenshots/f2-ultra-uv-collapsed.png) | ![P2, collapsed](docs/screenshots/p2-collapsed.png) |
-| ![F2 Ultra UV, expanded, with its camera](docs/screenshots/f2-ultra-uv-expanded.png) | ![P2, expanded, with its camera and overlays](docs/screenshots/p2-expanded.png) |
+| ![F2 Ultra UV, collapsed](https://raw.githubusercontent.com/GizmoGoody/xtool-card/main/docs/screenshots/f2-ultra-uv-collapsed.png) | ![P2, collapsed](https://raw.githubusercontent.com/GizmoGoody/xtool-card/main/docs/screenshots/p2-collapsed.png) |
+| ![F2 Ultra UV, expanded, with its camera](https://raw.githubusercontent.com/GizmoGoody/xtool-card/main/docs/screenshots/f2-ultra-uv-expanded.png) | ![P2, expanded, with its camera and overlays](https://raw.githubusercontent.com/GizmoGoody/xtool-card/main/docs/screenshots/p2-expanded.png) |
 
 > [!WARNING]
 > **Alpha developmental software. Use with caution.** This card can expose controls for xTool machines. Check every control and entity on your machine before relying on it, and keep the manufacturer's safety procedures in place.
