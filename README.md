@@ -1,5 +1,7 @@
 # xTool Card
 
+![xTool](https://raw.githubusercontent.com/GizmoGoody/xtool-card/main/docs/xtool-card.png)
+
 A Home Assistant dashboard card for xTool lasers. It is Home Assistant's own **tile card**, wrapped: the card builds a tile card for the laser's Status sensor and adds to it. Everything a tile card does works the same way, with the same editor: name, icon, state content, interactions, features and layout. The card layers on top:
 
 - **A state picture** of the laser in place of the icon, with a **status badge**, a **connection badge** and a **status light** ring that copies the laser's own light.
@@ -8,7 +10,7 @@ A Home Assistant dashboard card for xTool lasers. It is Home Assistant's own **t
 - **Collapsing** to the title row with a tap, and following the laser's power.
 - **xTool features**, added like any tile feature: Job, Controls, Configuration, Safety, Lights, Camera, Overlays, Position, Focus and SafetyPro IF2 fan.
 
-The card needs the [xTool Laser integration](https://github.com/thecodingdad/ha-xtool) for the entities it shows and controls.
+The card needs the **dev build** of the [xTool Laser integration](https://github.com/GizmoGoody/ha-xtool) for the entities it shows and controls (see [The xTool Laser integration](#the-xtool-laser-integration)).
 
 | F2 Ultra UV | P2 |
 | --- | --- |
@@ -17,6 +19,9 @@ The card needs the [xTool Laser integration](https://github.com/thecodingdad/ha-
 
 > [!WARNING]
 > **Alpha developmental software. Use with caution.** This card can expose controls for xTool machines. Check every control and entity on your machine before relying on it, and keep the manufacturer's safety procedures in place.
+
+> [!IMPORTANT]
+> **Pre-release: expect changes.** While the card is a pre-release, its design, its configuration options and its editor can all change from one release to the next. An update may need you to set a card up again.
 
 ## Status
 
@@ -40,14 +45,20 @@ versions; later Alpha releases increment the final prerelease number.
 
 Home Assistant 2026.11 and later include the Marketplace, which replaces HACS. The card needs a Home Assistant version with the Marketplace, or HACS on an older one.
 
+The card is published only as pre-releases, so turn on pre-releases for it before you install it.
+
 1. Go to **Settings** → **Marketplace**. On the first visit, select **I understand the risks and agree**.
 2. In the upper-right corner, select **Add from link**, enter `GizmoGoody/xtool-card` under **GitHub link**, and select **Add**. If asked for the type, choose the dashboard type.
-3. Open **xTool Card** and select **Install**, then **Install** again in the dialog. This installs the latest release.
-4. Reload the browser page (in the Companion app, pull down to refresh).
+3. Turn on pre-releases for the card:
+   1. Go to **Settings** → **Devices & services** → **Marketplace**, and open the **xTool Card** device.
+   2. The **Pre-release** switch is disabled at first. Under **Controls**, select **+1 entity not shown**, select **Pre-release**, select the gear icon, turn on **Enabled**, and select **Update**.
+   3. Wait about 30 seconds for Home Assistant to enable it, then turn the **Pre-release** switch on.
+4. Go back to **Settings** → **Marketplace**, open **xTool Card**, and select **Install**. Check that the version is the latest pre-release (for example 0.1.0-alpha.1), then select **Install** again in the dialog.
+5. Reload the browser page (in the Companion app, pull down to refresh).
 
 The Marketplace adds the card to **Settings** → **Dashboards** → **Resources** for you. To add the card, edit a dashboard, select **Add card**, and search for **xTool**.
 
-Adding a repository from a link needs a connection to GitHub, which the Marketplace asks for the first time. With HACS on an older Home Assistant, use ⋮ → **Custom repositories**, add `GizmoGoody/xtool-card` with the type **Dashboard**, then select **Download**.
+Adding a repository from a link needs a connection to GitHub, which the Marketplace asks for the first time. With HACS on an older Home Assistant, use ⋮ → **Custom repositories**, add `GizmoGoody/xtool-card` with the type **Dashboard**, turn on its **Pre-release** switch as in step 3 (under **Devices & services** → **HACS**), then select **Download**.
 
 ## Styles
 
@@ -128,29 +139,25 @@ Add them like any tile feature, under **Features** in the editor. Only the featu
 
 ## The xTool Laser integration
 
-The card reads and controls the entities of the [xTool Laser integration](https://github.com/thecodingdad/ha-xtool). Install it from the Marketplace (or HACS) as its README describes.
+The card needs the **dev build** of the xTool Laser integration, from [GizmoGoody/ha-xtool](https://github.com/GizmoGoody/ha-xtool). Install it as that repository's README describes. The dev build holds the integration changes below, which are waiting for review in the original integration, [thecodingdad/ha-xtool](https://github.com/thecodingdad/ha-xtool). Its latest release, v2.8.0 (November 3, 2026), has none of them, and the card is not built for it.
 
-Its latest release, **v2.8.0** (November 3, 2026), has the laser's Status sensor and its basic entities, so the card works with it. The editor offers only the features a laser has the entities for, so some features do not appear yet. Most of what the pictures above show needs integration changes that are in open pull requests. All of them were opened between November 8 and 14, 2026, and none has been reviewed yet.
+The pull requests were opened between November 8 and 17, 2026. The maintainer has not reviewed or merged any of them yet. Once they are merged and released, the card will move to the original integration.
 
 | Pull request | What it brings to the card | Depends on |
 | --- | --- | --- |
 | [#71 IF2 2.0](https://github.com/thecodingdad/ha-xtool/pull/71) | The SafetyPro IF2 fan feature: Off, Auto and speeds 1 to 4 | |
 | [#52 Hold written values](https://github.com/thecodingdad/ha-xtool/pull/52) | Keys that stay as tapped, instead of flipping back until the next poll | #71 |
-| [#70 F2 Ultra UV](https://github.com/thecodingdad/ha-xtool/pull/70) | Focusing and Warming up in the status, the engraving lens, the exhaust fan and red dot, and the Focus feature | |
+| [#70 F2 Ultra UV](https://github.com/thecodingdad/ha-xtool/pull/70) | Focusing and Warming up in the status, the engraving lens, the exhaust fan and red dot, the Focus feature, and the Connection sensor that the connection badge shows | |
 | [#73 WS-V2 cameras](https://github.com/thecodingdad/ha-xtool/pull/73) | A faster camera picture, and how often it refreshes | |
 | [#74 F2 Ultra UV cameras](https://github.com/thecodingdad/ha-xtool/pull/74) | Straightened pictures, a device per camera, Crop and Perspective, and the Calibration image | #70, #73 |
 | [#69 WS-V2 fixes](https://github.com/thecodingdad/ha-xtool/pull/69) | Failed jobs shown as failed, and a sleeping laser left alone | |
 | [#60 P2](https://github.com/thecodingdad/ha-xtool/pull/60) | Everything for the P2: status, cameras, crop presets, overlays, Position, lights, safety and the Connection sensor | #52, #69, #73, #74 |
+| [#78 P2 overlay places](https://github.com/thecodingdad/ha-xtool/pull/78) | Where each overlay sits and the area each camera shows, so the card can draw the overlays in its own **Overlay styles**; the **Overlays** select (Integration or Card); the Red dot close ring | #60 |
 | [#72 Power switch](https://github.com/thecodingdad/ha-xtool/pull/72) | Initializing while the laser starts, readings unavailable while it is off, and auto power-off | |
 | [#68 Small fixes](https://github.com/thecodingdad/ha-xtool/pull/68) | Fill light brightness as in xTool Studio, and tidier device pages | |
 | [#55 Access control](https://github.com/thecodingdad/ha-xtool/pull/55) | The Access control switch, named as in xTool Studio and only on the units that have it | |
 
-Each pull request with a dependency contains the commits of the ones it depends on, so they can be merged in this order: #71, then #52; #70 and #73, then #74; #69; then #60. The others can be merged at any time.
-
-Some changes the card uses are not in a pull request yet. They will be offered after the ones above are merged:
-
-- The places of the P2 overlays and the area each camera shows, which let the card draw the overlays in its own **Overlay styles**.
-- The F2 Ultra UV Connection sensor, which the connection badge shows (Wi-Fi or USB).
+Each pull request with a dependency contains the commits of the ones it depends on, so they can be merged in this order: #71, then #52; #70 and #73, then #74; #69; then #60, then #78. The others can be merged at any time.
 
 ## Troubleshooting
 
