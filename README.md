@@ -127,7 +127,7 @@ Add them like any tile feature, under **Features** in the editor. Only the featu
 | Feature | Type | What it shows |
 | --- | --- | --- |
 | Job | `custom:xtool-job` | Start, pause and cancel the job. |
-| Controls | `custom:xtool-controls` | Power, fans, fill lights, red dots, safety lock, wake, buzzer and sleep. |
+| Controls | `custom:xtool-controls` | Power, fans, fill lights, red dots, cover lock, wake, buzzer and sleep. |
 | Configuration | `custom:xtool-configuration` | The same keys for the laser's configuration entities. |
 | Safety | `custom:xtool-safety` | Flame alarm, the stop when opened or moved checks, safety key, lid, baseplate and access control. |
 | Lights | `custom:xtool-lights` | The fill lights with their brightness. |
@@ -146,7 +146,7 @@ Install the [xTool Laser integration](https://github.com/thecodingdad/ha-xtool) 
 - The state picture, progress edge, status light, xTool styles and collapsing.
 - The status badge: alarm, safety key, lid and firmware update.
 - **Job**: pause, resume and cancel.
-- **Controls**, **Configuration** and **Lights**: power, exhaust and cooling fans, fill lights, red dot, safety lock, buzzer and sleep, on the lasers that have them.
+- **Controls**, **Configuration** and **Lights**: power, exhaust and cooling fans, fill lights, red dot, cover lock, buzzer and sleep, on the lasers that have them.
 - **Safety**: flame alarm, the stop when opened or moved checks, safety key and lid.
 - **Camera**: the camera pictures, without crop or perspective.
 - **SafetyPro IF2 fan**, though speeds can bounce back until #71 is merged.
@@ -163,7 +163,7 @@ Install the [xTool Laser integration](https://github.com/thecodingdad/ha-xtool) 
 | A faster camera picture, and how often it refreshes | #73 |
 | Keys that stay as tapped instead of flipping back until the next poll | #52 |
 | Steady SafetyPro IF2 2.0 fan speeds and Auto | #71 |
-| Initializing while the laser starts, and readings unavailable while it is off | #72 |
+| Initializing while the laser starts, Not responding when its Power switch is on but it does not answer, and readings unavailable while it is off | #72 |
 
 The pull requests in the original integration were opened between November 8 and 17, 2026. The maintainer has not reviewed or merged any of them yet.
 
@@ -177,13 +177,17 @@ The pull requests in the original integration were opened between November 8 and
 | [#73 WS-V2 cameras](https://github.com/thecodingdad/ha-xtool/pull/73) | A faster camera picture, and how often it refreshes | |
 | [#74 F2 Ultra UV cameras](https://github.com/thecodingdad/ha-xtool/pull/74) | Straightened pictures, a device per camera, Crop and Perspective, and the Calibration image | #70, #73 |
 | [#69 WS-V2 fixes](https://github.com/thecodingdad/ha-xtool/pull/69) | Failed jobs shown as failed, and a sleeping laser left alone | |
-| [#60 P2](https://github.com/thecodingdad/ha-xtool/pull/60) | Everything for the P2: status, cameras, crop presets, overlays, Position, lights, safety and the Connection sensor | #52, #69, #73, #74 |
+| [#60 P2](https://github.com/thecodingdad/ha-xtool/pull/60) | Everything for the P2: status, cameras, crop presets, overlays, Position, lights, safety and the Connection sensor | #52, #69, #73, #74, #76 |
 | [#78 P2 overlay places](https://github.com/thecodingdad/ha-xtool/pull/78) | Where each overlay sits and the area each camera shows, so the card can draw the overlays in its own **Overlay styles**; the **Overlays** select (Integration or Card); the Red dot close ring | #60 |
-| [#72 Power switch](https://github.com/thecodingdad/ha-xtool/pull/72) | Initializing while the laser starts, readings unavailable while it is off, and auto power-off | |
+| [#76 P2 discovery](https://github.com/thecodingdad/ha-xtool/pull/76) | Finding a P2 by discovery | |
+| [#72 Power switch](https://github.com/thecodingdad/ha-xtool/pull/72) | Initializing while the laser starts, Not responding when its Power switch is on but it does not answer, readings unavailable while it is off, and auto power-off | |
 | [#68 Small fixes](https://github.com/thecodingdad/ha-xtool/pull/68) | Fill light brightness as in xTool Studio, and tidier device pages | |
 | [#55 Access control](https://github.com/thecodingdad/ha-xtool/pull/55) | The Access control switch, named as in xTool Studio and only on the units that have it | |
+| [#77 Name](https://github.com/thecodingdad/ha-xtool/pull/77) | The integration named xTool instead of xTool Laser | |
 
-Each pull request with a dependency contains the commits of the ones it depends on, so the maintainer can merge them in this order: #71, then #52; #70 and #73, then #74; #69; then #60, then #78. The others can be merged at any time.
+Each pull request with a dependency contains the commits of the ones it depends on, so the maintainer can merge them in this order: #71, then #52; #70 and #73, then #74; #69 and #76, then #60, then #78. The others can be merged at any time.
+
+Once #77 is merged and released, the integration is named **xTool** instead of **xTool Laser** in the Marketplace and on its integration page.
 
 ## Troubleshooting
 
