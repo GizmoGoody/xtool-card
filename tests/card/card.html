@@ -163,6 +163,7 @@
   const layouts = {
     f2Max: addCard("F2 Ultra UV, every option", f2Max, auto(f2("idle"))),
     f2Half: addCard("F2 Ultra UV, every option, camera in one column", halfCamera(f2Max), auto(f2("idle"))),
+    f2Plain: addCard("F2 Ultra UV, every option, no style", { ...f2Max, style: "none" }, auto(f2("idle"))),
     p2Max: addCard("P2, every option", p2Max, auto(p2("idle"))),
     p2Half: addCard("P2, every option, camera in one column", halfCamera(p2Max), auto(p2("idle"))),
     odd: addCard("three below the title", { features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" },
@@ -554,6 +555,13 @@
 
     // The title row is as tall on every card: no spare height above the title
     const titleRow = (card) => inner(card).shadowRoot.querySelector("ha-tile-container").shadowRoot.querySelector(".content").getBoundingClientRect().height;
+    // A number field: a pane of the style's window glass, in its window's text; with no style, Home Assistant's number color
+    const numberField = (card) => deep(card, ".field").find((f) => !f.classList.contains("readout") && !f.classList.contains("disabled"));
+    const paneOf = (card) => { const f = numberField(card); const before = f && getComputedStyle(f, "::before"); return f && { image: before.backgroundImage, opacity: before.opacity, color: getComputedStyle(f).color }; };
+    const styledPane = paneOf(layouts.f2Max), plainPane = paneOf(layouts.f2Plain);
+    check("number fields", styledPane?.image.includes("gradient") && styledPane.opacity === "1" && styledPane.color === "rgba(255, 248, 240, 0.97)",
+      `on a style, the window's orange glass, in its window's text (${JSON.stringify(styledPane)})`);
+    check("number fields", plainPane?.image === "none" && plainPane.opacity === "0.2", `with no style, Home Assistant's number color (${JSON.stringify(plainPane)})`);
     const titled = [...Object.values(minimum), layouts.f2Max, layouts.p2Max, layouts.odd];
     check("header", titled.every((card) => Math.abs(titleRow(card) - titleRow(minimum.f2)) < 0.5)
       && Math.abs(parseFloat(windowBox(minimum.f2Fixed).style.height) - parseFloat(windowBox(minimum.f2).style.height)) < 0.5,

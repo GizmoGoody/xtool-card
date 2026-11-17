@@ -1110,6 +1110,9 @@ const FEATURE_CSS = `
     color: var(--xtool-text, var(--primary-text-color)); font-weight: var(--ha-font-weight-medium, 500);
   }
   .field::before { content: ""; position: absolute; inset: 0; background: var(--feature-color); opacity: .2; }
+  /* On an xTool style, a number field is a pane of its window's glass, in its window's text color */
+  .field:not(.readout):not(.disabled) { color: var(--xtool-field-text, var(--xtool-text, var(--primary-text-color))); box-shadow: var(--xtool-field-edge, none); }
+  .field:not(.readout):not(.disabled)::before { background: var(--xtool-field, var(--feature-color)); opacity: var(--xtool-field-opacity, .2); }
   .field:focus-within { outline: 2px solid var(--feature-color); outline-offset: 2px; }
   .field > * { position: relative; }
   .field input {
@@ -2472,10 +2475,7 @@ class XtoolCamera extends XtoolFeature {
   // toggle by default
   static controls = ["camera_buttons", "camera_toggle", "custom_crop", ...CAMERA_SETTINGS, ...CAMERA_INPUTS];
   static defaults = ["camera_buttons", "custom_crop", ...CAMERA_SETTINGS, ...CAMERA_INPUTS];
-  static form = {
-    label: "Controls",
-    helper: "Custom crop: tap it, then tap two opposite corners on the picture.",
-  };
+  static form = { label: "Controls" };
 
   static supports(device) {
     return device.cameras.length > 0;
@@ -2500,10 +2500,28 @@ class XtoolCamera extends XtoolFeature {
     return offered;
   }
 
+  /**
+   * The camera's form: with more than one camera, its controls in two
+   * lists, as the feature shows them: All cameras (in place on a camera
+   * switch) and Per camera (swapped with the camera). Saved as one list,
+   * All cameras first.
+   */
   static editor(hass, entityId) {
-    const { cameras } = deviceOf(hass, entityId);
+    const device = deviceOf(hass, entityId);
+    const { cameras } = device;
     const ids = cameras.map((camera) => camera.id);
     const base = super.editor(hass, entityId);
+    const split = cameras.length > 1;
+    const every = (id) => XtoolCamera.everyCamera(device, hass, id);
+    const [controlsField] = base.schema.filter((f) => f.name === "controls");
+    const listOf = (name, label, helper, keep) => ({
+      ...controlsField, name, label, helper,
+      selector: { select: { ...controlsField.selector.select, options: controlsField.selector.select.options.filter((o) => keep(o.value)) } },
+    });
+    const controlsFields = split ? [
+      listOf("all_cameras", "All cameras", "In place when you switch cameras.", every),
+      listOf("per_camera", "Per camera", "Shown with the camera that has them.", (id) => !every(id)),
+    ] : [controlsField];
     return {
       schema: [
         {
@@ -2515,7 +2533,7 @@ class XtoolCamera extends XtoolFeature {
           helper: "As in Home Assistant's picture cards. Auto: snapshots, refreshed by Home Assistant. Live: the camera's stream.",
           selector: select(CAMERA_VIEWS),
         },
-        ...base.schema.filter((f) => f.name === "controls"),
+        ...controlsFields,
         displayField("For the camera's keys."),
         {
           name: "show_last_updated", label: "Show the last updated time",
@@ -2528,11 +2546,20 @@ class XtoolCamera extends XtoolFeature {
           selector: { boolean: {} },
         },
       ],
-      data: (c) => ({
-        camera: ids.includes(c.camera) ? c.camera : ids[0], camera_view: c.camera_view === "live" ? "live" : "auto",
-        ...base.data(c), show_last_updated: c.show_last_updated !== false, full_width: c.full_width !== false,
-      }),
-      save: base.save,
+      data: (c) => {
+        const data = {
+          camera: ids.includes(c.camera) ? c.camera : ids[0], camera_view: c.camera_view === "live" ? "live" : "auto",
+          ...base.data(c), show_last_updated: c.show_last_updated !== false, full_width: c.full_width !== false,
+        };
+        if (!split) return data;
+        const { controls, ...rest } = data;
+        return { ...rest, all_cameras: controls.filter(every), per_camera: controls.filter((id) => !every(id)) };
+      },
+      save: (data) => {
+        if (!split) return data;
+        const { all_cameras: all = [], per_camera: per = [], ...rest } = data;
+        return { ...rest, controls: [...all, ...per] };
+      },
     };
   }
 
@@ -2922,12 +2949,22 @@ class XtoolCamera extends XtoolFeature {
 
   /** Whether a camera has one of the controls (a light's slider: only a light with a brightness). */
   _has(camera, id) {
-    const { cameras, profile } = this._device;
+    return XtoolCamera.has(this._device, this._hass, camera, id);
+  }
+
+  /** Whether a camera has a control. */
+  static has(device, hass, camera, id) {
+    const { cameras, profile } = device;
     if (id === "camera_buttons" || id === "camera_toggle") return cameras.length > 1;
     if (id === "custom_crop") return !!profile.cropReset[camera.key] && CROP_ROLES.every((role) => camera.settings[role]);
     const { light, part } = lightPart(id) ?? {};
     const entityId = camera.settings[controlOf(light ?? id, profile)?.role];
-    return !!entityId && (part !== "brightness" || dimmable(this._hass, entityId));
+    return !!entityId && (part !== "brightness" || dimmable(hass, entityId));
+  }
+
+  /** Whether every camera has a control, with its partners (see CAMERA_PARTNERS): it stays in place on a camera switch. */
+  static everyCamera(device, hass, id) {
+    return device.cameras.every((camera) => [id, ...(CAMERA_PARTNERS[id] ?? [])].every((part) => XtoolCamera.has(device, hass, camera, part)));
   }
 
   /**
@@ -4081,7 +4118,8 @@ const BODIES = {
   blue_grey: { stops: ["#93a8c1", "#7d93ad", "#667a92"], metal: true },
   red: { stops: ["#c23c43", "#a92a31", "#8c1d22"], metal: true },
 };
-// A window: its glass, the title's text on it, and how strongly it
+// A window: its glass, the title's text on it (and a number field's, see
+// FEATURE_CSS: ink), and how strongly it
 // reflects (see glassReflections). Every orange plexi is the same orange.
 const LIGHT_TEXT = "--primary-text-color: rgba(255, 255, 255, .95); --secondary-text-color: rgba(235, 235, 240, .72)";
 const DARK_EDGE = "inset 0 1px 0 rgba(255, 255, 255, .18), inset 0 0 0 1px rgba(255, 255, 255, .06), inset 0 3px 8px rgba(0, 0, 0, .6)";
@@ -4091,24 +4129,24 @@ const WINDOWS = {
       linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%)`,
     edge: "inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 0 0 1px rgba(90, 30, 0, .35), inset 0 3px 8px rgba(90, 30, 0, .3)",
     text: "--primary-text-color: rgba(255, 248, 240, .97); --secondary-text-color: rgba(255, 236, 220, .86); text-shadow: 0 1px 2px rgba(90, 30, 0, .55)",
-    glare: 1,
+    ink: "rgba(255, 248, 240, .97)", glare: 1,
   },
   green: {
     glass: `radial-gradient(90% 120% at 50% 110%, rgba(120, 210, 80, .5) 0%, rgba(120, 210, 80, 0) 70%),
       linear-gradient(170deg, #6cc84a 0%, #4fa634 45%, #2f7a1d 100%)`,
     edge: "inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 0 0 1px rgba(10, 50, 0, .35), inset 0 3px 8px rgba(10, 50, 0, .3)",
     text: "--primary-text-color: rgba(245, 255, 240, .97); --secondary-text-color: rgba(230, 248, 222, .86); text-shadow: 0 1px 2px rgba(10, 50, 0, .6)",
-    glare: 1,
+    ink: "rgba(245, 255, 240, .97)", glare: 1,
   },
   // A dark lid with the amber inside glowing through (the P2 and P2S)
   smoke_amber: {
     glass: `radial-gradient(120% 90% at 50% 120%, rgba(214, 140, 60, .28) 0%, rgba(214, 140, 60, 0) 60%),
       linear-gradient(175deg, #1d2024 0%, #141619 60%, #0f1113 100%)`,
-    edge: DARK_EDGE, text: `${LIGHT_TEXT}; text-shadow: 0 1px 2px rgba(0, 0, 0, .8)`, glare: .5,
+    edge: DARK_EDGE, text: `${LIGHT_TEXT}; text-shadow: 0 1px 2px rgba(0, 0, 0, .8)`, ink: "rgba(255, 255, 255, .95)", glare: .5,
   },
   smoke: {
     glass: "linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)",
-    edge: DARK_EDGE, text: `${LIGHT_TEXT}; text-shadow: 0 1px 2px rgba(0, 0, 0, .8)`, glare: .5,
+    edge: DARK_EDGE, text: `${LIGHT_TEXT}; text-shadow: 0 1px 2px rgba(0, 0, 0, .8)`, ink: "rgba(255, 255, 255, .95)", glare: .5,
   },
   // No window (the open D1 series): the title sits on the theme's own card,
   // as with no style, its text in the theme's colors (see .frame)
@@ -4116,7 +4154,7 @@ const WINDOWS = {
     glass: "var(--ha-card-background, var(--card-background-color, white))", edge: "none",
     text: `--primary-text-color: var(--xtool-theme-primary-text); --secondary-text-color: var(--xtool-theme-secondary-text);
       --disabled-text-color: var(--xtool-theme-disabled-text); text-shadow: none`,
-    glare: 0,
+    ink: "var(--xtool-theme-primary-text)", glare: 0,
   },
 };
 // Each model, in the editor's order: [id, model, color (for a model sold
@@ -4171,7 +4209,7 @@ const LOOKS = Object.fromEntries(MODEL_STYLES.map(([id, , , bodyId, windowId]) =
   const grain = body.metal ? "radial-gradient(rgba(255, 255, 255, .07) .6px, transparent .7px) 0 0 / 3px 3px, " : "";
   return [id, {
     body: `${grain}linear-gradient(160deg, ${light} 0%, ${base} 45%, ${dark} 100%)`,
-    glass: window.glass, edge: window.edge, text: window.text, glare: window.glare, plain: windowId === "theme",
+    glass: window.glass, edge: window.edge, text: window.text, ink: window.ink, glare: window.glare, plain: windowId === "theme",
     tone: isLight(base) ? "light" : "dark", flat: base,
   }];
 }));
@@ -4954,6 +4992,12 @@ class XtoolCard extends HTMLElement {
     const look = LOOKS[style];
     this._frame.classList.toggle("styled", !!look);
     this._frame.classList.toggle("plain", !!look?.plain);
+    // A number field is a pane of the window's glass (see FEATURE_CSS)
+    for (const [name, value] of [["--xtool-field", look && "var(--xtool-glass)"], ["--xtool-field-opacity", look && "1"],
+      ["--xtool-field-text", look?.ink], ["--xtool-field-edge", look && "var(--xtool-edge)"]]) {
+      if (value) this._frame.style.setProperty(name, value);
+      else this._frame.style.removeProperty(name);
+    }
     for (const [name, value] of [["--xtool-body", look?.body], ["--xtool-glass", look?.glass], ["--xtool-edge", look?.edge]]) {
       if (value) this._frame.style.setProperty(name, value);
       else this._frame.style.removeProperty(name);

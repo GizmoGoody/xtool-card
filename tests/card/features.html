@@ -124,7 +124,7 @@
     }
     check("editor notes", helpers.length > 0 && !helpers.some((h) => /^In order\b/.test(h)), "no note that only says the controls are in order");
     check("editor notes", !helpers.some((h) => /F2|P2|Ultra|deep camera/.test(h)), "no note names a model or its camera");
-    check("editor notes", helpers.includes("Custom crop: tap it, then tap two opposite corners on the picture."), "the camera's note is one short sentence");
+    check("editor notes", !helpers.some((h) => h.startsWith("Custom crop")), "no note on Custom crop under the controls (the picture says what to tap)");
 
     // Crop numbers not known (the laser off): no crop of its own, so Crop is off
     const unknownCrops = ["unknown", "unavailable"].map((state) => [state, addFeature({ type: "custom:xtool-camera" }, { hass: makeHass(Object.fromEntries(
@@ -550,11 +550,13 @@
     p2Options.context = { entity_id: "sensor.p2_status" };
     p2Options.setConfig({ type: "custom:xtool-camera" });
     const p2Form = p2Options.querySelector("ha-form");
-    const p2Controls = p2Form.schema.find((f) => f.name === "controls");
-    check("P2 camera, options", p2Controls.selector.select.options.map((o) => o.label).join() === "Camera buttons,Camera toggle,Custom crop,Thickness or distance,Mode,Crop,Exposure,Fill light close"
-      && p2Controls.selector.select.reorder && p2Form.data.controls.join() === "camera_buttons,custom_crop,thickness_or_distance,mode,crop,exposure,fill_light_close"
+    const p2List = (name) => p2Form.schema.find((f) => f.name === name);
+    const labelsOf = (name) => p2List(name).selector.select.options.map((o) => o.label).join();
+    check("P2 camera, options", labelsOf("all_cameras") === "Camera buttons,Camera toggle,Custom crop,Crop,Exposure"
+      && labelsOf("per_camera") === "Thickness or distance,Mode,Fill light close" && p2List("all_cameras").selector.select.reorder
+      && p2Form.data.all_cameras.join() === "camera_buttons,custom_crop,crop,exposure" && p2Form.data.per_camera.join() === "thickness_or_distance,mode,fill_light_close"
       && p2Form.schema.find((f) => f.name === "camera").selector.select.options.map((o) => o.label).join() === "Overview camera,Close camera",
-      `the controls to choose and order, by their entities' names (${p2Controls.selector.select.options.map((o) => o.label).join(", ")})`);
+      `the controls to choose and order, by their entities' names (${labelsOf("all_cameras")} | ${labelsOf("per_camera")})`);
     const onlyMode = addFeature({ type: "custom:xtool-camera", show: "names", controls: ["exposure", "mode"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", keysOf(onlyMode).length === 0
@@ -905,10 +907,11 @@
     check("camera, options", cameraChoices.join() === "main,deep" && cameraOptions.querySelector("ha-form").data.camera === "main",
       `the camera by its id, not its name (${cameraChoices.join(", ")})`);
     const cameraNames = cameraOptions.querySelector("ha-form").schema.map((s) => s.name);
-    const f2Controls = cameraOptions.querySelector("ha-form").schema.find((f) => f.name === "controls");
-    check("camera, options", cameraNames.join() === "camera,camera_view,controls,show,show_last_updated,full_width" && f2Controls.selector.select.reorder
-      && f2Controls.selector.select.options.map((o) => o.label).join() === "Camera buttons,Camera toggle,Custom crop,Perspective"
-      && cameraOptions.querySelector("ha-form").data.controls.join() === "camera_buttons,custom_crop,perspective",
+    const f2Form = cameraOptions.querySelector("ha-form");
+    const f2Lists = ["all_cameras", "per_camera"].map((name) => f2Form.schema.find((f) => f.name === name));
+    check("camera, options", cameraNames.join() === "camera,camera_view,all_cameras,per_camera,show,show_last_updated,full_width" && f2Lists.every((l) => l.selector.select.reorder)
+      && f2Lists.flatMap((l) => l.selector.select.options.map((o) => o.label)).join() === "Camera buttons,Camera toggle,Custom crop,Perspective"
+      && [...f2Form.data.all_cameras, ...f2Form.data.per_camera].join() === "camera_buttons,custom_crop,perspective",
       `the camera buttons, the camera toggle, Crop and the perspective, chosen and ordered, all but the toggle by default (${cameraNames.join(", ")})`);
 
     // Home Assistant's image stops for good after the connection drops and returns: each camera's image is made anew

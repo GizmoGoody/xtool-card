@@ -175,6 +175,25 @@
     cameraForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...cameraForm.data, full_width: true } } }));
     check("camera, full width", JSON.stringify(cameraFired) === JSON.stringify({ type: "custom:xtool-camera" }), "on, it is left out");
 
+    // The P2's camera controls: in two lists, All cameras and Per camera, saved as one list, All cameras first
+    const p2Camera = document.createElement("xtool-feature-editor");
+    let p2CameraFired;
+    p2Camera.addEventListener("config-changed", (ev) => (p2CameraFired = ev.detail.config));
+    p2Camera.hass = makeHass();
+    p2Camera.context = { entity_id: "sensor.p2_status" };
+    p2Camera.setConfig({ type: "custom:xtool-camera", controls: ["mode", "camera_toggle", "exposure", "thickness_or_distance"] });
+    const p2Form = p2Camera.querySelector("ha-form");
+    const listNames = p2Form.schema.filter((s) => s.selector?.select?.multiple).map((s) => s.label).join();
+    const optionsOf = (name) => p2Form.schema.find((s) => s.name === name).selector.select.options.map((o) => o.value);
+    check("camera, lists", listNames === "All cameras,Per camera" && optionsOf("all_cameras").includes("exposure") && !optionsOf("all_cameras").includes("mode")
+      && optionsOf("per_camera").includes("mode") && optionsOf("per_camera").includes("thickness_or_distance"),
+      `two lists, each offering its own controls (${listNames}: ${optionsOf("all_cameras")} | ${optionsOf("per_camera")})`);
+    check("camera, lists", p2Form.data.all_cameras.join() === "camera_toggle,exposure" && p2Form.data.per_camera.join() === "mode,thickness_or_distance",
+      "the chosen controls, each in its list, in their order");
+    p2Form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...p2Form.data, per_camera: ["thickness_or_distance", "mode"] } } }));
+    check("camera, lists", JSON.stringify(p2CameraFired?.controls) === JSON.stringify(["camera_toggle", "exposure", "thickness_or_distance", "mode"])
+      && !("all_cameras" in p2CameraFired) && !("per_camera" in p2CameraFired), `saved as one list (${JSON.stringify(p2CameraFired)})`);
+
     // The overlays' styles: in the card's own options, one folded section for each overlay the card can draw
     const stylesEditor = document.createElement("xtool-card-editor");
     let stylesFired;
