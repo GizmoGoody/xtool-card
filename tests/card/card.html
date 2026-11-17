@@ -300,14 +300,16 @@
       "the F2 Ultra UV style is drawn: its champagne body and orange window");
     const styleTile = (card) => card.shadowRoot.querySelector("hui-tile-card");
     // Models that look alike share a body and a window; a model without a window gets a recess in its frame
+    const titleText = (card) => [...(card._windowSheet?.cssRules ?? [])].map((r) => r.cssText).join(" ");
     const lookOf = (card) => ["--xtool-body", "--xtool-glass"].map((name) => frame(card).style.getPropertyValue(name)).join(" | ");
     check("styles", lookOf(styles.m2) === lookOf(styles.s1White) && lookOf(styles.m2).includes("#f5a21a") && lookOf(styles.m2).includes("#e6e6e6"),
       `every orange plexi is the F2 Ultra UV's orange, on its own body (M2 and S1 (White): ${lookOf(styles.m2).slice(0, 60)})`);
     check("styles", lookOf(styles.f1Ultra).includes("#4fa634") && styleTile(styles.f1Ultra).classList.contains("light"),
       "the F1 Ultra: green plexi on a grey frame, with dark text on the body");
-    check("styles", lookOf(styles.d1ProRed).includes("color-mix") && lookOf(styles.d1ProRed).includes("#a92a31") && styleTile(styles.d1ProRed).classList.contains("dark"),
-      "the D1 Pro (Red): no window, a recess in its red frame, with light text on the body");
-    const titleText = (card) => [...(card._windowSheet?.cssRules ?? [])].map((r) => r.cssText).join(" ");
+    check("styles", lookOf(styles.d1ProRed).includes("#a92a31") && lookOf(styles.d1ProRed).includes("var(--ha-card-background") && styleTile(styles.d1ProRed).classList.contains("dark")
+      && titleText(styles.d1ProRed).includes("var(--xtool-theme-primary-text)")
+      && getComputedStyle(frame(styles.d1ProRed)).getPropertyValue("--xtool-theme-primary-text").trim() === getComputedStyle(document.body).getPropertyValue("--primary-text-color").trim(),
+      "the D1 Pro (Red): no window, so the title sits on the theme's card in the theme's text, on its red frame with light text");
     check("styles", titleText(styles.p3).includes("ha-tile-info { --primary-text-color: rgba(255, 255, 255, .95)") && styleTile(styles.p3).classList.contains("light")
       && !!styleTile(styles.p3).shadowRoot?.adoptedStyleSheets.includes(styles.p3._windowSheet),
       `the P3: a white body with dark text, and light title text on its dark lid (${titleText(styles.p3).slice(-220)})`);

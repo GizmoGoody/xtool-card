@@ -70,8 +70,8 @@
     const styleChoices = styleForm.schema.find((f) => f.name === "style").selector.select.options;
     const choiceText = styleChoices.map((o) => `${o.value}=${o.label}`).join();
     check("editor", choiceText.startsWith("none=None (theme),d1=D1,d1_pro_grey=D1 Pro (Grey),d1_pro_red=D1 Pro (Red),")
-      && ["f2_ultra_uv=F2 Ultra UV", "f2_ultra_uv_class_1=F2 Ultra UV (Class 1)", "p2_grey=P2 (Grey)", "p2_white=P2 (White)", "s1_white=S1 (White)", "apparel_printer=Apparel Printer"]
-        .every((choice) => choiceText.includes(choice)) && styleChoices.length === 31,
+      && ["f2_ultra_uv=F2 Ultra UV", "p2_grey=P2 (Grey)", "p2_white=P2 (White)", "s1_white=S1 (White)", "apparel_printer=Apparel Printer"]
+        .every((choice) => choiceText.includes(choice)) && styleChoices.length === 30,
       `a style for each model, and each color it comes in (${styleChoices.length}: ${styleChoices.map((o) => o.label).join(", ")})`);
 
     // Randomize reflections: a new pattern for the window's reflections

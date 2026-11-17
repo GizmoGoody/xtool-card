@@ -4110,21 +4110,24 @@ const WINDOWS = {
     glass: "linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)",
     edge: DARK_EDGE, text: `${LIGHT_TEXT}; text-shadow: 0 1px 2px rgba(0, 0, 0, .8)`, glare: .5,
   },
-  // No window (the open D1 series): a recess in the frame's own color
-  frame: {
-    edge: "inset 0 0 0 1px rgba(0, 0, 0, .25), inset 0 3px 8px rgba(0, 0, 0, .45)",
-    text: `${LIGHT_TEXT}; text-shadow: 0 1px 2px rgba(0, 0, 0, .8)`, glare: .6,
+  // No window (the open D1 series): the title sits on the theme's own card,
+  // as with no style, its text in the theme's colors (see .frame)
+  theme: {
+    glass: "var(--ha-card-background, var(--card-background-color, white))", edge: "none",
+    text: `--primary-text-color: var(--xtool-theme-primary-text); --secondary-text-color: var(--xtool-theme-secondary-text);
+      --disabled-text-color: var(--xtool-theme-disabled-text); text-shadow: none`,
+    glare: 0,
   },
 };
 // Each model, in the editor's order: [id, model, color (for a model sold
 // in more than one), body, window]. A new card gets its laser's model's
 // style, in the first color listed.
 const MODEL_STYLES = [
-  ["d1", "D1", "", "blue_grey", "frame"],
-  ["d1_pro_grey", "D1 Pro", "Grey", "blue_grey", "frame"],
-  ["d1_pro_red", "D1 Pro", "Red", "red", "frame"],
-  ["d1_pro_2_grey", "D1 Pro 2.0", "Grey", "blue_grey", "frame"],
-  ["d1_pro_2_red", "D1 Pro 2.0", "Red", "red", "frame"],
+  ["d1", "D1", "", "blue_grey", "theme"],
+  ["d1_pro_grey", "D1 Pro", "Grey", "blue_grey", "theme"],
+  ["d1_pro_red", "D1 Pro", "Red", "red", "theme"],
+  ["d1_pro_2_grey", "D1 Pro 2.0", "Grey", "blue_grey", "theme"],
+  ["d1_pro_2_red", "D1 Pro 2.0", "Red", "red", "theme"],
   ["f1", "F1", "", "silver", "green"],
   ["f1_lite", "F1 Lite", "", "silver", "green"],
   ["f1_ultra", "F1 Ultra", "", "grey", "green"],
@@ -4133,7 +4136,6 @@ const MODEL_STYLES = [
   ["f2_ultra", "F2 Ultra", "", "grey", "smoke"],
   ["f2_ultra_single", "F2 Ultra (Single)", "", "grey", "smoke"],
   ["f2_ultra_uv", "F2 Ultra UV", "", "champagne", "orange"],
-  ["f2_ultra_uv_class_1", "F2 Ultra UV (Class 1)", "", "champagne", "orange"],
   ["laserbox_white", "Laserbox", "White", "white", "smoke"],
   ["laserbox_black", "Laserbox", "Black", "charcoal", "smoke"],
   ["m1", "M1", "", "white", "orange"],
@@ -4167,11 +4169,9 @@ const LOOKS = Object.fromEntries(MODEL_STYLES.map(([id, , , bodyId, windowId]) =
   const body = BODIES[bodyId], window = WINDOWS[windowId];
   const [light, base, dark] = body.stops;
   const grain = body.metal ? "radial-gradient(rgba(255, 255, 255, .07) .6px, transparent .7px) 0 0 / 3px 3px, " : "";
-  const recess = (color) => `color-mix(in srgb, ${color} 72%, black)`;
   return [id, {
     body: `${grain}linear-gradient(160deg, ${light} 0%, ${base} 45%, ${dark} 100%)`,
-    glass: window.glass ?? `linear-gradient(170deg, ${recess(light)} 0%, ${recess(base)} 45%, ${recess(dark)} 100%)`,
-    edge: window.edge, text: window.text, glare: window.glare,
+    glass: window.glass, edge: window.edge, text: window.text, glare: window.glare, plain: windowId === "theme",
     tone: isLight(base) ? "light" : "dark", flat: base,
   }];
 }));
@@ -4179,10 +4179,15 @@ const STYLES = [["none", "None (theme)"], ...MODEL_STYLES.map(([id, model, color
 const TONE = Object.fromEntries(Object.entries(LOOKS).map(([id, look]) => [id, look.tone]));
 const FLAT = Object.fromEntries(Object.entries(LOOKS).map(([id, look]) => [id, look.flat]));
 
-/** The style a new card gets for its laser's model (its name in Home Assistant): that model's first style, or none. */
+/**
+ * The style a new card gets for its laser's model (its name in Home
+ * Assistant): that model's first style, else its base model's (the F2
+ * Ultra UV (Class 1) is drawn as the F2 Ultra UV), else none.
+ */
 function modelStyle(model) {
   const name = `${model ?? ""}`.replace(/^xTool\s+/i, "").trim().toLowerCase();
-  return MODEL_STYLES.find(([, m]) => m.toLowerCase() === name)?.[0] ?? "none";
+  const style = (n) => MODEL_STYLES.find(([, m]) => m.toLowerCase() === n)?.[0];
+  return style(name) ?? style(name.replace(/\s*\([^)]*\)$/, "")) ?? "none";
 }
 const DEFAULT_PATTERN = 4242;
 
@@ -4332,6 +4337,10 @@ class XtoolCard extends HTMLElement {
       <style>
         :host { display: block; height: 100%; }
         .frame {
+          /* The theme's text colors, for a window in the theme's own colors
+             (the tile's text is the body's, see .tile.dark and .tile.light) */
+          --xtool-theme-primary-text: var(--primary-text-color); --xtool-theme-secondary-text: var(--secondary-text-color);
+          --xtool-theme-disabled-text: var(--disabled-text-color);
           position: relative; height: 100%; box-sizing: border-box; isolation: isolate;
           /* Exactly the tile card's own corners (ha-card), from the theme */
           border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px));
@@ -4350,7 +4359,7 @@ class XtoolCard extends HTMLElement {
         #window::after { content: ""; position: absolute; inset: 0; background: var(--xtool-gloss); }
         /* A machine that is off: its window dims a little, so it still reads in its own color; the body does not */
         #window { transition: filter 400ms ease-in-out; }
-        .off #window { filter: brightness(.8) saturate(.9); }
+        .off:not(.plain) #window { filter: brightness(.8) saturate(.9); }
         .styled #body { background: var(--xtool-body); }
         .styled #window { background: var(--xtool-glass); box-shadow: var(--xtool-edge); }
         .styled::after {
@@ -4944,6 +4953,7 @@ class XtoolCard extends HTMLElement {
     const tone = TONE[style];
     const look = LOOKS[style];
     this._frame.classList.toggle("styled", !!look);
+    this._frame.classList.toggle("plain", !!look?.plain);
     for (const [name, value] of [["--xtool-body", look?.body], ["--xtool-glass", look?.glass], ["--xtool-edge", look?.edge]]) {
       if (value) this._frame.style.setProperty(name, value);
       else this._frame.style.removeProperty(name);
@@ -4953,7 +4963,7 @@ class XtoolCard extends HTMLElement {
     else this.style.removeProperty("--xtool-enabled-color");
     if (tone) {
       const pattern = Number.isFinite(this._config.pattern) ? this._config.pattern : DEFAULT_PATTERN;
-      this._window.style.setProperty("--xtool-gloss", glassReflections(look.glare, pattern));
+      this._window.style.setProperty("--xtool-gloss", look.glare ? glassReflections(look.glare, pattern) : "none");
     }
     if (this._tile) {
       this._tile.classList.toggle("dark", tone === "dark");
@@ -5021,7 +5031,8 @@ class XtoolCard extends HTMLElement {
 
   /**
    * The title's text on the window, in the style's own colors (light on
-   * every window: orange or green plexi, a dark lid, a frame's recess), and
+   * every window: orange or green plexi, a dark lid; the theme's own on a
+   * frame without a window), and
    * the space below the title row. This styles the tile card's title from
    * inside it; if Home Assistant renames that part, the title keeps the
    * body's text color.
