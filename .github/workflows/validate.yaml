@@ -18,6 +18,8 @@ jobs:
         uses: "hacs/action@main"
         with:
           category: "plugin"
+          # Issues are off while feedback goes to Discussions; HACS needs them only for its default list
+          ignore: "issues"
 
   test-card:
     runs-on: "ubuntu-latest"
