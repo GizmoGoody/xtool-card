@@ -2459,10 +2459,10 @@ const CAMERA_INPUTS = ["mode", "crop", "exposure", ...lightParts("fill_light_clo
 const CAMERA_SETTINGS = ["perspective", "thickness_or_distance", "measure_thickness_or_distance"];
 // Controls chosen as one in the camera (see XtoolCamera._chosen) and kept
 // side by side (see XtoolCamera._layout): the thickness or distance with
-// Measure, and the close fill light with its slider
+// Measure. The close fill light and its slider are chosen each on its own,
+// and share a cell when both are chosen.
 const CAMERA_PARTNERS = {
   thickness_or_distance: ["measure_thickness_or_distance"],
-  fill_light_close: ["fill_light_close_brightness"],
 };
 const unitOf = (id) => Object.keys(CAMERA_PARTNERS).find((key) => CAMERA_PARTNERS[key].includes(id)) ?? id;
 const PARTNERED = Object.values(CAMERA_PARTNERS).flat();
@@ -3031,14 +3031,17 @@ class XtoolCamera extends XtoolFeature {
       else units.push({ key, ids: [id] });
     }
     const everywhere = (unit) => cameras.every((camera) => unit.ids.every((id) => this._has(camera, id)));
-    // What shares a cell: keys with keys, inputs with inputs; a field or a light keeps its own
-    const kindOf = (ids) => (ids.includes("thickness_or_distance") ? "field" : ids.some((id) => lightPart(id)) ? "light"
-      : ids.some((id) => CAMERA_INPUTS.includes(id)) ? "input" : "keys");
+    // What shares a cell: keys with keys, inputs with inputs, a light's icon
+    // with its own slider; a field keeps its own
+    const kindOf = (ids) => {
+      const light = ids.map((id) => lightPart(id)?.light).find(Boolean);
+      return ids.includes("thickness_or_distance") ? "field" : light ? `light:${light}` : ids.some((id) => CAMERA_INPUTS.includes(id)) ? "input" : "keys";
+    };
     const cells = (list) => {
       const out = [];
       for (const ids of list) {
         const last = out.at(-1), kind = kindOf(ids);
-        if (last && last.kind === kind && ["keys", "input"].includes(kind) && this._sizeOf([...last.ids, ...ids], keyGap).min <= half + 0.5) last.ids.push(...ids);
+        if (last && last.kind === kind && kind !== "field" && this._sizeOf([...last.ids, ...ids], keyGap).min <= half + 0.5) last.ids.push(...ids);
         else out.push({ kind, ids: [...ids] });
       }
       return out.map((cell) => ({ ids: cell.ids, span: this._sizeOf(cell.ids, keyGap).min <= half + 0.5 ? 1 : 2 }));

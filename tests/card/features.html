@@ -582,8 +582,8 @@
     const p2List = (name) => p2Form.schema.find((f) => f.name === name);
     const labelsOf = (name) => p2List(name).selector.select.options.map((o) => o.label).join();
     check("P2 camera, options", labelsOf("all_cameras") === "Camera buttons,Camera toggle,Custom crop,Crop,Exposure"
-      && labelsOf("per_camera") === "Thickness or distance,Mode,Fill light close" && p2List("all_cameras").selector.select.reorder
-      && p2Form.data.all_cameras.join() === "camera_buttons,custom_crop,crop,exposure" && p2Form.data.per_camera.join() === "thickness_or_distance,mode,fill_light_close"
+      && labelsOf("per_camera") === "Thickness or distance,Mode,Fill light close,Fill light close brightness" && p2List("all_cameras").selector.select.reorder
+      && p2Form.data.all_cameras.join() === "camera_buttons,custom_crop,crop,exposure" && p2Form.data.per_camera.join() === "thickness_or_distance,mode,fill_light_close,fill_light_close_brightness"
       && p2Form.schema.find((f) => f.name === "camera").selector.select.options.map((o) => o.label).join() === "Overview camera,Close camera",
       `the controls to choose and order, by their entities' names (${labelsOf("all_cameras")} | ${labelsOf("per_camera")})`);
     const onlyMode = addFeature({ type: "custom:xtool-camera", show: "names", controls: ["exposure", "mode"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
@@ -592,7 +592,14 @@
       && inputsOf(onlyMode) === "numeric-input:slider=number.p2_overview_exposure,select-options=select.p2_mode", "only the controls chosen, in the order chosen");
     const onlyIcon = addFeature({ type: "custom:xtool-camera", show: "names", camera: "close", controls: ["fill_light_close"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
-    check("P2 camera, options", closeIcon(onlyIcon) && inputsOf(onlyIcon) === "light-brightness=light.p2_close_light", "the close fill light is one choice: its icon and its slider");
+    check("P2 camera, options", closeIcon(onlyIcon) && inputsOf(onlyIcon) === "", "the close fill light's icon is a choice of its own, without its slider");
+    const onlySlider = addFeature({ type: "custom:xtool-camera", show: "names", camera: "close", controls: ["fill_light_close_brightness"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    await wait(60);
+    check("P2 camera, options", !closeIcon(onlySlider) && inputsOf(onlySlider) === "light-brightness=light.p2_close_light", "and its slider, without its icon");
+    const bothParts = addFeature({ type: "custom:xtool-camera", show: "names", camera: "close", controls: ["fill_light_close", "fill_light_close_brightness"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    await wait(60);
+    check("P2 camera, options", closeIcon(bothParts)?.parentElement === bothParts.shadowRoot.querySelector(".line > .slide")?.parentElement,
+      "both chosen: the icon and its slider share one cell");
     const onlyThickness = addFeature({ type: "custom:xtool-camera", show: "names", controls: ["thickness_or_distance"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", !!keyNamed(onlyThickness, "measure_thickness_or_distance") && !!onlyThickness.shadowRoot.querySelector('[data-control="thickness_or_distance"]'),
