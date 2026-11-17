@@ -42,7 +42,7 @@ Adding a repository from a link needs a connection to GitHub, which the Marketpl
 
 ## Styles
 
-The card's **Style** option draws the tile in the colors of an xTool machine. The editor has a style for each model, and for each color a model is sold in; a new card starts with its laser's model's style. [COLORWAYS.md](COLORWAYS.md) lists every style's colors and the xTool photos they come from.
+The card's **Style** option draws the tile in the colors of an xTool machine. The editor has a style for each model, and for each color a model is sold in; a new card starts with its laser's model's style. [xTool Machine Colors](https://gizmogoody.github.io/xtool-card/colorways.html) shows every style's colors beside the xTool photos they come from.
 
 ## xTool Laser integration status and dependencies
 

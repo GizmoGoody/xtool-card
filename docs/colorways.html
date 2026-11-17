@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xTool Machine Colors</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+:root {
+  --bg: #f6f6f4; --surface: #ffffff; --fg: #1d1e20; --muted: #63666b; --line: #dcdcd8; --accent: #c8641f;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif; --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root { --bg: #17181a; --surface: #202124; --fg: #ececea; --muted: #a1a4a9; --line: #34363a; --accent: #f08a3e; color-scheme: dark } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 15px/1.5 var(--body); padding: 32px 16px 48px; }
+main { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+h1 { font: 600 30px/1.15 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 600 20px/1.2 var(--display); margin: 12px 0 0; }
+a { color: var(--accent); }
+.lede { margin: 0; color: var(--muted); max-width: 75ch; }
+.wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 980px; }
+thead th { text-align: left; font: 500 11px/1.2 var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 12px 14px; border-bottom: 1px solid var(--line); }
+tbody th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; text-align: left; }
+tbody tr:last-child > * { border-bottom: 0; }
+.model { display: block; font: 600 17px/1.2 var(--display); }
+.fam { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); font-weight: 400; }
+.ph { width: 150px; }
+.ph img { display: block; width: 140px; height: 140px; object-fit: contain; background: #fff; border-radius: 8px; }
+.chip { display: flex; gap: 10px; align-items: center; }
+.sw { width: 38px; height: 38px; border-radius: 8px; flex: none; box-shadow: inset 0 0 0 1px rgba(127,127,127,.35); }
+.cn { display: block; font-weight: 500; }
+code { font: 400 13px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.none { color: var(--muted); }
+.note { color: var(--muted); font-size: 13px; max-width: 30ch; }
+.foot, .sources { color: var(--muted); font-size: 13px; max-width: 90ch; margin: 0; }
+.sources li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>xTool Machine Colors</h1>
+  <p class="lede">Every style in the <a href="https://github.com/GizmoGoody/xtool-card">xTool card</a>'s editor: one for each xTool model, and one for each color a model is sold in. The card draws a <strong>body</strong> (the frame or case) and a <strong>window</strong> (the plexi or lid, behind the title); models that look alike share them. A new card gets its laser model's style. The photo columns are a 7 by 7 pixel average on xTool's own product photo shown beside them; the card's colors are close to them, but tuned to read well on a dashboard.</p>
+  <div class="wrap"><table>
+    <thead><tr><th>Style</th><th>Reference photo</th><th>Card body</th><th>Card window</th><th>Photo body</th><th>Photo window</th><th>Notes</th></tr></thead>
+    <tbody>
+<tr>
+  <th scope="row"><span class="model">D1</span><span class="fam"><code>d1</code></span></th>
+  <td class="ph"><img src="colorways/d1.png" alt="D1" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #93a8c1 0%, #7d93ad 45%, #667a92 100%)"></span><span><span class="cn">blue_grey</span><code>#7d93ad</code></span></span></td><td><span class="none">None: the theme's card</span></td>
+  <td><span class="chip"><span class="sw" style="background:#7d93ad"></span><span><code>#7d93ad</code></span></span></td><td><span class="none">None</span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">D1 Pro (Grey)</span><span class="fam"><code>d1_pro_grey</code></span></th>
+  <td class="ph"><img src="colorways/d1_pro_grey.png" alt="D1 Pro (Grey)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #93a8c1 0%, #7d93ad 45%, #667a92 100%)"></span><span><span class="cn">blue_grey</span><code>#7d93ad</code></span></span></td><td><span class="none">None: the theme's card</span></td>
+  <td><span class="chip"><span class="sw" style="background:#7d93ad"></span><span><code>#7d93ad</code></span></span></td><td><span class="none">None</span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">D1 Pro (Red)</span><span class="fam"><code>d1_pro_red</code></span></th>
+  <td class="ph"><img src="colorways/d1_pro_red.jpg" alt="D1 Pro (Red)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #c23c43 0%, #a92a31 45%, #8c1d22 100%)"></span><span><span class="cn">red</span><code>#a92a31</code></span></span></td><td><span class="none">None: the theme's card</span></td>
+  <td><span class="chip"><span class="sw" style="background:#a92a31"></span><span><code>#a92a31</code></span></span></td><td><span class="none">None</span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">D1 Pro 2.0 (Grey)</span><span class="fam"><code>d1_pro_2_grey</code></span></th>
+  <td class="ph"><img src="colorways/d1_pro_grey.png" alt="D1 Pro 2.0 (Grey)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #93a8c1 0%, #7d93ad 45%, #667a92 100%)"></span><span><span class="cn">blue_grey</span><code>#7d93ad</code></span></span></td><td><span class="none">None: the theme's card</span></td>
+  <td><span class="chip"><span class="sw" style="background:#7d93ad"></span><span><code>#7d93ad</code></span></span></td><td><span class="none">None</span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">D1 Pro 2.0 (Red)</span><span class="fam"><code>d1_pro_2_red</code></span></th>
+  <td class="ph"><img src="colorways/d1_pro_red.jpg" alt="D1 Pro 2.0 (Red)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #c23c43 0%, #a92a31 45%, #8c1d22 100%)"></span><span><span class="cn">red</span><code>#a92a31</code></span></span></td><td><span class="none">None: the theme's card</span></td>
+  <td><span class="chip"><span class="sw" style="background:#a92a31"></span><span><code>#a92a31</code></span></span></td><td><span class="none">None</span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">F1</span><span class="fam"><code>f1</code></span></th>
+  <td class="ph"><img src="colorways/f1.jpg" alt="F1" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #c8cac9 0%, #b4b6b5 45%, #9d9f9e 100%)"></span><span><span class="cn">silver</span><code>#b4b6b5</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(120, 210, 80, .5) 0%, rgba(120, 210, 80, 0) 70%), linear-gradient(170deg, #6cc84a 0%, #4fa634 45%, #2f7a1d 100%)"></span><span><span class="cn">green</span><code>#4fa634</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#b1b3b2"></span><span><code>#b1b3b2</code></span></span></td><td><span class="chip"><span class="sw" style="background:#62c465"></span><span><code>#62c465</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">F1 Lite</span><span class="fam"><code>f1_lite</code></span></th>
+  <td class="ph"><img src="colorways/f1_lite.png" alt="F1 Lite" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #c8cac9 0%, #b4b6b5 45%, #9d9f9e 100%)"></span><span><span class="cn">silver</span><code>#b4b6b5</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(120, 210, 80, .5) 0%, rgba(120, 210, 80, 0) 70%), linear-gradient(170deg, #6cc84a 0%, #4fa634 45%, #2f7a1d 100%)"></span><span><span class="cn">green</span><code>#4fa634</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#8ba282"></span><span><code>#8ba282</code></span></span></td><td><span class="chip"><span class="sw" style="background:#57c02b"></span><span><code>#57c02b</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">F1 Ultra</span><span class="fam"><code>f1_ultra</code></span></th>
+  <td class="ph"><img src="colorways/f1_ultra.jpg" alt="F1 Ultra" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #97989b 0%, #808184 45%, #6b6c6f 100%)"></span><span><span class="cn">grey</span><code>#808184</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(120, 210, 80, .5) 0%, rgba(120, 210, 80, 0) 70%), linear-gradient(170deg, #6cc84a 0%, #4fa634 45%, #2f7a1d 100%)"></span><span><span class="cn">green</span><code>#4fa634</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#838282"></span><span><code>#838282</code></span></span></td><td><span class="chip"><span class="sw" style="background:#499029"></span><span><code>#499029</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">F1 Ultra V2</span><span class="fam"><code>f1_ultra_v2</code></span></th>
+  <td class="ph"><img src="colorways/f1_ultra.jpg" alt="F1 Ultra V2" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #97989b 0%, #808184 45%, #6b6c6f 100%)"></span><span><span class="cn">grey</span><code>#808184</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(120, 210, 80, .5) 0%, rgba(120, 210, 80, 0) 70%), linear-gradient(170deg, #6cc84a 0%, #4fa634 45%, #2f7a1d 100%)"></span><span><span class="cn">green</span><code>#4fa634</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#838282"></span><span><code>#838282</code></span></span></td><td><span class="chip"><span class="sw" style="background:#499029"></span><span><code>#499029</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">F2</span><span class="fam"><code>f2</code></span></th>
+  <td class="ph"><img src="colorways/f2.jpg" alt="F2" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #dcc1aa 0%, #cdae94 45%, #b8977c 100%)"></span><span><span class="cn">champagne</span><code>#cdae94</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(245, 162, 26, .55) 0%, rgba(245, 162, 26, 0) 70%), linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%)"></span><span><span class="cn">orange</span><code>#e8891c</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#a68f82"></span><span><code>#a68f82</code></span></span></td><td><span class="chip"><span class="sw" style="background:#dd761b"></span><span><code>#dd761b</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">F2 Ultra</span><span class="fam"><code>f2_ultra</code></span></th>
+  <td class="ph"><img src="colorways/f2_ultra.jpg" alt="F2 Ultra" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #97989b 0%, #808184 45%, #6b6c6f 100%)"></span><span><span class="cn">grey</span><code>#808184</code></span></span></td><td><span class="chip"><span class="sw" style="background:linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)"></span><span><span class="cn">smoke</span><code>#1c1e21</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#7d7e82"></span><span><code>#7d7e82</code></span></span></td><td><span class="chip"><span class="sw" style="background:#393939"></span><span><code>#393939</code></span></span></td>
+  <td class="note">Green console trim (#7dba4a).</td></tr>
+<tr>
+  <th scope="row"><span class="model">F2 Ultra (Single)</span><span class="fam"><code>f2_ultra_single</code></span></th>
+  <td class="ph"><img src="colorways/f2_ultra.jpg" alt="F2 Ultra (Single)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #97989b 0%, #808184 45%, #6b6c6f 100%)"></span><span><span class="cn">grey</span><code>#808184</code></span></span></td><td><span class="chip"><span class="sw" style="background:linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)"></span><span><span class="cn">smoke</span><code>#1c1e21</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#7d7e82"></span><span><code>#7d7e82</code></span></span></td><td><span class="chip"><span class="sw" style="background:#393939"></span><span><code>#393939</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">F2 Ultra UV</span><span class="fam"><code>f2_ultra_uv</code></span></th>
+  <td class="ph"><img src="colorways/f2_ultra_uv.jpg" alt="F2 Ultra UV" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #dcc1aa 0%, #cdae94 45%, #b8977c 100%)"></span><span><span class="cn">champagne</span><code>#cdae94</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(245, 162, 26, .55) 0%, rgba(245, 162, 26, 0) 70%), linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%)"></span><span><span class="cn">orange</span><code>#e8891c</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#a68f82"></span><span><code>#a68f82</code></span></span></td><td><span class="chip"><span class="sw" style="background:#cc6321"></span><span><code>#cc6321</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">Laserbox (White)</span><span class="fam"><code>laserbox_white</code></span></th>
+  <td class="ph"><img src="colorways/laserbox_white.png" alt="Laserbox (White)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #f4f4f3 0%, #e6e6e6 45%, #d3d3d3 100%)"></span><span><span class="cn">white</span><code>#e6e6e6</code></span></span></td><td><span class="chip"><span class="sw" style="background:linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)"></span><span><span class="cn">smoke</span><code>#1c1e21</code></span></span></td>
+  <td><span class="none">White</span></td><td><span class="none">Smoked</span></td>
+  <td class="note">The Laserbox Pro.</td></tr>
+<tr>
+  <th scope="row"><span class="model">Laserbox (Black)</span><span class="fam"><code>laserbox_black</code></span></th>
+  <td class="ph"><img src="colorways/laserbox_black.png" alt="Laserbox (Black)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #3a3b3e 0%, #2d2e30 45%, #232426 100%)"></span><span><span class="cn">charcoal</span><code>#2d2e30</code></span></span></td><td><span class="chip"><span class="sw" style="background:linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)"></span><span><span class="cn">smoke</span><code>#1c1e21</code></span></span></td>
+  <td><span class="none">Black</span></td><td><span class="none">Smoked</span></td>
+  <td class="note">The Laserbox Basic.</td></tr>
+<tr>
+  <th scope="row"><span class="model">M1</span><span class="fam"><code>m1</code></span></th>
+  <td class="ph"><img src="colorways/m1.png" alt="M1" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #f4f4f3 0%, #e6e6e6 45%, #d3d3d3 100%)"></span><span><span class="cn">white</span><code>#e6e6e6</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(245, 162, 26, .55) 0%, rgba(245, 162, 26, 0) 70%), linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%)"></span><span><span class="cn">orange</span><code>#e8891c</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#f6f6f6"></span><span><code>#f6f6f6</code></span></span></td><td><span class="none">Orange</span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">M1 Ultra</span><span class="fam"><code>m1_ultra</code></span></th>
+  <td class="ph"><img src="colorways/m1_ultra.jpg" alt="M1 Ultra" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #f4f4f3 0%, #e6e6e6 45%, #d3d3d3 100%)"></span><span><span class="cn">white</span><code>#e6e6e6</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(245, 162, 26, .55) 0%, rgba(245, 162, 26, 0) 70%), linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%)"></span><span><span class="cn">orange</span><code>#e8891c</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#f0f0f0"></span><span><code>#f0f0f0</code></span></span></td><td><span class="chip"><span class="sw" style="background:#dc8122"></span><span><code>#dc8122</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">M2</span><span class="fam"><code>m2</code></span></th>
+  <td class="ph"><img src="colorways/m2.jpg" alt="M2" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #f4f4f3 0%, #e6e6e6 45%, #d3d3d3 100%)"></span><span><span class="cn">white</span><code>#e6e6e6</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(245, 162, 26, .55) 0%, rgba(245, 162, 26, 0) 70%), linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%)"></span><span><span class="cn">orange</span><code>#e8891c</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#eeeeee"></span><span><code>#eeeeee</code></span></span></td><td><span class="chip"><span class="sw" style="background:#bd7f53"></span><span><code>#bd7f53</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">MetalFab</span><span class="fam"><code>metalfab</code></span></th>
+  <td class="ph"><img src="colorways/metalfab.jpg" alt="MetalFab" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #c8cac9 0%, #b4b6b5 45%, #9d9f9e 100%)"></span><span><span class="cn">silver</span><code>#b4b6b5</code></span></span></td><td><span class="chip"><span class="sw" style="background:linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)"></span><span><span class="cn">smoke</span><code>#1c1e21</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#cccccc"></span><span><code>#cccccc</code></span></span></td><td><span class="chip"><span class="sw" style="background:#2d2d2d"></span><span><span class="cn">black panels</span><code>#2d2d2d</code></span></span></td>
+  <td class="note">No window; the photo window color is its black panels.</td></tr>
+<tr>
+  <th scope="row"><span class="model">O1 Omni Printer</span><span class="fam"><code>o1_omni_printer</code></span></th>
+  <td class="ph"><img src="colorways/o1_omni_printer.jpg" alt="O1 Omni Printer" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #f4f4f3 0%, #e6e6e6 45%, #d3d3d3 100%)"></span><span><span class="cn">white</span><code>#e6e6e6</code></span></span></td><td><span class="chip"><span class="sw" style="background:linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)"></span><span><span class="cn">smoke</span><code>#1c1e21</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#eeeeee"></span><span><code>#eeeeee</code></span></span></td><td><span class="none">Smoked</span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">P2 (Grey)</span><span class="fam"><code>p2_grey</code></span></th>
+  <td class="ph"><img src="colorways/p2_grey.jpg" alt="P2 (Grey)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #3a3f45 0%, #2d3136 45%, #24272b 100%)"></span><span><span class="cn">graphite</span><code>#2d3136</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(120% 90% at 50% 120%, rgba(214, 140, 60, .28) 0%, rgba(214, 140, 60, 0) 60%), linear-gradient(175deg, #1d2024 0%, #141619 60%, #0f1113 100%)"></span><span><span class="cn">smoke_amber</span><code>#141619</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#50555b"></span><span><code>#50555b</code></span></span></td><td><span class="chip"><span class="sw" style="background:#885a31"></span><span><code>#885a31</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">P2 (White)</span><span class="fam"><code>p2_white</code></span></th>
+  <td class="ph"><img src="colorways/p2_white.jpg" alt="P2 (White)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #f4f4f3 0%, #e6e6e6 45%, #d3d3d3 100%)"></span><span><span class="cn">white</span><code>#e6e6e6</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(120% 90% at 50% 120%, rgba(214, 140, 60, .28) 0%, rgba(214, 140, 60, 0) 60%), linear-gradient(175deg, #1d2024 0%, #141619 60%, #0f1113 100%)"></span><span><span class="cn">smoke_amber</span><code>#141619</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#e5e5e6"></span><span><code>#e5e5e6</code></span></span></td><td><span class="none">Amber</span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">P2S (Grey)</span><span class="fam"><code>p2s_grey</code></span></th>
+  <td class="ph"><img src="colorways/p2s_grey.jpg" alt="P2S (Grey)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #3a3f45 0%, #2d3136 45%, #24272b 100%)"></span><span><span class="cn">graphite</span><code>#2d3136</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(120% 90% at 50% 120%, rgba(214, 140, 60, .28) 0%, rgba(214, 140, 60, 0) 60%), linear-gradient(175deg, #1d2024 0%, #141619 60%, #0f1113 100%)"></span><span><span class="cn">smoke_amber</span><code>#141619</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#50555b"></span><span><code>#50555b</code></span></span></td><td><span class="chip"><span class="sw" style="background:#885a31"></span><span><code>#885a31</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">P2S (White)</span><span class="fam"><code>p2s_white</code></span></th>
+  <td class="ph"><img src="colorways/p2_white.jpg" alt="P2S (White)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #f4f4f3 0%, #e6e6e6 45%, #d3d3d3 100%)"></span><span><span class="cn">white</span><code>#e6e6e6</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(120% 90% at 50% 120%, rgba(214, 140, 60, .28) 0%, rgba(214, 140, 60, 0) 60%), linear-gradient(175deg, #1d2024 0%, #141619 60%, #0f1113 100%)"></span><span><span class="cn">smoke_amber</span><code>#141619</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#e5e5e6"></span><span><code>#e5e5e6</code></span></span></td><td><span class="none">Amber</span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">P3</span><span class="fam"><code>p3</code></span></th>
+  <td class="ph"><img src="colorways/p3.jpg" alt="P3" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #f4f4f3 0%, #e6e6e6 45%, #d3d3d3 100%)"></span><span><span class="cn">white</span><code>#e6e6e6</code></span></span></td><td><span class="chip"><span class="sw" style="background:linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)"></span><span><span class="cn">smoke</span><code>#1c1e21</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#dbdbdb"></span><span><code>#dbdbdb</code></span></span></td><td><span class="chip"><span class="sw" style="background:#4d4d4d"></span><span><code>#4d4d4d</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">Retail Marker</span><span class="fam"><code>retail_marker</code></span></th>
+  <td class="ph"><img src="colorways/retail_marker.jpg" alt="Retail Marker" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #97989b 0%, #808184 45%, #6b6c6f 100%)"></span><span><span class="cn">grey</span><code>#808184</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(120, 210, 80, .5) 0%, rgba(120, 210, 80, 0) 70%), linear-gradient(170deg, #6cc84a 0%, #4fa634 45%, #2f7a1d 100%)"></span><span><span class="cn">green</span><code>#4fa634</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#838282"></span><span><code>#838282</code></span></span></td><td><span class="chip"><span class="sw" style="background:#499029"></span><span><code>#499029</code></span></span></td>
+  <td class="note">Its color can be customized.</td></tr>
+<tr>
+  <th scope="row"><span class="model">S1 (Black)</span><span class="fam"><code>s1_black</code></span></th>
+  <td class="ph"><img src="colorways/s1_black.jpg" alt="S1 (Black)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #3a3b3e 0%, #2d2e30 45%, #232426 100%)"></span><span><span class="cn">charcoal</span><code>#2d2e30</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(120, 210, 80, .5) 0%, rgba(120, 210, 80, 0) 70%), linear-gradient(170deg, #6cc84a 0%, #4fa634 45%, #2f7a1d 100%)"></span><span><span class="cn">green</span><code>#4fa634</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#2d2e30"></span><span><code>#2d2e30</code></span></span></td><td><span class="chip"><span class="sw" style="background:#649658"></span><span><code>#649658</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">S1 (White)</span><span class="fam"><code>s1_white</code></span></th>
+  <td class="ph"><img src="colorways/s1_white.jpg" alt="S1 (White)" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #f4f4f3 0%, #e6e6e6 45%, #d3d3d3 100%)"></span><span><span class="cn">white</span><code>#e6e6e6</code></span></span></td><td><span class="chip"><span class="sw" style="background:radial-gradient(90% 120% at 50% 110%, rgba(245, 162, 26, .55) 0%, rgba(245, 162, 26, 0) 70%), linear-gradient(170deg, #f5a21a 0%, #e8891c 45%, #c2620f 100%)"></span><span><span class="cn">orange</span><code>#e8891c</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#e8e8e8"></span><span><code>#e8e8e8</code></span></span></td><td><span class="chip"><span class="sw" style="background:#c67410"></span><span><code>#c67410</code></span></span></td>
+  <td class="note"></td></tr>
+<tr>
+  <th scope="row"><span class="model">Apparel Printer</span><span class="fam"><code>apparel_printer</code></span></th>
+  <td class="ph"><img src="colorways/apparel_printer.jpg" alt="Apparel Printer" loading="lazy"></td>
+  <td><span class="chip"><span class="sw" style="background:linear-gradient(160deg, #f4f4f3 0%, #e6e6e6 45%, #d3d3d3 100%)"></span><span><span class="cn">white</span><code>#e6e6e6</code></span></span></td><td><span class="chip"><span class="sw" style="background:linear-gradient(175deg, #2b2d31 0%, #1c1e21 60%, #141518 100%)"></span><span><span class="cn">smoke</span><code>#1c1e21</code></span></span></td>
+  <td><span class="chip"><span class="sw" style="background:#d7d7d7"></span><span><code>#d7d7d7</code></span></span></td><td><span class="chip"><span class="sw" style="background:#313131"></span><span><code>#313131</code></span></span></td>
+  <td class="note"></td></tr>
+    </tbody>
+  </table></div>
+  <p class="foot">Photos are from xTool's stores, support pages and render library, and MatterHackers (the red D1 Pro), November 2026. Variants with the same enclosure reuse their base model's photo. Photo lighting shifts every value: a window reads darker where the inside behind it is dark.</p>
+  <h2>Notes and sources</h2>
+  <ul class="sources">
+<li><strong>Variants with the same look.</strong> The D1 Pro 2.0 has the D1 Pro's frame. The F1 Ultra V2 is a Class 1 version of the F1 Ultra. The F2 Ultra (Single) has the F2 Ultra's enclosure. The F2 Ultra UV (Class 1) has the F2 Ultra UV's enclosure, so it uses the F2 Ultra UV style. The Apparel Printer looks the same as the Apparel Printer Plus.</li>
+<li><strong>D1 series.</strong> The D1 is grey only. The D1 Pro and D1 Pro 2.0 come in red or grey, the two colors of xTool's D1 and D1 Pro risers, which match the frame (xTool calls them Red and Grey on its UK store, Golden Red and Metal Grey on its German store). MatterHackers sells the red D1 Pro. The D1 series has no enclosure, so its title sits on the theme's card.</li>
+<li><strong>P2 and P2S.</strong> Both come in grey and white, as the variants of xTool's US refurbished P2/P2S listing show. xTool's EU and UK stores call the grey one black.</li>
+<li><strong>S1.</strong> Black with a green window, or white with an orange window (xTool's US refurbished S1 listing calls them Black and Pure White).</li>
+<li><strong>Laserbox.</strong> The Laserbox Pro is white with a smoked lid, and the Laserbox Basic is black.</li>
+<li><strong>Retail Marker.</strong> The in-store version of the F1 Ultra. Its enclosure color can be customized for a store (<a href="https://support.xtool.com/article/2735">xTool support, article 2735</a>); the card draws its standard look.</li>
+<li><strong>Model names</strong> are the ones the xTool integration gives each device in Home Assistant (for example, "xTool F2 Ultra UV").</li>
+  </ul>
+</main>
+</body>
+</html>
