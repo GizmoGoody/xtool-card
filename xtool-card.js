@@ -2447,6 +2447,8 @@ const CAMERA_VIEWS = [["auto", "Auto"], ["live", "Live"]];
 
 // The crop preset of a crop chosen on the camera's own (the P2's presets)
 const CUSTOM_CROP = "custom";
+// The longest a crop sent shows Cropping, should no picture of it arrive (ms)
+const CROP_WAIT = 30000;
 
 // The camera's controls that are Home Assistant's own features (and the
 // close camera's light), among its keys: each only for a camera that has
@@ -3129,8 +3131,9 @@ class XtoolCamera extends XtoolFeature {
       const returned = before.states[camera]?.state === "unavailable" && hass.states[camera] && hass.states[camera].state !== "unavailable";
       if (back || returned) this._dropImage();
     }
-    // The crop sent has taken effect (or the camera put another in its place)
-    if (this._cropSent && JSON.stringify(this._cropNow()) !== this._cropSent) this._cropSent = undefined;
+    // The crop sent has reached Home Assistant (or the camera put another in
+    // its place): Cropping shows until a picture of it arrives (see _arrived)
+    if (this._cropSent && JSON.stringify(this._cropNow()) !== this._cropSent.before) this._cropSent.changed = true;
     this._showCamera();
     this._drawTarget();
   }
@@ -3164,6 +3167,8 @@ class XtoolCamera extends XtoolFeature {
       this._camera = current;
       this._pictureAt = undefined;
       this._first = undefined;
+      clearTimeout(this._cropSent?.timer);
+      this._cropSent = undefined;
       this._area.hidden = true;
       // Crop starts on when the camera shows a crop of its own (see _ownCrop)
       this._cropping = this._ownCrop();
@@ -3330,8 +3335,9 @@ class XtoolCamera extends XtoolFeature {
     this._showHint();
     const width = Math.abs(point.x - first.x), height = Math.abs(point.y - first.y);
     if (!width || !height) return;
-    // Until the camera's crop numbers change, the hint says it is cropping
-    this._cropSent = JSON.stringify(crop);
+    // Until a picture with the new crop arrives, the hint says it is
+    // cropping (at most CROP_WAIT, should the crop never take effect)
+    this._cropSent = { before: JSON.stringify(crop), changed: false, timer: setTimeout(() => this._cropDone(), CROP_WAIT) };
     this._showHint();
     this._sendCrop({
       width: Math.round(width), height: Math.round(height),
@@ -3366,9 +3372,16 @@ class XtoolCamera extends XtoolFeature {
     }
   }
 
+  /** The crop sent is shown (or was given up on): taps choose a crop again. */
+  _cropDone() {
+    clearTimeout(this._cropSent?.timer);
+    this._cropSent = undefined;
+    this._showHint();
+  }
+
   _stopCropping() {
     this._cropping = false;
-    this._cropSent = undefined;
+    this._cropDone();
     this._first = undefined;
     this._area.hidden = true;
     this._showHint();
@@ -3452,6 +3465,8 @@ class XtoolCamera extends XtoolFeature {
 
   /** A picture has arrived for the shown camera. */
   _arrived() {
+    // The first picture after the crop changed shows it: cropping is done
+    if (this._cropSent?.changed) this._cropDone();
     this._drawTarget();
     if (["off", "sleeping"].includes(phaseNow(this._hass, this._entityId))) return;
     this._pictureAt = new Date();

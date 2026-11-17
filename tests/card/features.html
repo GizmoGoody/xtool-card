@@ -655,6 +655,10 @@
         "camera.p2_overview": { state: "idle", attributes: { view: { x: 152.5, y: 0, width: 305, height: 305 } } } });
       tapper.hass = cropped;
       await wait(150);
+      tapAt(0.25, 0.2);
+      check(`tap, ${kind}`, !tapper.shadowRoot.querySelector(".area:not([hidden])") && tapper.shadowRoot.querySelector(".hint").textContent === "Cropping",
+        "until the next picture arrives, taps wait and the hint says Cropping");
+      tapper.shadowRoot.querySelector(".shot hui-image").shadowRoot.querySelector("img").dispatchEvent(new Event("load"));
       check(`tap, ${kind}`, keyNamed(tapper, "custom_crop").getAttribute("aria-pressed") === "true", "Crop stays on after a crop is set");
       tapAt(0.25, 0.2);
       tapAt(0.75, 0.8);
@@ -881,7 +885,7 @@
     check("camera, crop", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "xtool", service: "camera", data: {
       crop_width: 100, crop_height: 120, crop_center_x: 0, crop_center_y: 0, entity_id: "camera.f2_main" } })
       && area.hidden && cropped.shadowRoot.querySelector(".hint").textContent === "Cropping",
-      `the opposite corner crops to the rectangle between them, in mm on the work surface, and the hint says Cropping until the crop numbers change (${JSON.stringify(lastCall(hass).data)})`);
+      `the opposite corner crops to the rectangle between them, in mm on the work surface, and the hint says Cropping (${JSON.stringify(lastCall(hass).data)})`);
     await wait(30);
     check("camera, crop", [...cropped.shadowRoot.querySelectorAll(".shot hui-image")].length === 1 && before.isConnected,
       "the picture stays in the same image, which fetches the new photo on Home Assistant's own schedule");
@@ -889,8 +893,11 @@
     const croppedHass = makeHass({ "number.f2_main_crop_width": "100", "number.f2_main_crop_height": "120" });
     cropped.hass = croppedHass;
     await wait(20);
+    check("camera, crop", cropped.shadowRoot.querySelector(".hint").textContent === "Cropping",
+      "the new crop numbers alone: still Cropping, as the picture shown is the old one");
+    cropped.shadowRoot.querySelector(".shot hui-image").shadowRoot.querySelector("img").dispatchEvent(new Event("load"));
     check("camera, crop", keyNamed(cropped, "custom_crop").getAttribute("aria-pressed") === "true" && cropped.shadowRoot.querySelector(".hint").textContent === "Tap a corner to start selection of a crop area",
-      "Crop stays on until it is turned off; a tap on the picture still marks a corner");
+      "the next picture shows the crop: Crop stays on until it is turned off, and a tap on the picture marks a corner again");
     keyNamed(cropped, "custom_crop").click();
     check("camera, crop", JSON.stringify(lastCall(croppedHass).data) === JSON.stringify({ crop_width: 200, crop_height: 200, crop_center_x: 0, crop_center_y: 0, entity_id: "camera.f2_main" }),
       "turning Crop off shows it all: 200 x 200 mm, centered");
