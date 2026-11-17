@@ -4686,13 +4686,22 @@ class XtoolCard extends HTMLElement {
     return this._hass;
   }
 
-  // Dashboard properties the tile card uses. In the editor's preview the
-  // card starts expanded and changes only when tapped (see PREVIEW_OPEN)
+  // Dashboard properties the tile card uses. In the editor's preview and
+  // while the dashboard is edited, the card starts expanded and changes only
+  // when tapped (see PREVIEW_OPEN); when the edit ends, it returns to how it
+  // is shown on the dashboard
   set preview(value) {
     const was = this._preview;
     this._preview = value;
     if (this._tile) this._tile.preview = value;
-    if (value && !was && this._config && this._config.collapsible !== false) this._setOpen(PREVIEW_OPEN.get(this._config.entity) ?? true, false);
+    if (!this._config || this._config.collapsible === false || !value === !was) return;
+    this._setOpen(value ? PREVIEW_OPEN.get(this._config.entity) ?? true : this._dashboardOpen(), false);
+  }
+
+  /** Whether the card is expanded on the dashboard: as last tapped, else as set, and collapsed while the machine is off when it follows the power. */
+  _dashboardOpen() {
+    if (this._wasOff && this._config.collapse_when_powered_off !== false) return false;
+    return this._storedOpen() ?? this._config.expanded_at_load === true;
   }
 
   set layout(value) {

@@ -458,6 +458,18 @@
     document.getElementById("cards").append(reopened);
     await wait(50);
     check("editor preview", inner(reopened).config.features.length === 2, "the editor opened again starts expanded");
+    reopened.preview = false;
+    await wait(50);
+    check("dashboard edit ends", inner(reopened).config.features.length === 0 && localStorage.getItem("xtool-card:sensor.f2_status") === "0",
+      "leaving edit mode returns the card to how the dashboard shows it (remembered collapsed)");
+    reopened.preview = true;
+    reopened.hass = f2("off");
+    try { localStorage.removeItem("xtool-card:sensor.f2_status"); } catch (err) { /* no storage */ }
+    reopened.setConfig({ ...previewConfig, expanded_at_load: true });
+    reopened.hass = f2("off");
+    reopened.preview = false;
+    await wait(50);
+    check("dashboard edit ends", inner(reopened).config.features.length === 0, "a laser that is off collapses again when edit mode ends");
     preview.remove();
     rebuilt.remove();
     reopened.remove();
