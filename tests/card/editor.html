@@ -169,13 +169,13 @@
     cameraEditor.addEventListener("config-changed", (ev) => (cameraFired = ev.detail.config));
     cameraEditor.hass = makeHass();
     cameraEditor.context = { entity_id: "sensor.f2_status" };
-    cameraEditor.setConfig({ type: "custom:xtool-camera" });
+    cameraEditor.setConfig({ type: "custom:xtool-cameras" });
     const cameraForm = cameraEditor.querySelector("ha-form");
     check("camera, full width", cameraForm.schema.find((s) => s.name === "full_width")?.label === "Full width" && cameraForm.data.full_width === true, "offered, on by default");
     cameraForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...cameraForm.data, full_width: false } } }));
-    check("camera, full width", JSON.stringify(cameraFired) === JSON.stringify({ type: "custom:xtool-camera", full_width: false }), `turned off, it alone is saved (${JSON.stringify(cameraFired)})`);
+    check("camera, full width", JSON.stringify(cameraFired) === JSON.stringify({ type: "custom:xtool-cameras", full_width: false }), `turned off, it alone is saved (${JSON.stringify(cameraFired)})`);
     cameraForm.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...cameraForm.data, full_width: true } } }));
-    check("camera, full width", JSON.stringify(cameraFired) === JSON.stringify({ type: "custom:xtool-camera" }), "on, it is left out");
+    check("camera, full width", JSON.stringify(cameraFired) === JSON.stringify({ type: "custom:xtool-cameras" }), "on, it is left out");
 
     // The P2's camera controls: in two lists, All cameras and Per camera, saved as one list, All cameras first
     const p2Camera = document.createElement("xtool-feature-editor");
@@ -183,7 +183,7 @@
     p2Camera.addEventListener("config-changed", (ev) => (p2CameraFired = ev.detail.config));
     p2Camera.hass = makeHass();
     p2Camera.context = { entity_id: "sensor.p2_status" };
-    p2Camera.setConfig({ type: "custom:xtool-camera", controls: ["mode", "camera_toggle", "exposure", "thickness_or_distance"] });
+    p2Camera.setConfig({ type: "custom:xtool-cameras", controls: ["mode", "camera_toggle", "exposure", "thickness_or_distance"] });
     const p2Form = p2Camera.querySelector("ha-form");
     const listNames = p2Form.schema.filter((s) => s.selector?.select?.multiple).map((s) => s.label).join();
     const optionsOf = (name) => p2Form.schema.find((s) => s.name === name).selector.select.options.map((o) => o.value);

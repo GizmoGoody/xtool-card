@@ -67,7 +67,7 @@
   const styles = {
     f2UltraUv: addCard("f2_ultra_uv, match", { style: "f2_ultra_uv", features_style: "match", collapsible: false, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     timeFormat: addCard("camera time, card's Time format total", { style: "f2_ultra_uv", time_format: "total",
-      features: [{ type: "custom:xtool-camera", show_last_updated: true }] }, { hass: f2("idle"), height: 360 }),
+      features: [{ type: "custom:xtool-cameras", show_last_updated: true }] }, { hass: f2("idle"), height: 360 }),
     samePattern: addCard("f2_ultra_uv, pattern 4242", { style: "f2_ultra_uv", features_style: "match", pattern: 4242, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     otherPattern: addCard("f2_ultra_uv, pattern 17", { style: "f2_ultra_uv", features_style: "match", pattern: 17, ...jobFeatures }, { hass: f2("processing"), height: 220 }),
     flat: addCard("f2_ultra_uv, flat", { style: "f2_ultra_uv", features_style: "flat", ...jobFeatures }, { hass: f2("processing"), height: 220 }),
@@ -128,7 +128,7 @@
   // A feature beside the title (features position: inline), and two columns of features
   const inlineCard = addCard("inline job, f2_ultra_uv", { style: "f2_ultra_uv", features_style: "console", features_position: "inline", collapsible: false,
     features: [{ type: "custom:xtool-job" }, { type: "custom:xtool-controls" }, { type: "custom:xtool-safety" }] }, { hass: f2("idle"), height: 280 });
-  const camera = addCard("camera", { features: [{ type: "custom:xtool-camera" }, { type: "custom:xtool-safetypro-if2-fan" }] }, { hass: f2("idle"), height: 120 });
+  const camera = addCard("camera", { features: [{ type: "custom:xtool-cameras" }, { type: "custom:xtool-safetypro-if2-fan" }] }, { hass: f2("idle"), height: 120 });
 
   // The features below the title in Home Assistant's grid: the camera, and a last feature alone in its row
   const auto = (hass) => ({ hass, height: "auto" });
@@ -144,7 +144,7 @@
       { type: "custom:xtool-configuration", controls: ["buzzer", "if2_buzzer", "device_sleep"], show: "icons" },
       { type: "custom:xtool-safety", controls: ["flame_alarm", "stops_when_enclosure_opened", "stops_when_moved", "safety_key"], show: "icons", disabled_color: "red" },
       { type: "custom:xtool-lights", controls: ["fill_light_front", "fill_light_front_brightness", "fill_light_back", "fill_light_back_brightness"], off_at_minimum: false },
-      { type: "custom:xtool-camera", camera: "main", camera_view: "auto", controls: ["camera_buttons", "camera_toggle", "custom_crop", "perspective"], show: "icons", show_last_updated: true, full_width: true },
+      { type: "custom:xtool-cameras", camera: "main", camera_view: "auto", controls: ["camera_buttons", "camera_toggle", "custom_crop", "perspective"], show: "icons", show_last_updated: true, full_width: true },
       { type: "custom:xtool-safetypro-if2-fan", controls: ["fan_off", "fan_auto", "fan_speed"], show: "icons" },
       { type: "custom:xtool-focus", controls: ["autofocus", "focus_height"], show: "icons" },
     ],
@@ -156,13 +156,13 @@
       { type: "custom:xtool-configuration", controls: ["exhaust_fan", "buzzer"], show: "icons" },
       { type: "custom:xtool-safety", controls: ["flame_alarm", "lid", "baseplate"], show: "icons", disabled_color: "red" },
       { type: "custom:xtool-lights", controls: ["fill_light_left", "fill_light_left_brightness", "fill_light_right", "fill_light_right_brightness"], off_at_minimum: false },
-      { type: "custom:xtool-camera", camera: "overview", camera_view: "auto", show: "icons", show_last_updated: true, full_width: true,
+      { type: "custom:xtool-cameras", camera: "overview", camera_view: "auto", show: "icons", show_last_updated: true, full_width: true,
         controls: ["camera_buttons", "camera_toggle", "custom_crop", "thickness_or_distance", "measure_thickness_or_distance", "mode", "crop", "exposure", "fill_light_close", "fill_light_close_brightness"] },
       { type: "custom:xtool-overlays", show: "icons" },
       { type: "custom:xtool-position", controls: ["laser_position", "move_laser", "home_laser"], show: "icons" },
     ],
   };
-  const halfCamera = (config) => ({ ...config, features: config.features.map((f) => (f.type === "custom:xtool-camera" ? { ...f, full_width: false } : f)) });
+  const halfCamera = (config) => ({ ...config, features: config.features.map((f) => (f.type === "custom:xtool-cameras" ? { ...f, full_width: false } : f)) });
   const layouts = {
     f2Max: addCard("F2 Ultra UV, every option", f2Max, auto(f2("idle"))),
     f2Half: addCard("F2 Ultra UV, every option, camera in one column", halfCamera(f2Max), auto(f2("idle"))),
@@ -365,7 +365,7 @@
     }
     check("f2_ultra_uv, match", styles.f2UltraUv.shadowRoot.querySelectorAll(".area").length === 0, "Match draws no areas");
     await wait(100);
-    const timedCamera = deep(styles.timeFormat, "xtool-camera")[0];
+    const timedCamera = deep(styles.timeFormat, "xtool-cameras")[0];
     timedCamera?.shadowRoot.querySelector("hui-image")?.shadowRoot.querySelector("img").dispatchEvent(new Event("load"));
     check("camera time", timedCamera?.shadowRoot.querySelector(".time hui-timestamp-display")?.format === "total", "the camera's time follows the card's Time format");
     const gloss = (card) => windowBox(card).style.getPropertyValue("--xtool-gloss");
@@ -603,7 +603,7 @@
       && (a.full || b.full || a.right === b.right)));
     // The camera, the features beside it (in the other column, from its top), and the ones after
     const besideCamera = (places) => {
-      const cam = places.find((p) => p.type === "camera");
+      const cam = places.find((p) => p.type === "cameras");
       const beside = places.filter((p) => p !== cam && !p.full && p.right !== cam.right && p.top < cam.bottom - 0.5 && p.bottom > cam.top + 0.5);
       const after = places.slice(places.indexOf(cam) + 1).filter((p) => !beside.includes(p));
       return { cam, beside, after };
@@ -631,7 +631,7 @@
     }
     for (const [name, card] of [["F2 Ultra UV", layouts.f2Max], ["P2", layouts.p2Max]]) {
       const places = placesOf(card);
-      const cam = places.find((p) => p.type === "camera");
+      const cam = places.find((p) => p.type === "cameras");
       check("layout, camera full width", cam?.full && !overlap(places) && places.every((p) => p.full || p.half),
         `${name}, every option: the camera takes both columns; the others half each, side by side, none overlapping (${describe(places)})`);
     }
@@ -640,14 +640,14 @@
     // The camera's cells as far apart as the features side by side
     const featureBoxes = deep(layouts.p2Max, "hui-card-feature").map((el) => el.getBoundingClientRect()).filter((b) => b.width);
     const besideGap = featureBoxes.flatMap((a) => featureBoxes.filter((b) => Math.abs(b.top - a.top) < 1 && b.left > a.right).map((b) => b.left - a.right))[0];
-    const p2Cells = [...deep(layouts.p2Max, "xtool-camera")[0].shadowRoot.querySelectorAll(".sections > .line")].map((el) => el.getBoundingClientRect());
+    const p2Cells = [...deep(layouts.p2Max, "xtool-cameras")[0].shadowRoot.querySelectorAll(".sections > .line")].map((el) => el.getBoundingClientRect());
     const cellGap = p2Cells.flatMap((a) => p2Cells.filter((b) => Math.abs(b.top - a.top) < 1 && b.left > a.right).map((b) => b.left - a.right))[0];
     check("layout, camera cells", besideGap > 0 && Math.abs(cellGap - besideGap) < 0.5,
       `the camera's half-width cells are as far apart as features side by side (${cellGap} and ${besideGap} px)`);
-    check("layout, camera full width", describe(p2Places) === "configuration:left safety:right lights:full camera:full overlays:left position:right",
+    check("layout, camera full width", describe(p2Places) === "configuration:left safety:right lights:full cameras:full overlays:left position:right",
       `P2: the lights, left alone before the camera, take the full width (${describe(p2Places)})`);
     check("layout, camera full width", describe(placesOf(layouts.f2Max))
-      === "controls:left configuration:right safety:left lights:right camera:full safetypro-if2-fan:left focus:right",
+      === "controls:left configuration:right safety:left lights:right cameras:full safetypro-if2-fan:left focus:right",
       `F2 Ultra UV: left and right in the order chosen (${describe(placesOf(layouts.f2Max))})`);
     for (const [name, card] of [["F2 Ultra UV", layouts.f2Half], ["P2", layouts.p2Half]]) {
       const places = placesOf(card);
@@ -734,11 +734,11 @@
     const targetAttributes = (more = {}) => ({ position: { target: [{ x: 100, y: 50 }] }, style: { color: [0, 0, 255], line: 3, style: "solid", icon: "mdi:crosshairs", size: 10 }, ...more });
     const markHass = (more = {}) => p2("idle", { "switch.p2_overview_target": { state: "on", attributes: targetAttributes() }, ...more });
     const marked = (look) => addCard("P2 laser target", { entity: "sensor.p2_status", ...(look ? { overlay_styles: { laser_target: look } } : {}), features: [
-      { type: "custom:xtool-camera", camera: "overview", controls: ["camera_buttons"] },
+      { type: "custom:xtool-cameras", camera: "overview", controls: ["camera_buttons"] },
     ] }, { hass: markHass(), height: 420 });
     const styledCard = marked({ color: "red", icon: "mdi:crosshairs-gps", size: 40 }), plainCard = marked();
     await wait(200);
-    const markCamera = deep(styledCard, "xtool-camera")[0];
+    const markCamera = deep(styledCard, "xtool-cameras")[0];
     markCamera.hass = markHass();
     const marks = () => [...markCamera.shadowRoot.querySelectorAll(".shot .marks ha-icon")];
     const markImg = markCamera.shadowRoot.querySelector(".shot hui-image").shadowRoot.querySelector("img").getBoundingClientRect();
@@ -752,18 +752,18 @@
     check("overlays, style", Math.abs(parseFloat(marks()[0]?.style.left) - movedX) < 1.5, `it follows the head position numbers, which update more often than the picture (${marks()[0]?.style.left} for ${Math.round(movedX)})`);
     markCamera.hass = markHass({ "switch.p2_overview_target": { state: "off", attributes: targetAttributes() } });
     check("overlays, style", marks().length === 0, "nothing while the Laser target overlay is off");
-    const plainCamera = deep(plainCard, "xtool-camera")[0];
+    const plainCamera = deep(plainCard, "xtool-cameras")[0];
     plainCamera.hass = markHass();
     check("overlays, style", plainCamera.shadowRoot.querySelectorAll(".shot .marks ha-icon").length === 0, "nothing of the card's own while its style follows the integration");
     plainCard.setConfig({ ...plainCard._config, overlay_styles: { laser_target: { size: 30 } } });
     await wait(30);
-    const restyled = deep(plainCard, "xtool-camera")[0];
+    const restyled = deep(plainCard, "xtool-cameras")[0];
     check("overlays, style", restyled.shadowRoot.querySelectorAll(".shot .marks ha-icon").length === 1,
       `a style changed in the editor shows at once, with no new state from the laser (same camera: ${restyled === plainCamera}, connected: ${plainCamera.isConnected})`);
     // With the camera's Overlays select on Card, the card draws every overlay that is on, in the integration's style
     plainCard.setConfig({ ...plainCard._config, overlay_styles: undefined });
     await wait(30);
-    let byCard = deep(plainCard, "xtool-camera")[0];
+    let byCard = deep(plainCard, "xtool-cameras")[0];
     byCard.hass = markHass({ "select.p2_overview_overlays": "card" });
     const cardIcons = [...byCard.shadowRoot.querySelectorAll(".shot .marks ha-icon")];
     const slatLines = [...byCard.shadowRoot.querySelectorAll(".shot .looks line")];
@@ -776,7 +776,7 @@
       `the slat lines and their numbers (${slatLines.length} lines, ${slatLines[0]?.getAttribute("stroke")})`);
     plainCard.setConfig({ ...plainCard._config, overlay_styles: { slat_lines: { color: "red", line: 4, style: "dashed" } } });
     await wait(30);
-    byCard = deep(plainCard, "xtool-camera")[0];
+    byCard = deep(plainCard, "xtool-cameras")[0];
     byCard.hass = markHass({ "select.p2_overview_overlays": "card" });
     const dashed = byCard.shadowRoot.querySelector(".shot .looks line");
     check("overlays, by the card", dashed?.getAttribute("stroke").includes("--red-color") && dashed.getAttribute("stroke-width") === "4" && dashed.getAttribute("stroke-dasharray") === "12 8",

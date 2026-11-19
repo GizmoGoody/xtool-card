@@ -11,7 +11,7 @@
  * - custom:xtool-safety       the safety checks (the P2's flame alarm level), the safety key, lid and baseplate
  *                             (read-outs), and Access control; turning a check off asks first
  * - custom:xtool-configuration the Configuration settings: buzzer, exhaust fan, the IF2 buzzer, device sleep
- * - custom:xtool-camera       a camera, shown by Home Assistant's own image element, with keys to switch;
+ * - custom:xtool-cameras       a camera, shown by Home Assistant's own image element, with keys to switch;
  *                             tap two corners on the picture to crop it; the deep camera's perspective; the
  *                             P2's mode, crop, exposure and close light (Home Assistant's own features), and
  *                             its overview camera's thickness or distance (a field) and Measure
@@ -309,12 +309,12 @@ const ROLES = {
   exposure: roleSpec(["exposure"], ["number"], "camera"),
   mode: roleSpec(["processing_mode"], ["select"], "camera"),
   // Who draws a camera's overlays: the integration on the picture, or the
-  // card (see XtoolCamera._drawLooks)
+  // card (see XtoolCameras._drawLooks)
   overlays: roleSpec(["overlays"], ["select"], "camera"),
 };
 const CROP_ROLES = ["crop_width", "crop_height", "crop_center_x", "crop_center_y"];
 
-// The cameras, by translation key, in the order the camera feature offers them
+// The cameras, by translation key, in the order the Cameras feature offers them
 const CAMERAS = [
   ["camera_main", "Main"], ["camera_deep", "Deep"], ["camera_overview", "Overview"], ["camera_closeup", "Close"],
   ["camera_far", "Far"], ["camera_near", "Near"], ["camera_side", "Side"], ["camera_fire_record", "Fire record"],
@@ -337,7 +337,7 @@ const DEFAULT_OVERLAYS = [
 ];
 
 // The overlays the card can draw over the picture (see
-// XtoolCamera._drawLooks): each overlay switch whose position attribute says
+// XtoolCameras._drawLooks): each overlay switch whose position attribute says
 // where its marks are, by kind (the attribute's key). The integration's
 // style attribute says how it draws them; the card's Overlay styles
 // (overlay_styles, by the overlay's key without overlay_) change that.
@@ -1602,7 +1602,7 @@ function scrub(el, { pulls, change, done, tap = false }) {
 
 // The laser's position being slid, before it is set: { "<x entity>|<y
 // entity>": [x, y] }, and an event on TARGETS when it changes (the camera
-// draws it, see XtoolCamera._drawTarget)
+// draws it, see XtoolCameras._drawTarget)
 const PENDING_TARGETS = new Map();
 const TARGETS = new EventTarget();
 function announceTarget(entities, values) {
@@ -1634,7 +1634,7 @@ class FieldGroup {
     this._control = control;
     this.el = document.createElement("div");
     this.el.className = "group";
-    // Its control, for the order chosen (see XtoolCamera._showInputs)
+    // Its control, for the order chosen (see XtoolCameras._showInputs)
     this.el.dataset.control = control.id;
     this._field = document.createElement("label");
     this._field.className = "field";
@@ -2454,13 +2454,13 @@ const CROP_WAIT = 30000;
 // close camera's light), among its keys: each only for a camera that has
 // it, while that camera is shown
 const CAMERA_INPUTS = ["mode", "crop", "exposure", ...lightParts("fill_light_close")];
-// The camera's settings that are keys or fields (see XtoolCamera._buttons),
+// The camera's settings that are keys or fields (see XtoolCameras._buttons),
 // each only for a camera that has it, while that camera is shown: the deep
 // camera's perspective, and the overview camera's thickness or distance
 // and Measure (the P2's)
 const CAMERA_SETTINGS = ["perspective", "thickness_or_distance", "measure_thickness_or_distance"];
-// Controls chosen as one in the camera (see XtoolCamera._chosen) and kept
-// side by side (see XtoolCamera._layout): the thickness or distance with
+// Controls chosen as one in the camera (see XtoolCameras._chosen) and kept
+// side by side (see XtoolCameras._layout): the thickness or distance with
 // Measure. The close fill light and its slider are chosen each on its own,
 // and share a cell when both are chosen.
 const CAMERA_PARTNERS = {
@@ -2469,9 +2469,9 @@ const CAMERA_PARTNERS = {
 const unitOf = (id) => Object.keys(CAMERA_PARTNERS).find((key) => CAMERA_PARTNERS[key].includes(id)) ?? id;
 const PARTNERED = Object.values(CAMERA_PARTNERS).flat();
 
-class XtoolCamera extends XtoolFeature {
-  static label = "Camera";
-  static pickerName = "xTool camera";
+class XtoolCameras extends XtoolFeature {
+  static label = "Cameras";
+  static pickerName = "xTool cameras";
   // The keys to switch cameras (one for each, or one that steps to the next),
   // Custom crop, the camera's settings and its inputs; all but the camera
   // toggle by default
@@ -2514,7 +2514,7 @@ class XtoolCamera extends XtoolFeature {
     const ids = cameras.map((camera) => camera.id);
     const base = super.editor(hass, entityId);
     const split = cameras.length > 1;
-    const every = (id) => XtoolCamera.everyCamera(device, hass, id);
+    const every = (id) => XtoolCameras.everyCamera(device, hass, id);
     const [controlsField] = base.schema.filter((f) => f.name === "controls");
     const listOf = (name, label, helper, keep) => ({
       ...controlsField, name, label, helper,
@@ -2954,7 +2954,7 @@ class XtoolCamera extends XtoolFeature {
 
   /** Whether a camera has one of the controls (a light's slider: only a light with a brightness). */
   _has(camera, id) {
-    return XtoolCamera.has(this._device, this._hass, camera, id);
+    return XtoolCameras.has(this._device, this._hass, camera, id);
   }
 
   /** Whether a camera has a control. */
@@ -2969,7 +2969,7 @@ class XtoolCamera extends XtoolFeature {
 
   /** Whether every camera has a control, with its partners (see CAMERA_PARTNERS): it stays in place on a camera switch. */
   static everyCamera(device, hass, id) {
-    return device.cameras.every((camera) => [id, ...(CAMERA_PARTNERS[id] ?? [])].every((part) => XtoolCamera.has(device, hass, camera, part)));
+    return device.cameras.every((camera) => [id, ...(CAMERA_PARTNERS[id] ?? [])].every((part) => XtoolCameras.has(device, hass, camera, part)));
   }
 
   /**
@@ -3520,7 +3520,7 @@ class XtoolLights extends XtoolElement {
 
   /**
    * The light's control (part: icon or brightness), and its entity; a camera's
-   * own light is in the camera feature, not here.
+   * own light is in the Cameras feature, not here.
    */
   static controlFor(id, device) {
     const { light, part } = lightPart(id) ?? {};
@@ -3719,7 +3719,7 @@ class XtoolFocus extends XtoolFeature {
 
 // The features, in the order Home Assistant's feature picker lists them
 const FEATURES = Object.fromEntries([
-  XtoolJob, XtoolControls, XtoolLights, XtoolSafety, XtoolConfiguration, XtoolCamera, XtoolOverlays, XtoolSafetyproIf2Fan, XtoolFocus, XtoolPosition,
+  XtoolJob, XtoolControls, XtoolLights, XtoolSafety, XtoolConfiguration, XtoolCameras, XtoolOverlays, XtoolSafetyproIf2Fan, XtoolFocus, XtoolPosition,
 ].map((feature) => [feature.type, feature]));
 const FEATURE_TAGS = Object.keys(FEATURES);
 
@@ -4612,7 +4612,7 @@ class XtoolCard extends HTMLElement {
     if (!EDGES.some(([id]) => id === edge)) throw new Error(`Unknown progress edge: ${edge}`);
     this._config = { ...config, style };
     this._ownConfig = config;
-    // The cameras draw the overlays in the card's Overlay styles (see XtoolCamera._drawLooks)
+    // The cameras draw the overlays in the card's Overlay styles (see XtoolCameras._drawLooks)
     TARGETS.dispatchEvent(new Event("change"));
     this._open = config.collapsible === false ? true : this._preview ? PREVIEW_OPEN.get(config.entity) ?? true : this._storedOpen() ?? config.expanded_at_load === true;
     this._wasOff = undefined;
@@ -4712,7 +4712,7 @@ class XtoolCard extends HTMLElement {
   getCardSize() {
     // A camera picture is about five rows tall; every other feature is one
     const features = this._config?.features ?? [];
-    const rows = features.reduce((sum, f) => sum + (f?.type === "custom:xtool-camera" ? 5 : 1), 0);
+    const rows = features.reduce((sum, f) => sum + (f?.type === "custom:xtool-cameras" ? 5 : 1), 0);
     return 1 + (this._open === false ? 0 : rows);
   }
 
@@ -5122,7 +5122,7 @@ class XtoolCard extends HTMLElement {
     const items = [...(group?.shadowRoot?.querySelectorAll("hui-card-feature") ?? [])];
     const inline = (this._config.features_position ?? DEFAULT_FEATURES_POSITION) === "inline";
     const lastWide = this._config.last_feature_full_width !== false;
-    const isCamera = (item) => item.feature?.type === `custom:${XtoolCamera.type}`;
+    const isCamera = (item) => item.feature?.type === `custom:${XtoolCameras.type}`;
     const placed = inline && items.length > 0 && (!lastWide || items.some(isCamera));
     const gap = placed ? parseFloat(getComputedStyle(group).rowGap) || 0 : 0;
     const { places, rows } = placed

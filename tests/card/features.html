@@ -127,7 +127,7 @@
     check("editor notes", !helpers.some((h) => h.startsWith("Custom crop")), "no note on Custom crop under the controls (the picture says what to tap)");
 
     // Crop numbers not known (the laser off): no crop of its own, so Crop is off
-    const unknownCrops = ["unknown", "unavailable"].map((state) => [state, addFeature({ type: "custom:xtool-camera" }, { hass: makeHass(Object.fromEntries(
+    const unknownCrops = ["unknown", "unavailable"].map((state) => [state, addFeature({ type: "custom:xtool-cameras" }, { hass: makeHass(Object.fromEntries(
       ["width", "height", "center_x", "center_y"].map((side) => [`number.f2_main_crop_${side}`, state]))) })]);
     await wait(60);
     for (const [state, unknownCrop] of unknownCrops) {
@@ -449,7 +449,7 @@
 
     // Camera: Home Assistant's own image element, with buttons to switch cameras
     hass = makeHass();
-    const camera = addFeature({ type: "custom:xtool-camera", show: "names" }, { hass });
+    const camera = addFeature({ type: "custom:xtool-cameras", show: "names" }, { hass });
     await wait(80);
     const image = camera.shadowRoot.querySelector(".shot hui-image");
     check("camera", image?.cameraImage === "camera.f2_main" && image.entity === "camera.f2_main" && image.cameraView === "auto" && image.hass === hass,
@@ -474,13 +474,13 @@
     camera.addEventListener("hass-more-info", (ev) => (opened = ev.detail.entityId));
     camera.shadowRoot.querySelector(".shot").click();
     check("camera", opened === "camera.f2_deep", "a tap opens the camera");
-    const live = addFeature({ type: "custom:xtool-camera", show: "names", camera: "deep", camera_view: "live", controls: ["custom_crop", "perspective"] }, { hass });
+    const live = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "deep", camera_view: "live", controls: ["custom_crop", "perspective"] }, { hass });
     await wait(80);
     check("camera, live", live.shadowRoot.querySelector("hui-image").cameraView === "live" && live.shadowRoot.querySelector("hui-image").cameraImage === "camera.f2_deep"
       && topKeys(live).map((k) => k.dataset.key).join() === "perspective", "the chosen camera, live, without camera buttons (its perspective stays)");
 
     const p2Hass = makeHass();
-    const p2Camera = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const p2Camera = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     const inputsOf = (feature) => [...feature.shadowRoot.querySelectorAll(".line > .slide hui-card-feature")]
       .map((f) => `${f.feature.type}${f.feature.style ? `:${f.feature.style}` : ""}=${f.context.entity_id}`).join();
@@ -529,7 +529,7 @@
       "the fill light's slider stays beside its icon");
     // A phone's width: every camera's controls (the camera keys, Crop and Exposure) take the top row alone, in the order chosen,
     // in its two halves (never across the middle), every item shown and inside its half
-    const phone = addFeature({ type: "custom:xtool-camera", show: "icons", camera: "overview",
+    const phone = addFeature({ type: "custom:xtool-cameras", show: "icons", camera: "overview",
       controls: ["camera_toggle", "custom_crop", "crop", "exposure", "thickness_or_distance", "mode", "fill_light_close"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     phone.parentElement.style.width = "350px";
     await wait(80);
@@ -548,7 +548,7 @@
       && phoneLines.slice(2).every((l) => l.getBoundingClientRect().top > topLeft.getBoundingClientRect().bottom),
       `the top row: the camera keys | Crop and Exposure, each in its half; the rest below (${phoneLines.map((l) => `${entityOf(l)}:${Math.round(l.getBoundingClientRect().width)}@${Math.round(l.getBoundingClientRect().top)}`).join(", ")})`);
     phone.parentElement.remove();
-    const sorted = addFeature({ type: "custom:xtool-camera", show: "icons", camera: "overview",
+    const sorted = addFeature({ type: "custom:xtool-cameras", show: "icons", camera: "overview",
       controls: ["exposure", "camera_toggle", "crop", "mode", "custom_crop"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     sorted.parentElement.style.width = "350px";
     await wait(80);
@@ -572,12 +572,12 @@
     const p2Images = [...p2Camera.shadowRoot.querySelectorAll(".shot hui-image")];
     check("P2 camera, switch", p2Images.length === 1 && p2Images[0].cameraImage === "camera.p2_overview" && p2Images[0].loads === 1,
       "the overview camera shows in one image, which fetches a photo");
-    check("P2 camera", window.customCardFeatures.find((f) => f.type === "xtool-camera").isSupported(p2Hass, { entity_id: "sensor.p2_status" }),
+    check("P2 camera", window.customCardFeatures.find((f) => f.type === "xtool-cameras").isSupported(p2Hass, { entity_id: "sensor.p2_status" }),
       "the P2 camera is offered by the feature picker");
     const p2Options = document.createElement("xtool-feature-editor");
     p2Options.hass = p2Hass;
     p2Options.context = { entity_id: "sensor.p2_status" };
-    p2Options.setConfig({ type: "custom:xtool-camera" });
+    p2Options.setConfig({ type: "custom:xtool-cameras" });
     const p2Form = p2Options.querySelector("ha-form");
     const p2List = (name) => p2Form.schema.find((f) => f.name === name);
     const labelsOf = (name) => p2List(name).selector.select.options.map((o) => o.label).join();
@@ -586,21 +586,21 @@
       && p2Form.data.all_cameras.join() === "camera_buttons,custom_crop,crop,exposure" && p2Form.data.per_camera.join() === "thickness_or_distance,mode,fill_light_close,fill_light_close_brightness"
       && p2Form.schema.find((f) => f.name === "camera").selector.select.options.map((o) => o.label).join() === "Overview camera,Close camera",
       `the controls to choose and order, by their entities' names (${labelsOf("all_cameras")} | ${labelsOf("per_camera")})`);
-    const onlyMode = addFeature({ type: "custom:xtool-camera", show: "names", controls: ["exposure", "mode"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const onlyMode = addFeature({ type: "custom:xtool-cameras", show: "names", controls: ["exposure", "mode"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", keysOf(onlyMode).length === 0
       && inputsOf(onlyMode) === "numeric-input:slider=number.p2_overview_exposure,select-options=select.p2_mode", "only the controls chosen, in the order chosen");
-    const onlyIcon = addFeature({ type: "custom:xtool-camera", show: "names", camera: "close", controls: ["fill_light_close"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const onlyIcon = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "close", controls: ["fill_light_close"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", closeIcon(onlyIcon) && inputsOf(onlyIcon) === "", "the close fill light's icon is a choice of its own, without its slider");
-    const onlySlider = addFeature({ type: "custom:xtool-camera", show: "names", camera: "close", controls: ["fill_light_close_brightness"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const onlySlider = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "close", controls: ["fill_light_close_brightness"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", !closeIcon(onlySlider) && inputsOf(onlySlider) === "light-brightness=light.p2_close_light", "and its slider, without its icon");
-    const bothParts = addFeature({ type: "custom:xtool-camera", show: "names", camera: "close", controls: ["fill_light_close", "fill_light_close_brightness"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const bothParts = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "close", controls: ["fill_light_close", "fill_light_close_brightness"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", closeIcon(bothParts)?.parentElement === bothParts.shadowRoot.querySelector(".line > .slide")?.parentElement,
       "both chosen: the icon and its slider share one cell");
-    const onlyThickness = addFeature({ type: "custom:xtool-camera", show: "names", controls: ["thickness_or_distance"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const onlyThickness = addFeature({ type: "custom:xtool-cameras", show: "names", controls: ["thickness_or_distance"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", !!keyNamed(onlyThickness, "measure_thickness_or_distance") && !!onlyThickness.shadowRoot.querySelector('[data-control="thickness_or_distance"]'),
       "Thickness or distance is one choice: the field and Measure");
@@ -627,7 +627,7 @@
     };
     for (const kind of ["touch", "mouse"]) {
       const tapHass = makeHass();
-      const tapper = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: tapHass, entityId: "sensor.p2_status" });
+      const tapper = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "overview" }, { hass: tapHass, entityId: "sensor.p2_status" });
       await wait(80);
       const shot = tapper.shadowRoot.querySelector(".shot");
       let infos = 0;
@@ -678,7 +678,7 @@
 
     // The target: while the position is slid, and the Laser target overlay is on
     const targetHass = makeHass({ "switch.p2_overview_target": "on" });
-    const targetCamera = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: targetHass, entityId: "sensor.p2_status" });
+    const targetCamera = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "overview" }, { hass: targetHass, entityId: "sensor.p2_status" });
     const targetPosition = addFeature({ type: "custom:xtool-position", show: "names" }, { hass: targetHass, entityId: "sensor.p2_status" });
     await wait(80);
     const target = targetCamera.shadowRoot.querySelector(".shot svg.target");
@@ -708,7 +708,7 @@
 
     // Hold: on a camera with a Laser target overlay, a hold sets the laser's position to the held point
     const holdHass = makeHass();
-    const holder = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: holdHass, entityId: "sensor.p2_status" });
+    const holder = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "overview" }, { hass: holdHass, entityId: "sensor.p2_status" });
     await wait(80);
     let holdOpened = 0;
     holder.addEventListener("hass-more-info", () => holdOpened++);
@@ -728,7 +728,7 @@
     holdShot.dispatchEvent(new PointerEvent("pointerup", { ...held, pointerId: 12 }));
     holdShot.dispatchEvent(new MouseEvent("click", held));
     check("hold", holdOpened === 1 && holdHass.calls.filter((c) => c.service === "set_value").length === 2, "a short tap still opens the camera");
-    const closeHolder = addFeature({ type: "custom:xtool-camera", show: "names", camera: "close" }, { hass: holdHass, entityId: "sensor.p2_status" });
+    const closeHolder = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "close" }, { hass: holdHass, entityId: "sensor.p2_status" });
     await wait(80);
     const closeShot = closeHolder.shadowRoot.querySelector(".shot");
     // Both at once: a press that moves, and a hold on a camera without a Laser target overlay
@@ -742,7 +742,7 @@
       "a press that moves is not a hold, and a camera without a Laser target overlay takes no hold");
 
     // P2 crop: tap two corners on the overview picture; the work area measured from its back left corner
-    const p2Crop = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    const p2Crop = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "overview" }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(80);
     const p2Shot = p2Crop.shadowRoot.querySelector(".shot");
     const p2Img = p2Crop.shadowRoot.querySelector(".shot hui-image:not([hidden])").shadowRoot.querySelector("img");
@@ -769,7 +769,7 @@
     p2Crop.hass = makeHass({ "number.p2_overview_crop_width": "400", "select.p2_overview_crop": "process_on_slats" });
     await wait(20);
     check("P2 crop", keyNamed(p2Crop, "custom_crop").getAttribute("aria-pressed") === "false", "a crop preset chosen leaves Crop off");
-    const customAtLoad = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview" },
+    const customAtLoad = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "overview" },
       { hass: makeHass({ "number.p2_overview_crop_width": "300", "select.p2_overview_crop": "custom" }), entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 crop", keyNamed(customAtLoad, "custom_crop").getAttribute("aria-pressed") === "true", "a crop of its own (Custom) at load: Crop is on");
@@ -807,7 +807,7 @@
       && !window.customCardFeatures.find((f) => f.type === "xtool-overlays").isSupported(p2Hass, { entity_id: "sensor.f2_status" }),
       "offered for a laser whose cameras have overlays");
 
-    const offCamera = addFeature({ type: "custom:xtool-camera", show: "names" }, { hass: makeHass({ "sensor.f2_status": "off" }) });
+    const offCamera = addFeature({ type: "custom:xtool-cameras", show: "names" }, { hass: makeHass({ "sensor.f2_status": "off" }) });
     await wait(60);
     check("camera, off", offCamera.style.display === "" && offCamera.shadowRoot.querySelector(".shot hui-image")?.cameraImage === "camera.f2_main",
       "kept in place while the laser is off: Home Assistant's image element shows the camera as it is");
@@ -816,29 +816,29 @@
     const imageLoad = (feature) => feature.shadowRoot.querySelector("hui-image").shadowRoot.querySelector("img").dispatchEvent(new Event("load"));
     imageLoad(camera);
     check("camera, time", !!camera.shadowRoot.querySelector(".time hui-timestamp-display"), "the last updated time by default");
-    const untimed = addFeature({ type: "custom:xtool-camera", show_last_updated: false }, { hass });
+    const untimed = addFeature({ type: "custom:xtool-cameras", show_last_updated: false }, { hass });
     await wait(60);
     imageLoad(untimed);
     check("camera, time", untimed.shadowRoot.querySelector(".time").textContent === "", "none when turned off");
-    const stamped = addFeature({ type: "custom:xtool-camera", show: "names", show_last_updated: true }, { hass });
+    const stamped = addFeature({ type: "custom:xtool-cameras", show: "names", show_last_updated: true }, { hass });
     check("camera, time", !stamped.shadowRoot.querySelector(".time hui-timestamp-display"), "no time before a picture arrives");
     await wait(60);
     const element = stamped.shadowRoot.querySelector(".time hui-timestamp-display");
     check("camera, time", !!element && element.ts instanceof Date && element.format === undefined && element.hass === hass
       && stamped.shadowRoot.querySelector(".time").textContent === "Updated ", "Home Assistant's timestamp display, in its default format outside the xTool card");
-    const offTime = addFeature({ type: "custom:xtool-camera", show: "names", show_last_updated: true }, { hass: makeHass({ "sensor.f2_status": "off" }) });
+    const offTime = addFeature({ type: "custom:xtool-cameras", show: "names", show_last_updated: true }, { hass: makeHass({ "sensor.f2_status": "off" }) });
     await wait(60);
     imageLoad(offTime);
     check("camera, time", !offTime.shadowRoot.querySelector(".time hui-timestamp-display"),
       "while the laser is off, a picture Home Assistant reloads is not a new one: no time");
-    const liveTime = addFeature({ type: "custom:xtool-camera", show: "names", camera_view: "live", show_last_updated: true }, { hass });
+    const liveTime = addFeature({ type: "custom:xtool-cameras", show: "names", camera_view: "live", show_last_updated: true }, { hass });
     await wait(60);
     imageLoad(liveTime);
     check("camera, time", liveTime.shadowRoot.querySelector(".time").textContent === "", "no updated time on a live stream");
     const cameraOptions = document.createElement("xtool-feature-editor");
     cameraOptions.hass = hass;
     cameraOptions.context = { entity_id: "sensor.f2_status" };
-    cameraOptions.setConfig({ type: "custom:xtool-camera", show_last_updated: true });
+    cameraOptions.setConfig({ type: "custom:xtool-cameras", show_last_updated: true });
     const cameraForm = cameraOptions.querySelector("ha-form");
     check("camera, options", !cameraForm.schema.some((s) => s.name === "time_format") && cameraForm.schema.find((s) => s.name === "show_last_updated").helper.includes("Time format"),
       "no Time format of its own: the card's is used");
@@ -847,7 +847,7 @@
 
     // Crop: the Crop button makes a tap mark the top-left corner, then the bottom-right corner
     hass = makeHass();
-    const cropped = addFeature({ type: "custom:xtool-camera", show: "names" }, { hass });
+    const cropped = addFeature({ type: "custom:xtool-cameras", show: "names" }, { hass });
     await wait(80);
     check("camera, crop", !cropped.shadowRoot.querySelector(".controls, hui-card-feature"), "no crop number controls");
     const shot = cropped.shadowRoot.querySelector(".shot");
@@ -858,7 +858,7 @@
     };
     let cropOpened;
     cropped.addEventListener("hass-more-info", (ev) => (cropOpened = ev.detail.entityId));
-    const iconsOf = addFeature({ type: "custom:xtool-camera", show: "names", show: "icons" }, { hass });
+    const iconsOf = addFeature({ type: "custom:xtool-cameras", show: "names", show: "icons" }, { hass });
     await wait(60);
     const iconOf = (key) => keyNamed(iconsOf, key)?.querySelector("ha-state-icon")?.stateObj?.entity_id ?? keyNamed(iconsOf, key)?.querySelector("ha-icon")?.icon;
     check("camera, crop", keysOf(cropped).map((k) => k.dataset.key).join() === "camera.f2_main,camera.f2_deep,custom_crop" && !keyNamed(cropped, "open")
@@ -901,19 +901,19 @@
     keyNamed(cropped, "custom_crop").click();
     check("camera, crop", JSON.stringify(lastCall(croppedHass).data) === JSON.stringify({ crop_width: 200, crop_height: 200, crop_center_x: 0, crop_center_y: 0, entity_id: "camera.f2_main" }),
       "turning Crop off shows it all: 200 x 200 mm, centered");
-    const choosing = addFeature({ type: "custom:xtool-camera", show: "names" }, { hass: makeHass() });
+    const choosing = addFeature({ type: "custom:xtool-cameras", show: "names" }, { hass: makeHass() });
     await wait(80);
     keyNamed(choosing, "custom_crop").click();
     keyNamed(choosing, "custom_crop").click();
     check("camera, crop", choosing._hass.calls.length === 0 && keyNamed(choosing, "custom_crop").getAttribute("aria-pressed") === "false"
       && choosing.shadowRoot.querySelector(".hint").textContent === "", "turning Crop off before any crop only stops choosing");
     const wholeHass = makeHass({ "number.f2_main_crop_width": "0" });
-    const whole = addFeature({ type: "custom:xtool-camera", show: "names" }, { hass: wholeHass });
+    const whole = addFeature({ type: "custom:xtool-cameras", show: "names" }, { hass: wholeHass });
     await wait(80);
     check("camera, crop", keyNamed(whole, "custom_crop").getAttribute("aria-pressed") === "true", "a whole-photo side (0) is a crop in effect");
     keyNamed(whole, "custom_crop").click();
     check("camera, crop", lastCall(wholeHass)?.data.crop_width === 200, "turning it off shows the 200 x 200 mm area");
-    const noTap = addFeature({ type: "custom:xtool-camera", show: "names", controls: ["camera_buttons", "perspective"] }, { hass });
+    const noTap = addFeature({ type: "custom:xtool-cameras", show: "names", controls: ["camera_buttons", "perspective"] }, { hass });
     await wait(80);
     let noTapOpened;
     noTap.addEventListener("hass-more-info", (ev) => (noTapOpened = ev.detail.entityId));
@@ -935,18 +935,18 @@
     const mainImages = [...cropped.shadowRoot.querySelectorAll(".shot hui-image")];
     check("camera, switch", mainImages.length === 1 && mainImages[0].cameraImage === "camera.f2_main" && mainImages[0].loads === 1,
       "switching back: the main camera in one image, which fetches a photo");
-    const iconCamera = addFeature({ type: "custom:xtool-camera", camera: "deep", show: "icons" }, { hass });
+    const iconCamera = addFeature({ type: "custom:xtool-cameras", camera: "deep", show: "icons" }, { hass });
     await wait(60);
     check("camera, show", keysOf(iconCamera).length === 3 && keyNamed(iconCamera, "perspective").querySelector("ha-state-icon").stateObj.entity_id === "select.f2_deep_perspective"
       && keysOf(iconCamera).every((k) => k.querySelector("ha-state-icon"))
       && keysOf(iconCamera).every((k) => !k.querySelector("span")),
       "Show: Icons, for the camera buttons and the perspective (its entity's icon), as for every other key");
-    const namedCamera = addFeature({ type: "custom:xtool-camera", camera: "deep", show: "names" }, { hass });
+    const namedCamera = addFeature({ type: "custom:xtool-cameras", camera: "deep", show: "names" }, { hass });
     await wait(60);
     check("camera, show", keysOf(namedCamera).map((k) => k.textContent).slice(0, 2).join() === "Main,Deep" && keysOf(namedCamera).slice(0, 2).every((k) => !k.querySelector("ha-state-icon")),
       "Show: Names, for the camera buttons too");
     // The F2 Ultra UV: the camera toggle (every camera) and one key per camera share one row
-    const oneRow = addFeature({ type: "custom:xtool-camera", camera: "main", controls: ["camera_toggle", "custom_crop", "perspective"] }, { hass });
+    const oneRow = addFeature({ type: "custom:xtool-cameras", camera: "main", controls: ["camera_toggle", "custom_crop", "perspective"] }, { hass });
     await wait(80);
     const rowOf = () => {
       const lines = [...oneRow.shadowRoot.querySelectorAll(".sections > .line")].map((l) => l.getBoundingClientRect());
@@ -961,7 +961,7 @@
     check("camera, one row", mainRow.oneRow && mainRow.keys === "camera_toggle,custom_crop" && deepRow.oneRow && deepRow.keys === "camera_toggle,perspective"
       && Math.abs(mainRow.lines[1].left - deepRow.lines[1].left) < 1,
       `every camera's toggle on the left, the shown camera's own key on the right, in one row for both cameras (${mainRow.keys} | ${deepRow.keys})`);
-    cameraOptions.setConfig({ type: "custom:xtool-camera" });
+    cameraOptions.setConfig({ type: "custom:xtool-cameras" });
     const cameraChoices = cameraOptions.querySelector("ha-form").schema.find((f) => f.name === "camera").selector.select.options.map((o) => o.value);
     check("camera, options", cameraChoices.join() === "main,deep" && cameraOptions.querySelector("ha-form").data.camera === "main",
       `the camera by its id, not its name (${cameraChoices.join(", ")})`);
@@ -974,7 +974,7 @@
       `the camera buttons, the camera toggle, Crop and the perspective, chosen and ordered, all but the toggle by default (${cameraNames.join(", ")})`);
 
     // Home Assistant's image stops for good after the connection drops and returns: each camera's image is made anew
-    const renewed = addFeature({ type: "custom:xtool-camera", show: "names" }, { hass: makeHass() });
+    const renewed = addFeature({ type: "custom:xtool-cameras", show: "names" }, { hass: makeHass() });
     await wait(80);
     const firstImage = renewed.shadowRoot.querySelector(".shot hui-image");
     const dropped = makeHass();
@@ -1344,7 +1344,7 @@
 
     // Measure, in the overview camera: the Measure key and the thickness or distance in a field, to type in or slide on
     hass = makeHass();
-    let measure = addFeature({ type: "custom:xtool-camera", show: "names", camera: "overview",
+    let measure = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "overview",
       controls: ["camera_buttons", "measure_thickness_or_distance", "thickness_or_distance"] }, { hass, entityId: "sensor.p2_status" });
     await wait(60);
     const thickness = () => measure.shadowRoot.querySelector(".field input");
@@ -1408,7 +1408,7 @@
 
     // Camera: what every camera has first, then the camera's own, each in the order chosen, line by line
     const orderHass = makeHass();
-    const ordered = addFeature({ type: "custom:xtool-camera", camera: "overview", controls: ["mode", "camera_buttons", "exposure", "custom_crop"] }, { hass: orderHass, entityId: "sensor.p2_status" });
+    const ordered = addFeature({ type: "custom:xtool-cameras", camera: "overview", controls: ["mode", "camera_buttons", "exposure", "custom_crop"] }, { hass: orderHass, entityId: "sensor.p2_status" });
     await wait(60);
     const orderOf = (feature) => [...feature.shadowRoot.querySelectorAll(".line > *")]
       .map((el) => el.dataset.control ?? el.querySelector(":scope > hui-card-feature")?.context.entity_id).join();
@@ -1417,7 +1417,7 @@
     const boxes = [...ordered.shadowRoot.querySelectorAll(".line > *")].map((el) => el.getBoundingClientRect());
     check("camera, order", boxes.every((b, i) => i === 0 || b.top > boxes[i - 1].top + 1 || b.left > boxes[i - 1].left),
       "left to right, then on the next line");
-    const toggled = addFeature({ type: "custom:xtool-camera", camera: "overview", show: "names", controls: ["camera_toggle"] }, { hass: orderHass, entityId: "sensor.p2_status" });
+    const toggled = addFeature({ type: "custom:xtool-cameras", camera: "overview", show: "names", controls: ["camera_toggle"] }, { hass: orderHass, entityId: "sensor.p2_status" });
     await wait(60);
     const toggleKey = () => keyNamed(toggled, "camera_toggle");
     check("camera toggle", keysOf(toggled).length === 1 && toggleKey().textContent === "Overview" && toggleKey().title === "Overview camera. Tap for Close camera",
@@ -1456,7 +1456,7 @@
     await wait(50);
     check("heights", heights(tall).every((h) => h === 42) && heights(inline).every((h) => h === 36),
       `each item as tall as the feature height: 42 px, or 36 px beside the title (${heights(tall).join(", ")}; ${heights(inline).join(", ")})`);
-    const cameraRow = addFeature({ type: "custom:xtool-camera", camera: "overview", controls: ["custom_crop", "thickness_or_distance", "measure_thickness_or_distance"] },
+    const cameraRow = addFeature({ type: "custom:xtool-cameras", camera: "overview", controls: ["custom_crop", "thickness_or_distance", "measure_thickness_or_distance"] },
       { hass: makeHass(), entityId: "sensor.p2_status" });
     await wait(80);
     check("heights", heights(cameraRow).length === 3 && heights(cameraRow).every((h) => h === 42),
@@ -1464,7 +1464,7 @@
 
     // The features are offered only for lasers that have their parts
     const offered = Object.fromEntries(window.customCardFeatures.map((f) => [f.type, f.isSupported(makeHass(), { entity_id: "sensor.p2_status" })]));
-    check("feature picker", offered["xtool-job"] && offered["xtool-controls"] && offered["xtool-lights"] && offered["xtool-overlays"] && !offered["xtool-safetypro-if2-fan"] && offered["xtool-position"] && !("xtool-measure" in offered) && offered["xtool-camera"] && !offered["xtool-focus"],
+    check("feature picker", offered["xtool-job"] && offered["xtool-controls"] && offered["xtool-lights"] && offered["xtool-overlays"] && !offered["xtool-safetypro-if2-fan"] && offered["xtool-position"] && !("xtool-measure" in offered) && offered["xtool-cameras"] && !offered["xtool-focus"],
       `offered for the P2: ${Object.entries(offered).filter(([, v]) => v).map(([k]) => k).join(", ")}`);
   });
 </script>

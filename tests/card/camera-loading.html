@@ -13,7 +13,7 @@
 <pre id="report" data-result="running">running</pre>
 <script>
   runChecks(async () => {
-    const camera = addFeature({ type: "custom:xtool-camera" }, { hass: makeHass() });
+    const camera = addFeature({ type: "custom:xtool-cameras" }, { hass: makeHass() });
     await wait(150);
     const asked = window.cardHelperCalls.find((c) => c.type === "picture-entity");
     check("camera loading", asked?.entity === "camera.f2_main", "the card asks the card helpers for a picture card, which loads Home Assistant's image element");

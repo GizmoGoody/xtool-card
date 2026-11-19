@@ -73,7 +73,7 @@ type: custom:xtool-card
 entity: sensor.f2_ultra_uv_status
 features:
   - type: custom:xtool-job
-  - type: custom:xtool-camera
+  - type: custom:xtool-cameras
     full_width: true
 ```
 
@@ -131,7 +131,7 @@ Add them like any tile feature, under **Features** in the editor. Only the featu
 | Configuration | `custom:xtool-configuration` | The same keys for the laser's configuration entities. |
 | Safety | `custom:xtool-safety` | Flame alarm, the stop when opened or moved checks, safety key, lid, baseplate and access control. |
 | Lights | `custom:xtool-lights` | The fill lights with their brightness. |
-| Camera | `custom:xtool-camera` | The camera picture with its controls: camera switch, crop, perspective, fill lights and more. Options: `camera`, `camera_view` (`auto` or `live`), `show_last_updated` (`true`) and `full_width` (`true`). |
+| Cameras | `custom:xtool-cameras` | The camera picture with its controls: camera switch, crop, perspective, fill lights and more. Options: `camera`, `camera_view` (`auto` or `live`), `show_last_updated` (`true`) and `full_width` (`true`). |
 | Overlays | `custom:xtool-overlays` | The camera overlay switches. |
 | Position | `custom:xtool-position` | The laser head position, Move laser and Home laser. |
 | Focus | `custom:xtool-focus` | Autofocus and the focus height. |
