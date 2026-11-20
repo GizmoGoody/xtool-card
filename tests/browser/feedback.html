@@ -1,0 +1,100 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>xTool card: feedback from testing in Home Assistant</title>
+<style>
+  body { margin: 0; padding: 16px; background: #111; color: #ddd; font: 13px Roboto, "Segoe UI", sans-serif; }
+  #cards { display: flex; flex-wrap: wrap; gap: 12px 20px; }
+  figure { margin: 0; } figcaption { margin-bottom: 4px; color: #aaa; }
+  pre { white-space: pre-wrap; }
+</style>
+<script>
+  // What the card prints to the console when it loads (its badge)
+  window.consoleLines = [];
+  for (const name of ["info", "log", "groupCollapsed", "group"]) {
+    const original = console[name].bind(console);
+    console[name] = (...args) => {
+      window.consoleLines.push(args.map(String).join(" "));
+      original(...args);
+    };
+  }
+</script>
+<script src="stand-ins.js"></script>
+<script src="load.js"></script>
+<script src="checks.js"></script>
+<div id="cards"></div>
+<pre id="report" data-result="running">running</pre>
+<script>
+  // Every feature with all of its controls, as on a full card
+  const F2_FEATURES = ["job", "controls", "lights", "focus", "safetypro-if2-fan", "cameras", "safety", "configuration"];
+  const P2_FEATURES = ["controls", "lights", "position", "cameras", "overlays", "safety", "configuration"];
+
+  // A row's items as laid out: a group drawn with display: contents gives its children
+  const itemsOf = (row) => [...row.children].flatMap((c) => (getComputedStyle(c).display === "contents" ? itemsOf(c) : [c])).filter((c) => c.offsetWidth);
+
+  runChecks(async () => {
+    // B-1: the console badge is GizmoGoody's, with the Discussions link
+    const badge = consoleLines.join("\n");
+    check("B-1", badge.includes("🔦 xTool Card") && badge.includes("by GizmoGoody"), "the console badge: 🔦 xTool Card, by GizmoGoody");
+    check("B-1", badge.includes("https://github.com/GizmoGoody/xtool-card/discussions") && !badge.includes("/issues"),
+      "its last link is the repository's Discussions, where feedback goes");
+
+    // N-1: names in the pickers
+    const card = (window.customCards ?? []).find((c) => c.type === "xtool-card");
+    check("N-1", card?.name === "xTool", `the card is called xTool in the card picker (${card?.name})`);
+    const features = (window.customCardFeatures ?? []).filter((f) => f.type.startsWith("xtool-"));
+    const oneWord = features.filter((f) => !/^xtool-[a-z0-9]+$/.test(f.type) && f.type !== "xtool-safetypro-if2-fan");
+    check("N-1", features.length > 0 && oneWord.length === 0, `feature types are one word, as in their names (${oneWord.map((f) => f.type).join(", ") || "all"})`);
+    check("N-1", features.some((f) => f.type === "xtool-cameras") && !features.some((f) => f.type === "xtool-camera"), "the camera feature is Cameras: custom:xtool-cameras");
+
+    // R-1, R-2: rows never wrap or overflow, and fill their feature, at phone width too
+    for (const [width, label] of [[420, "desktop"], [340, "phone"]]) {
+      for (const [entity, list, hass] of [["sensor.f2_status", F2_FEATURES, makeHass()], ["sensor.p2_status", P2_FEATURES, makeHass({ "sensor.p2_status": "idle" })]]) {
+        for (const name of list) {
+          const feature = addFeature({ type: `custom:xtool-${name}` }, { hass, entityId: entity });
+          feature.parentElement.style.width = `${width}px`;
+        }
+      }
+    }
+    await wait(300);
+    const rows = [...document.querySelectorAll("#cards > div > *")].filter((el) => el.tagName.startsWith("XTOOL-"))
+      .flatMap((el) => [...el.shadowRoot.querySelectorAll(".row")].filter((r) => r.offsetWidth)
+        // The camera's controls are two lines by design: All cameras above, Per camera below; each line is a row
+        .flatMap((row) => (row.classList.contains("sections") ? [...row.querySelectorAll(":scope > .line")] : [row]).map((row) => ({ el, row }))));
+    const wraps = rows.filter(({ row }) => {
+      const items = itemsOf(row);
+      return items.some((c) => Math.abs(c.offsetTop - items[0].offsetTop) > 2);
+    });
+    check("R-1", rows.length > 0 && wraps.length === 0, `no row wraps into a second line (${wraps.map(({ el }) => el.tagName.toLowerCase()).join(", ") || `${rows.length} rows`})`);
+    const overflows = rows.filter(({ row }) => row.scrollWidth > row.clientWidth + 1);
+    check("R-1", overflows.length === 0, `no row overflows its feature (${overflows.map(({ el }) => el.tagName.toLowerCase()).join(", ") || "none"})`);
+    const narrow = rows.flatMap(({ el, row }) => [...row.querySelectorAll("[data-key]")].filter((k) => k.offsetWidth && k.offsetWidth < 35.5)
+      .map((k) => `${el.tagName.toLowerCase()} ${k.dataset.key} ${k.offsetWidth}px`));
+    check("R-2", narrow.length === 0, `no key is narrower than an icon, 36 px (${narrow.slice(0, 4).join(", ") || "none"})`);
+    const gaps = rows.filter(({ row }) => {
+      const items = itemsOf(row);
+      if (!items.length) return false;
+      const right = Math.max(...items.map((c) => c.offsetLeft + c.offsetWidth)) - row.offsetLeft;
+      return row.clientWidth - right > 2;
+    });
+    check("R-2", gaps.length === 0, `every row is filled to its end (${gaps.map(({ el, row }) => `${el.tagName.toLowerCase()} ${row.clientWidth}px: ${itemsOf(row).map((c) => `${c.dataset.key ?? c.className} ${c.offsetLeft - row.offsetLeft}+${c.offsetWidth}`).join(" ")}`).join("; ") || "all"})`);
+
+    // T-1: every control says its name when hovered, sliders included
+    const untitled = rows.flatMap(({ el, row }) => itemsOf(row)
+      .filter((k) => !(k.title || k.getAttribute("aria-label") || k.querySelector("[title]")))
+      .map((k) => `${el.tagName.toLowerCase()} ${k.dataset.key ?? k.className}`));
+    check("T-1", untitled.length === 0, `every key, field and slider has a tooltip (${untitled.slice(0, 6).join(", ") || "all"})`);
+
+    // E-1: editor wording
+    const editor = document.createElement("xtool-card-editor");
+    editor.hass = makeHass();
+    editor.setConfig({ type: "custom:xtool-card", entity: "sensor.f2_status" });
+    document.getElementById("cards").append(editor);
+    await wait(80);
+    const schema = JSON.stringify(deep(editor, "ha-form").map((f) => f.schema));
+    const labelled = deep(editor, "ha-form").map((f) => {
+      try { return JSON.stringify((f.schema ?? []).map((s) => f.computeLabel?.(s))) + JSON.stringify((f.schema ?? []).map((s) => f.computeHelper?.(s))); } catch { return ""; }
+    }).join(" ");
+    const words = schema + labelled;
+    check("E-1", !/in priority order/i.test(words), "no \"(in priority order)\": the description says so");
+  });
+</script>

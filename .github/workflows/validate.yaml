@@ -20,12 +20,3 @@ jobs:
           category: "plugin"
           # Issues are off while feedback goes to Discussions; HACS needs them only for its default list
           ignore: "issues"
-
-  test-card:
-    runs-on: "ubuntu-latest"
-    steps:
-      - uses: "actions/checkout@v4"
-      - name: Install Chromium
-        uses: "browser-actions/setup-chrome@v1"
-      - name: Run card tests
-        run: python tests/card/run_card_tests.py

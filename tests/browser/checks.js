@@ -41,6 +41,17 @@ window.deep = (el, selector) => {
  */
 window.addCard = (title, config, options) => addDefaultCard(title, { style: "none", expanded_at_load: true, ...config }, options);
 
+/** The config each card was last given by the checks (the card's own copy is private). */
+const configs = new WeakMap();
+window.configOf = (card) => configs.get(card);
+
+/** Give a card its config with some options changed, as the editor does. */
+window.reconfigure = (card, changes) => {
+  const full = { ...configs.get(card), ...changes };
+  card.setConfig(full);
+  configs.set(card, full);
+};
+
 /** Add an xTool card to the page, with the card's own defaults. */
 window.addDefaultCard = (title, config, { height = 120, width = 420, hass } = {}) => {
   const figure = document.createElement("figure");
@@ -48,7 +59,9 @@ window.addDefaultCard = (title, config, { height = 120, width = 420, hass } = {}
   const cell = document.createElement("div");
   cell.style.cssText = `width:${width}px;height:${typeof height === "number" ? `${height}px` : height}`;
   const card = document.createElement("xtool-card");
-  card.setConfig({ type: "custom:xtool-card", entity: "sensor.f2_status", ...config });
+  const full = { type: "custom:xtool-card", entity: "sensor.f2_status", ...config };
+  card.setConfig(full);
+  configs.set(card, full);
   card.hass = hass ?? makeHass();
   cell.append(card);
   figure.append(cell);

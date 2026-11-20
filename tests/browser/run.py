@@ -66,6 +66,7 @@ def run_page(browser: str, page: Path, bundle: Path) -> tuple[str, str]:
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
     root = HERE.parent.parent
     bundle = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "dist" / "xtool-card.js"
     if not bundle.is_file():

@@ -769,8 +769,8 @@
     p2Crop.hass = makeHass({ "number.p2_overview_crop_width": "400", "select.p2_overview_crop": "process_on_slats" });
     await wait(20);
     check("P2 crop", keyNamed(p2Crop, "custom_crop").getAttribute("aria-pressed") === "false", "a crop preset chosen leaves Crop off");
-    const customAtLoad = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "overview" },
-      { hass: makeHass({ "number.p2_overview_crop_width": "300", "select.p2_overview_crop": "custom" }), entityId: "sensor.p2_status" });
+    const customAtLoadHass = makeHass({ "number.p2_overview_crop_width": "300", "select.p2_overview_crop": "custom" });
+    const customAtLoad = addFeature({ type: "custom:xtool-cameras", show: "names", camera: "overview" }, { hass: customAtLoadHass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 crop", keyNamed(customAtLoad, "custom_crop").getAttribute("aria-pressed") === "true", "a crop of its own (Custom) at load: Crop is on");
     keyNamed(customAtLoad, "camera.p2_close").click();
@@ -778,7 +778,7 @@
     check("P2 crop", keyNamed(customAtLoad, "custom_crop").getAttribute("aria-pressed") === "true", "showing the other camera and back: on again for a crop of its own");
     keyNamed(customAtLoad, "custom_crop").click();
     check("P2 crop", keyNamed(customAtLoad, "custom_crop").getAttribute("aria-pressed") === "false"
-      && lastCall(customAtLoad._hass)?.data?.option === "uncropped", "off, with no preset seen: the first preset");
+      && lastCall(customAtLoadHass)?.data?.option === "uncropped", "off, with no preset seen: the first preset");
 
     // Overlays: a key for each overlay switch chosen, of every camera
     const overlays = addFeature({ type: "custom:xtool-overlays", show: "names" }, { hass: p2Hass, entityId: "sensor.p2_status" });
@@ -901,11 +901,12 @@
     keyNamed(cropped, "custom_crop").click();
     check("camera, crop", JSON.stringify(lastCall(croppedHass).data) === JSON.stringify({ crop_width: 200, crop_height: 200, crop_center_x: 0, crop_center_y: 0, entity_id: "camera.f2_main" }),
       "turning Crop off shows it all: 200 x 200 mm, centered");
-    const choosing = addFeature({ type: "custom:xtool-cameras", show: "names" }, { hass: makeHass() });
+    const choosingHass = makeHass();
+    const choosing = addFeature({ type: "custom:xtool-cameras", show: "names" }, { hass: choosingHass });
     await wait(80);
     keyNamed(choosing, "custom_crop").click();
     keyNamed(choosing, "custom_crop").click();
-    check("camera, crop", choosing._hass.calls.length === 0 && keyNamed(choosing, "custom_crop").getAttribute("aria-pressed") === "false"
+    check("camera, crop", choosingHass.calls.length === 0 && keyNamed(choosing, "custom_crop").getAttribute("aria-pressed") === "false"
       && choosing.shadowRoot.querySelector(".hint").textContent === "", "turning Crop off before any crop only stops choosing");
     const wholeHass = makeHass({ "number.f2_main_crop_width": "0" });
     const whole = addFeature({ type: "custom:xtool-cameras", show: "names" }, { hass: wholeHass });
@@ -1136,9 +1137,9 @@
     field().value = "abc";
     field().dispatchEvent(new Event("change"));
     check("focus, typed", hass.calls.length === calls && field().value === "36.1", "something that is not a number is put back");
-    focus = addFeature({ type: "custom:xtool-focus" }, { hass: makeHass({ "number.f2_focus_height": "149.9" }) });
+    const focusHass = makeHass({ "number.f2_focus_height": "149.9" });
+    focus = addFeature({ type: "custom:xtool-focus" }, { hass: focusHass });
     await wait(50);
-    const focusHass = focus._hass;
     release = await slideOn(focus.shadowRoot.querySelector(".row .field"), 300, 0, 150);
     release();
     check("focus", lastCall(focusHass).data.value === 150, "kept within the height's range");
