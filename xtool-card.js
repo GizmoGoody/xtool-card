@@ -70,6 +70,29 @@
  */
 
 const VERSION = "0.1.0-alpha.1";
+
+/*
+ * GizmoGoody console badge: a plain JavaScript copy of printBadge from
+ * GizmoGoody/card-badge v1.0.0 (src/index.ts), because this card has no build
+ * step to bundle the package. Keep it identical to that file, except that the
+ * last link points to Discussions, where this card takes feedback.
+ */
+function printBadge(info) {
+  const NAVY = "#001689";
+  const SILVER = "#9ea1a2";
+  const BASE = "font-family: DejaVu Sans, Verdana, Geneva, sans-serif; padding: 2px 6px; text-shadow: 0 1px 0 rgba(1, 1, 1, 0.3);";
+  const url = `https://github.com/GizmoGoody/${info.repo}`;
+  console.groupCollapsed(
+    `%c${info.icon} ${info.name}%cv${info.version}%c by GizmoGoody`,
+    `${BASE} background-color: ${NAVY}; color: ${SILVER}; border-radius: 999px 0 0 999px; padding-left: 10px;`,
+    `${BASE} background-color: ${SILVER}; color: ${NAVY}; border-radius: 0 999px 999px 0; padding-right: 10px; font-weight: bold;`,
+    "font-style: italic; color: inherit;"
+  );
+  console.log(`%cDescription:%c ${info.description}`, "font-weight: bold;", "font-weight: normal;");
+  console.log(`%cGitHub:%c ${url}`, "font-weight: bold;", "font-weight: normal;");
+  console.log(`%cDiscussions:%c ${url}/discussions`, "font-weight: bold;", "font-weight: normal;");
+  console.groupEnd();
+}
 const DOMAIN = "xtool";
 const CARD_TYPE = "xtool-card";
 const EDITOR_TYPE = "xtool-card-editor";
@@ -5833,5 +5856,11 @@ if (!customElements.get(CARD_TYPE)) {
     preview: true,
     documentationURL: "https://github.com/GizmoGoody/xtool-card#configuration",
   });
-  console.info(`%c XTOOL CARD %c ${VERSION} `, "color: #fff; background: #555; font-weight: bold", "color: #fff; background: #e0681f");
+  printBadge({
+    icon: "🔦",
+    name: "xTool Card",
+    version: VERSION,
+    description: "Status and controls for an xTool laser.",
+    repo: "xtool-card",
+  });
 }
