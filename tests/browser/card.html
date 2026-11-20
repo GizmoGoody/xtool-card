@@ -660,18 +660,6 @@
       check("layout, camera in one column", after.every((p, i) => (p.full ? i === after.length - 1 : p.half && p.right === (i % 2 === 1))) && !overlap(places),
         `${name}: then left and right again (${describe(after)})`);
     }
-    // The rule on its own: a picture 100 px tall, features 42 px tall, a 12 px row gap
-    const rule = featurePlaces([{ camera: true, full: false, height: 100 }, ...Array(6).fill({ camera: false, full: false, height: 42 })], 12, true);
-    check("layout, camera in one column", JSON.stringify(rule.places.map((p) => `${p.column}@${p.row}`)) === JSON.stringify(["1@1 / span 3", "2@1", "2@2", "2@3", "1@4", "2@4", "1 / -1@5"])
-      && rule.rows.join(" ") === "auto auto 1fr auto auto",
-      `beside the picture until the features pass its bottom (42, 96, then 150 px), then left and right again, the last alone across (${rule.places.map((p) => `${p.column}@${p.row}`).join("; ")}; rows ${rule.rows.join(" ")})`);
-    const ruleRight = featurePlaces([{ camera: false, full: false, height: 42 }, { camera: true, full: false, height: 50 },
-      { camera: false, full: false, height: 42 }, { camera: false, full: false, height: 42 }], 12, false);
-    check("layout, camera in one column", ruleRight.places.map((p) => `${p.column}@${p.row}`).join("; ") === "1@1; 2@1 / span 2; 1@2; 1@3",
-      `a camera on the right: the feature left of it is the first beside it; one column for the last, without Last feature full width (${ruleRight.places.map((p) => `${p.column}@${p.row}`).join("; ")})`);
-    const ruleFull = featurePlaces([{ camera: false, full: false, height: 42 }, { camera: true, full: true, height: 200 }, { camera: false, full: false, height: 42 }], 12, true);
-    check("layout, camera full width", ruleFull.places.map((p) => `${p.column}@${p.row}`).join("; ") === "1 / -1@1; 1 / -1@2; 1 / -1@3" && ruleFull.rows.join(" ") === "auto auto auto",
-      `a full-width camera: a feature alone before it, and the last, across too (${ruleFull.places.map((p) => `${p.column}@${p.row}`).join("; ")})`);
 
     // A last feature alone in its row
     check("layout, last feature", describe(placesOf(layouts.odd)) === "controls:left safety:right configuration:full",

@@ -79,7 +79,7 @@ They also find a few parts by their class names. The rewrite keeps these names s
 | ID | Behavior | Checked in |
 | --- | --- | --- |
 | L-1 | Features inline: half width, left and right in the order chosen, none overlapping. Last feature full width (on by default) stretches a last feature alone in its row. Each feature is told how many columns share its row. At the bottom, Home Assistant's one column. | card.html "layout, last feature", "layout, bottom", "layout, core" |
-| L-2 | The camera is full width by default. Without it, the features after it sit beside it, one per row, until they pass the bottom of the picture. A feature alone before a full-width camera takes the full width. | card.html "layout, camera full width", "layout, camera in one column", "layout, camera cells" |
+| L-2 | The camera is full width by default. Without it, the features after it sit beside it, one per row, until they pass the bottom of the picture. A feature alone before a full-width camera takes the full width. | card.html "layout, camera full width", "layout, camera in one column", "layout, camera cells"; unit "featurePlaces" |
 | L-3 | A feature that shows nothing takes no place, and neither does Home Assistant's element around it. | features.html "empty", "focus, inner lens" |
 | L-4 | The window holds the inline feature, centered on the icon. Space under the window equals the space between rows, in every features style and position. The title row is the same height on every card. | card.html "gap", "inline job", "header" |
 | L-5 | Spacing follows the tile card (56 px title row, 42 px features, 36 px beside the title, 12 px between features). | features.html "heights", real Home Assistant |
