@@ -15,7 +15,7 @@ import { cardOf, displayField, XtoolFeature, type FeatureForm } from "./base";
 import { HOLD_TIME, PENDING_TARGETS, TAP_SLOP, TARGETS } from "./field";
 import { keyOf, shows, type Item } from "./keys";
 import { ITEM_MIN } from "./rows";
-import { dimmable, inputOf, LightRow, lightPart, lightPartName, lightParts, showSlides, slideOf } from "./slides";
+import { dimmable, inputOf, LightRow, lightPart, lightPartName, lightParts, OFF_AT_MINIMUM, showSlides, slideOf } from "./slides";
 import { FEATURE_CSS, LIGHT_CSS } from "./styles";
 
 const CAMERA_VIEWS: [string, string][] = [["auto", "Auto"], ["live", "Live"]];
@@ -117,7 +117,7 @@ export class XtoolCameras extends XtoolFeature {
   // toggle by default
   static override controls = ["camera_buttons", "camera_toggle", "custom_crop", ...CAMERA_SETTINGS, ...CAMERA_INPUTS];
   static override defaults = ["camera_buttons", "custom_crop", ...CAMERA_SETTINGS, ...CAMERA_INPUTS];
-  static override form = { label: "Controls" };
+  static override form = { label: "Controls", options: [OFF_AT_MINIMUM] };
   static override styles: CSSResultGroup = unsafeCSS(`${FEATURE_CSS}\n${CAMERA_CSS}\n${LIGHT_CSS}`);
 
   static override supports(device: Device): boolean {
@@ -178,6 +178,9 @@ export class XtoolCameras extends XtoolFeature {
         },
         ...controlsFields,
         displayField(),
+        // Off at minimum, as in xTool lights, while a camera's light has a slider to choose
+        ...(controlsField.selector.select.options.some((o: Config) => lightPart(o.value)?.part === "brightness")
+          ? (base.schema as Config[]).filter((f) => f.name === OFF_AT_MINIMUM.name) : []),
         {
           name: "show_last_updated", label: "Show the last updated time",
           helper: "In the Auto view, along the bottom of the picture, in the card's Time format (under Content).",
@@ -608,10 +611,10 @@ export class XtoolCameras extends XtoolFeature {
     const entityId = camera.settings[control.role];
     if (!entityId || !shows(this._hass!.states[entityId])) return [];
     if (light) {
-      if (!this._lights.has(entityId)) this._lights.set(entityId, new LightRow(this, entityId));
+      if (!this._lights.has(entityId)) this._lights.set(entityId, new LightRow(this, entityId, control));
       const row = this._lights.get(entityId)!;
       row.update();
-      return part === "icon" ? [row.icon] : row.slide.hidden ? [] : [row.slide];
+      return part === "icon" ? (row.icon ? [row.icon] : []) : row.slide.hidden ? [] : [row.slide];
     }
     const slide = slideOf(this._slides, entityId, inputOf(control));
     (slide.firstChild as HTMLElement & Config).hass = this._hass;

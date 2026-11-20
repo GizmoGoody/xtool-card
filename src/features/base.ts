@@ -1,5 +1,5 @@
 // What every feature has, and the features made of a row of keys.
-import { html, LitElement, nothing, unsafeCSS, type CSSResultGroup, type TemplateResult } from "lit";
+import { html, LitElement, nothing, render, unsafeCSS, type CSSResultGroup, type TemplateResult } from "lit";
 import { repeat } from "lit/directives/repeat.js";
 import { styleMap } from "lit/directives/style-map.js";
 import { CARD_TYPE, cssColor, ENABLED, FEATURE_EDITOR_TYPE } from "../const";
@@ -423,6 +423,25 @@ export class XtoolFeature extends XtoolElement {
   /** What the buttons show: icons, names or both. */
   _display(): string {
     return displayOf(this._config, this._type.display ?? "icons");
+  }
+
+  /**
+   * A key drawn on its own, into holder (kept, so the same key is redrawn,
+   * wherever it has been moved): for a key placed outside the feature's row.
+   * The key once it is first drawn (later, it may no longer be in holder).
+   */
+  _drawKey(b: Item, holder: HTMLElement): HTMLElement | null {
+    const color = textOn(this, b.color ? cssColor(b.color) : ENABLED);
+    if (color === null && !this._retry) {
+      // Not on the page yet: the text color is found once it is
+      this._retry = true;
+      requestAnimationFrame(() => {
+        this._retry = false;
+        this._refresh();
+      });
+    }
+    render(this._button(b, color), holder);
+    return holder.firstElementChild as HTMLElement | null;
   }
 
   /** A key, or a read-out (a state that is only shown, which looks like a field). */

@@ -110,19 +110,8 @@ export const FEATURE_CSS = `
   ${KEY_CSS}
 `;
 
-// A light: its tile icon, and its slider beside it
+// A light's slider (its key is a key, see FEATURE_CSS)
 export const LIGHT_CSS = `
-  .light { display: flex; align-items: center; gap: var(--feature-button-spacing, 12px); min-width: 0; height: var(--feature-height, 42px); }
-  ha-tile-icon { flex: none; }
-  ha-tile-icon .glyph ha-state-icon { --mdc-icon-size: 20px; }
-  /* In a row, the tile icon fills its share as a key does: its circle
-     (Home Assistant's tile icon size) becomes the item, with the features' corners */
-  .row > ha-tile-icon {
-    flex: 1 1 0; min-width: ${ITEM_MIN.key}px; display: block; height: 100%;
-    --tile-icon-size: 100%; --ha-tile-icon-border-radius: var(--feature-border-radius, 12px);
-  }
-  .row > ha-tile-icon:active { transform: none; }
-  .light .slide { flex: 1 1 auto; }
   .slide { display: block; min-width: 0; border-radius: var(--feature-border-radius, 12px); }
   .slide[hidden] { display: none; }
   /* A slider's icon, centered, as large as a key's: blended into the

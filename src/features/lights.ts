@@ -1,30 +1,29 @@
-// The lights as a light's tile card shows them: each light's icon and its
-// slider are two choices, in one row, in the order chosen.
+// The lights: each light's key (pressed while it is on, as every switch's
+// key) and its slider are two choices, in one row, in the order chosen.
 import { html, unsafeCSS, type CSSResultGroup, type TemplateResult } from "lit";
 import { entityName, type HomeAssistant } from "../ha";
 import { controlOf, type Control } from "../machine/controls";
 import type { Device } from "../machine/device";
-import { XtoolElement } from "./base";
+import { XtoolFeature } from "./base";
 import { iconOf, needsDirection } from "./keys";
-import { dimmable, LightRow, lightPart, lightPartName, lightParts, showSlides } from "./slides";
-import { LIGHT_CSS, ROW_CSS } from "./styles";
+import { dimmable, LightRow, lightPart, lightPartName, lightParts, OFF_AT_MINIMUM, showSlides } from "./slides";
+import { FEATURE_CSS, LIGHT_CSS } from "./styles";
 
 const LIGHTS = ["fill_light_left", "fill_light_right", "fill_light_front", "fill_light_back", "fill_light"];
 
 type LightControl = Control & { part: "icon" | "brightness" };
 
-export class XtoolLights extends XtoolElement {
+export class XtoolLights extends XtoolFeature {
+  // The keys show their icons: there is no Show choice
+  static override display: string | undefined = undefined;
   static override label = "Lights";
   static override pickerName = "xTool lights";
   static override keepOffered = true;
   static override form = {
     label: "Controls",
-    options: [{
-      name: "off_at_minimum", label: "Off at minimum", default: false,
-      helper: "Moving a light's slider to its minimum (1%) turns the light off.",
-    }],
+    options: [OFF_AT_MINIMUM],
   };
-  static override styles: CSSResultGroup = unsafeCSS(`:host { display: block; min-width: 0; max-width: 100%; }\n${ROW_CSS}\n${LIGHT_CSS}`);
+  static override styles: CSSResultGroup = unsafeCSS(`${FEATURE_CSS}\n${LIGHT_CSS}`);
 
   /** Each light's icon and slider: "<light>" and "<light>_brightness". */
   static override controlIds(): string[] {
@@ -55,7 +54,7 @@ export class XtoolLights extends XtoolElement {
     return html`<div class="row" role="group" aria-label=${this._type.label}></div>`;
   }
 
-  // The lights are Home Assistant's own elements, kept while they show
+  // The sliders are Home Assistant's own elements, kept while they show
   protected override updated(): void {
     const device = this._device;
     const box = this.renderRoot.querySelector<HTMLElement>(".row")!;
@@ -66,14 +65,14 @@ export class XtoolLights extends XtoolElement {
     const faces = icons.map(({ entityId }) => iconOf(this._hass!, entityId, () => this._refresh()));
     const items = chosen
       .map(({ control, entityId }) => {
-        if (!this._rows.has(entityId)) this._rows.set(entityId, new LightRow(this, entityId));
+        if (!this._rows.has(entityId)) this._rows.set(entityId, new LightRow(this, entityId, control));
         const row = this._rows.get(entityId)!;
         const i = icons.findIndex((item) => item.entityId === entityId);
         row.update(i >= 0 && control.direction && needsDirection(faces, i) ? control.direction : undefined);
         return control.part === "icon" ? row.icon : row.slide;
       })
       // A light without a brightness has no slider
-      .filter((el) => !el.hidden);
+      .filter((el): el is HTMLElement => !!el && !el.hidden);
     this._showNothing(items.length === 0);
     showSlides(box, items);
     this._fitter.fit([box]);

@@ -172,7 +172,7 @@
     check("show", !optionNames.includes("show_names") && showField?.selector.select.options.map((o) => o.label).join() === "Icons,Names,Icons and names"
       && options.querySelector("ha-form").data.show === "icons", "Show: Icons (the default), Names, or Icons and names");
 
-    // Lights: each light's icon and slider as a light's tile card shows them, each chosen and ordered on its own, in one row
+    // Lights: each light's key (latching, as every switch's key) and slider, each chosen and ordered on its own, in one row
     hass = makeHass();
     const bothLights = addFeature({ type: "custom:xtool-lights" }, { hass });
     const reordered = addFeature({ type: "custom:xtool-lights", controls: ["fill_light_back_brightness", "fill_light_front", "fill_light_back"] }, { hass });
@@ -181,32 +181,32 @@
     const lightItems = [...lightsRow.children];
     const frontIcon = lightItems[0];
     const frontSlide = lightItems[1]?.querySelector("hui-card-feature");
-    check("lights", lightItems.map((el) => el.localName === "ha-tile-icon" ? "icon" : "slider").join() === "icon,slider,icon,slider"
-      && frontIcon?.interactive && frontIcon.querySelector("ha-state-icon")?.stateObj === hass.states["light.f2_fill_front"]
+    check("lights", lightItems.map((el) => el.classList.contains("key") ? "icon" : "slider").join() === "icon,slider,icon,slider"
+      && frontIcon?.localName === "button" && frontIcon.querySelector("ha-state-icon")?.stateObj === hass.states["light.f2_fill_front"]
       && frontSlide?.feature.type === "light-brightness" && frontSlide.context.entity_id === "light.f2_fill_front",
-      "Home Assistant's tile icon with the light's own icon, and its light brightness feature, for each light");
+      "a key with the light's own icon, and its light brightness feature, for each light");
     const lightBoxes = lightItems.map((el) => el.getBoundingClientRect());
     check("lights", lightBoxes.every((b) => Math.abs(b.top - lightBoxes[0].top) < 8) && lightBoxes.at(-1).right <= lightsRow.getBoundingClientRect().right + 1,
       "all in one row, within the feature");
-    check("lights", [...reordered.shadowRoot.querySelector(".row").children].map((el) => el.localName === "ha-tile-icon"
+    check("lights", [...reordered.shadowRoot.querySelector(".row").children].map((el) => el.classList.contains("key")
       ? `icon:${el.querySelector("ha-state-icon").stateObj.entity_id}` : `slider:${el.querySelector("hui-card-feature").context.entity_id}`).join()
       === "slider:light.f2_fill_back,icon:light.f2_fill_front,icon:light.f2_fill_back", "each icon and slider in the order chosen");
-    check("lights", !lightsRow.querySelector(".arrow") && frontIcon.querySelector(":scope > ha-state-icon[slot=icon]"),
+    check("lights", !lightsRow.querySelector(".arrow") && frontIcon.querySelector(":scope > ha-state-icon"),
       "no chevrons: each light's own icon shows where it sits");
     const sameHass = makeHass();
     sameHass.entities["light.f2_fill_front"].icon = sameHass.entities["light.f2_fill_back"].icon = "mdi:lightbulb";
     const sameLights = addFeature({ type: "custom:xtool-lights" }, { hass: sameHass });
     await wait(50);
-    const sameIcons = [...sameLights.shadowRoot.querySelectorAll(".row > ha-tile-icon")];
+    const sameIcons = [...sameLights.shadowRoot.querySelectorAll(".row > .key")];
     check("lights", sameIcons.map((el) => el.querySelector(".glyph .arrow")?.icon).join() === "mdi:chevron-down,mdi:chevron-up",
       "the chevron for where each light sits when their icons are the same, as in Controls");
-    check("lights", frontIcon.style.getPropertyValue("--tile-icon-color") === "rgb(214, 228, 255)"
-      && lightItems[2].style.getPropertyValue("--tile-icon-color").includes("--state-light-inactive-color")
+    check("lights", frontIcon.style.getPropertyValue("--c") === "rgb(214, 228, 255)" && frontIcon.getAttribute("aria-pressed") === "true"
+      && lightItems[2].getAttribute("aria-pressed") === "false"
       && lightItems[1].style.getPropertyValue("--feature-color") === "rgb(214, 228, 255)",
-      "in the light's color, as the tile card colors its icon: daylight when on, Home Assistant's off color when off");
+      "latching: pressed while the light is on, in its color (daylight without one); not pressed while off");
     frontIcon.click();
-    check("lights", lastAction()?.config.tap_action.perform_action === "light.toggle" && JSON.stringify(lastCall(hass)) ===
-      JSON.stringify({ domain: "light", service: "toggle", data: { entity_id: "light.f2_fill_front" } }), "a tap on the icon turns the light on or off, through Home Assistant's action handling");
+    check("lights", lastAction()?.config.tap_action.perform_action === "light.turn_off" && JSON.stringify(lastCall(hass)) ===
+      JSON.stringify({ domain: "light", service: "turn_off", data: { entity_id: "light.f2_fill_front" } }), "a tap on the key turns the light off while it is on, through Home Assistant's action handling");
     const slideAt = (feature, value) => feature.shadowRoot.querySelector(".slide hui-card-feature").shadowRoot.firstElementChild.slide(value);
     slideAt(bothLights, 1);
     check("lights, off at minimum", JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "light", service: "turn_on", data: { entity_id: "light.f2_fill_front", brightness_pct: 1 } }),
@@ -222,7 +222,7 @@
       && JSON.stringify(lastCall(hass)) === JSON.stringify({ domain: "light", service: "turn_off", data: { entity_id: "light.f2_fill_front" } }),
       "with the option on, the minimum turns the light off, and Home Assistant's feature does not set 1 %");
     bothLights.hass = makeHass({ "light.f2_fill_front": { state: "on", attributes: { rgb_color: [255, 0, 0] } } });
-    check("lights", bothLights.shadowRoot.querySelector(".row").firstElementChild === frontIcon && frontIcon.style.getPropertyValue("--tile-icon-color") === "rgb(255, 0, 0)",
+    check("lights", bothLights.shadowRoot.querySelector(".row").firstElementChild === frontIcon && frontIcon.style.getPropertyValue("--c") === "rgb(255, 0, 0)",
       "a light's own color, when it has one; the same icon stays");
     const stub = customElements.get("xtool-lights").getStubConfig(makeHass(), { entity_id: "sensor.f2_status" });
     check("lights", JSON.stringify(stub) === JSON.stringify({ type: "custom:xtool-lights" }) && lightItems.length === 4,
@@ -244,11 +244,11 @@
     delete noLights.entities["light.f2_fill_back"];
     const none = addFeature({ type: "custom:xtool-lights" }, { hass: noLights });
     await wait(50);
-    check("lights", !none.shadowRoot.querySelector("ha-tile-icon") && !window.customCardFeatures.find((f) => f.type === "xtool-lights").isSupported(noLights, { entity_id: "sensor.f2_status" }),
+    check("lights", !none.shadowRoot.querySelector(".key") && !window.customCardFeatures.find((f) => f.type === "xtool-lights").isSupported(noLights, { entity_id: "sensor.f2_status" }),
       "none for a laser without lights");
     const p2Lights = addFeature({ type: "custom:xtool-lights" }, { hass, entityId: "sensor.p2_status" });
     await wait(50);
-    const p2LightIcons = [...p2Lights.shadowRoot.querySelectorAll(".row > ha-tile-icon")];
+    const p2LightIcons = [...p2Lights.shadowRoot.querySelectorAll(".row > .key")];
     check("lights, P2", [...p2Lights.shadowRoot.querySelectorAll(".slide hui-card-feature")].map((f) => f.context.entity_id).join() === "light.p2_fill_left,light.p2_fill_right"
       && p2LightIcons.length === 2 && !p2Lights.shadowRoot.querySelector(".arrow"),
       "the P2's left and right fill lights, four choices, by their own icons without chevrons (the close camera's light is in the camera)");
@@ -484,7 +484,7 @@
     await wait(60);
     const inputsOf = (feature) => [...feature.shadowRoot.querySelectorAll(".line > .slide hui-card-feature")]
       .map((f) => `${f.feature.type}${f.feature.style ? `:${f.feature.style}` : ""}=${f.context.entity_id}`).join();
-    const closeIcon = (feature) => feature.shadowRoot.querySelector(".line > ha-tile-icon");
+    const closeIcon = (feature) => feature.shadowRoot.querySelector('.line > .key[data-control="fill_light_close"]');
     check("P2 camera", keysOf(p2Camera).map((k) => k.textContent).join() === "Overview,Close,Crop,Measure",
       `keys for the overview and close cameras, and Crop, as for the F2's cameras, and the overview camera's Measure (${keysOf(p2Camera).map((k) => k.textContent).join()})`);
     check("P2 camera", inputsOf(p2Camera) === "select-options=select.p2_overview_crop,numeric-input:slider=number.p2_overview_exposure,select-options=select.p2_mode"
@@ -519,8 +519,8 @@
     keyNamed(p2Camera, "camera.p2_close").click();
     await wait(60);
     check("P2 camera, close", inputsOf(p2Camera) === "select-options=select.p2_close_crop,numeric-input:slider=number.p2_close_exposure,light-brightness=light.p2_close_light"
-      && closeIcon(p2Camera)?.querySelector("ha-state-icon")?.stateObj === p2Hass.states["light.p2_close_light"] && closeIcon(p2Camera).title,
-      `the close camera: its crop preset, exposure, and its fill light: the tile icon and the brightness slider; no Mode (${inputsOf(p2Camera)})`);
+      && closeIcon(p2Camera)?.textContent.trim() && closeIcon(p2Camera).title,
+      `the close camera: its crop preset, exposure, and its fill light: its key (by its name, as Show is Names) and the brightness slider; no Mode (${inputsOf(p2Camera)})`);
     check("P2 camera, sections", cellWidths().length === 3 && cellWidths().every((w) => Math.abs(w - halfWidth) < 1),
       `the close camera: the same two shared cells, and its fill light in a half cell (${cellWidths().map(Math.round).join(", ")})`);
     check("P2 camera, sections", stays() === overviewPlaces && Math.abs(p2Camera.getBoundingClientRect().height - overviewHeight) < 0.5,
@@ -564,8 +564,9 @@
     p2Camera.hass = p2Hass;
     await wait(30);
     closeIcon(p2Camera).click();
-    check("P2 camera, close", JSON.stringify(lastCall(p2Hass)) === JSON.stringify({ domain: "light", service: "toggle", data: { entity_id: "light.p2_close_light" } }),
-      "a tap on the light's icon turns it on or off");
+    check("P2 camera, close", JSON.stringify(lastCall(p2Hass)) === JSON.stringify({ domain: "light", service: "turn_off", data: { entity_id: "light.p2_close_light" } })
+      && closeIcon(p2Camera).getAttribute("aria-pressed") === "true",
+      "the light's key latches as in xTool lights: pressed while it is on, and a tap turns it off");
     // Back to the overview camera: one image, for the camera shown
     keyNamed(p2Camera, "camera.p2_overview").click();
     await wait(150);
@@ -600,6 +601,15 @@
     await wait(60);
     check("P2 camera, options", closeIcon(bothParts)?.parentElement === bothParts.shadowRoot.querySelector(".line > .slide")?.parentElement,
       "both chosen: the icon and its slider share one cell");
+    const cameraMinimum = p2Form.schema.find((f) => f.name === "off_at_minimum");
+    check("P2 camera, off at minimum", cameraMinimum?.label === "Off at minimum" && p2Form.data.off_at_minimum === false
+      && cameraMinimum.helper === "Moving a light's slider to its minimum (1%) turns the light off.",
+      "Off at minimum, as in xTool lights (off by default), for the close fill light's slider");
+    const closeMinimum = addFeature({ type: "custom:xtool-cameras", camera: "close", controls: ["fill_light_close_brightness"], off_at_minimum: true }, { hass: p2Hass, entityId: "sensor.p2_status" });
+    await wait(60);
+    closeMinimum.shadowRoot.querySelector(".slide hui-card-feature").shadowRoot.firstElementChild.slide(1);
+    check("P2 camera, off at minimum", JSON.stringify(lastCall(p2Hass)) === JSON.stringify({ domain: "light", service: "turn_off", data: { entity_id: "light.p2_close_light" } }),
+      "with the option on, the close fill light's slider at its minimum turns the light off");
     const onlyThickness = addFeature({ type: "custom:xtool-cameras", show: "names", controls: ["thickness_or_distance"] }, { hass: p2Hass, entityId: "sensor.p2_status" });
     await wait(60);
     check("P2 camera, options", !!keyNamed(onlyThickness, "measure_thickness_or_distance") && !!onlyThickness.shadowRoot.querySelector('[data-control="thickness_or_distance"]'),

@@ -1,9 +1,9 @@
 // Home Assistant's own features inside this card's (sliders and selects),
-// and the lights as a light's tile card shows them.
+// and the lights: each light's key and its slider.
 import { DAYLIGHT } from "../const";
-import { entityName, performAction, type Config, type HomeAssistant } from "../ha";
+import { entityName, type Config, type HomeAssistant } from "../ha";
 import { CONTROLS, type Control } from "../machine/controls";
-import { KINDS, type KeyHost } from "./keys";
+import { keyOf, KINDS, type Item, type KeyHost } from "./keys";
 import { ITEM_MIN, nameItem } from "./rows";
 
 // The chevron under a key's icon for where its part sits
@@ -88,36 +88,31 @@ export const lightPartName = (name: string | undefined, part: string): string | 
 export const dimmable = (hass: HomeAssistant | undefined, light: string): boolean =>
   ((hass?.states[light]?.attributes.supported_color_modes ?? []) as string[]).some((mode) => mode !== "onoff");
 
+/** The lights' option: a slider at its minimum turns its light off. */
+export const OFF_AT_MINIMUM = {
+  name: "off_at_minimum", label: "Off at minimum", default: false,
+  helper: "Moving a light's slider to its minimum (1%) turns the light off.",
+};
+
+/** What a light's row needs from its feature: the keys' drawing. */
+export interface LightHost extends KeyHost {
+  _drawKey(b: Item, holder: HTMLElement): HTMLElement | null;
+}
+
 /**
- * A light as a light's tile card shows it: Home Assistant's tile icon with
- * the light's own icon (and the chevron for where it sits, when update is
- * given one), where a tap turns the light on or off, and Home Assistant's
- * light brightness feature (for a light with a brightness). el holds both,
- * side by side; icon and slide are each on its own. The feature's
- * off_at_minimum option turns the light off when its slider is set to the
- * minimum (1 %).
+ * A light: its key, which latches as every switch's key does (pressed while
+ * the light is on, a tap turns it on or off), in the light's own color
+ * (daylight without one), and Home Assistant's light brightness feature
+ * (for a light with a brightness). icon and slide are each placed on their
+ * own. The feature's off_at_minimum option turns the light off when its
+ * slider is set to the minimum (1 %).
  */
 export class LightRow {
-  readonly el: HTMLDivElement;
-  readonly icon: HTMLElement & Config;
   readonly slide: HTMLElement;
-  private _state: HTMLElement & Config;
-  private _drawn = false;
-  private _direction?: string;
+  private _holder = document.createElement("div");
+  private _icon?: HTMLElement;
 
-  constructor(private _feature: KeyHost, private _entityId: string) {
-    this.el = document.createElement("div");
-    this.el.className = "light";
-    this.icon = document.createElement("ha-tile-icon") as HTMLElement & Config;
-    this.icon.dataset.min = String(ITEM_MIN.key);
-    this.icon.interactive = true;
-    this.icon.actionHandlerOptions = { hasHold: false, hasDoubleClick: false };
-    this._state = document.createElement("ha-state-icon") as HTMLElement & Config;
-    // Home Assistant's action handler on the tile icon sends an action event for a tap
-    this.icon.addEventListener("action", (ev) => {
-      ev.stopPropagation();
-      if ((ev as CustomEvent).detail?.action === "tap") performAction(_feature, "light.toggle", _entityId);
-    });
+  constructor(private _feature: LightHost, private _entityId: string, private _control: Control) {
     this.slide = slideOf(new Map(), _entityId, KINDS.light.input!);
     // Home Assistant's brightness feature keeps its slider's value-changed
     // to itself (it sets the brightness): heard on the way down, at the
@@ -129,47 +124,25 @@ export class LightRow {
         _feature._hass!.callService("light", "turn_off", { entity_id: _entityId });
       }
     }, true);
-    this.el.append(this.icon, this.slide);
   }
 
-  /** The light as it is now, with the chevron for direction (none: without one). */
-  update(direction?: string): HTMLElement {
-    if (!this._drawn || direction !== this._direction) this._drawIcon(direction);
+  /** The light's key, once drawn (see update); it leaves its holder when placed, and is redrawn where it is. */
+  get icon(): HTMLElement | undefined {
+    return this._icon;
+  }
+
+  /** The light as it is now, its key with the chevron for direction (none: without one). */
+  update(direction?: string): void {
     const hass = this._feature._hass!, stateObj = hass.states[this._entityId];
     const rgb = stateObj?.attributes.rgb_color;
-    const color = stateObj?.state === "on" ? (Array.isArray(rgb) ? `rgb(${rgb.join(", ")})` : DAYLIGHT) : LIGHT_OFF;
-    // As the tile card's icon: the icon in the color, its circle the color at Home Assistant's opacity
-    this.icon.style.setProperty("--tile-icon-color", color);
-    this.icon.accessibleLabel = entityName(hass, this._entityId);
-    nameItem(this.icon, this.icon.accessibleLabel);
-    this._state.hass = hass;
-    this._state.stateObj = stateObj;
+    const own = Array.isArray(rgb) ? `rgb(${rgb.join(", ")})` : DAYLIGHT;
+    const key = keyOf(this._feature, this._control, this._entityId, this._feature._moment());
+    if (key) this._icon = this._feature._drawKey({ ...key, color: own, direction, control: this._control.id }, this._holder) ?? this._icon;
+    const color = stateObj?.state === "on" ? own : LIGHT_OFF;
     this.slide.hidden = !dimmable(hass, this._entityId);
     this.slide.style.setProperty("--feature-color", color);
     const feature = this.slide.firstChild as CardFeature;
     feature.color = color;
     feature.hass = hass;
-    return this.el;
-  }
-
-  /** The tile icon's content: the light's icon, with the chevron under it for direction. */
-  private _drawIcon(direction?: string): void {
-    this._drawn = true;
-    this._direction = direction;
-    this.icon.replaceChildren();
-    if (direction) {
-      const glyph = document.createElement("span");
-      glyph.className = "glyph";
-      glyph.slot = "icon";
-      const arrow = document.createElement("ha-icon") as HTMLElement & Config;
-      arrow.className = "arrow";
-      arrow.icon = DIRECTION_ICONS[direction];
-      this._state.removeAttribute("slot");
-      glyph.append(this._state, arrow);
-      this.icon.append(glyph);
-    } else {
-      this._state.slot = "icon";
-      this.icon.append(this._state);
-    }
   }
 }
