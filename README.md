@@ -10,7 +10,7 @@ A Home Assistant dashboard card for xTool lasers. It is Home Assistant's own **t
 - **Collapsing** to the title row with a tap, and following the laser's power.
 - **xTool features**, added like any tile feature: Job, Controls, Configuration, Safety, Lights, Camera, Overlays, Position, Focus and SafetyPro IF2 fan.
 
-The card needs the [xTool Laser integration](https://github.com/thecodingdad/ha-xtool) for the entities it shows and controls. Some features wait for integration changes that are not released yet (see [The xTool Laser integration](#the-xtool-laser-integration)).
+The card needs the [xTool integration](https://github.com/thecodingdad/ha-xtool), v2.9.0 or later, for the entities it shows and controls (see [The xTool integration](#the-xtool-integration)).
 
 | F2 Ultra UV | P2 |
 | --- | --- |
@@ -25,10 +25,9 @@ The card needs the [xTool Laser integration](https://github.com/thecodingdad/ha-
 
 ## Status
 
-This card is in **Alpha** and is being developed alongside the xTool Laser integration. It is not yet a stable, broadly validated release.
+This card is in **Alpha** and is being developed alongside the xTool integration. It is not yet a stable, broadly validated release.
 
-The current release is **0.1.0-alpha.1**. Alpha releases use SemVer prerelease
-versions; later Alpha releases increment the final prerelease number.
+Each change is published as a new Alpha pre-release, 0.1.0-alpha.N, with a higher final number than the last. The latest one is on the [Releases](https://github.com/GizmoGoody/xtool-card/releases) page.
 
 - **Developed with:**
   - xTool F2 Ultra UV
@@ -53,7 +52,7 @@ The card is published only as pre-releases, so turn on pre-releases for it befor
    1. Go to **Settings** → **Devices & services** → **Marketplace**, and open the **xTool Card** device.
    2. The **Pre-release** switch is disabled at first. Under **Controls**, select **+1 entity not shown**, select **Pre-release**, select the gear icon, turn on **Enabled**, and select **Update**.
    3. Wait about 30 seconds for Home Assistant to enable it, then turn the **Pre-release** switch on.
-4. Go back to **Settings** → **Marketplace**, open **xTool Card**, and select **Install**. Check that the version is the latest pre-release (for example 0.1.0-alpha.1), then select **Install** again in the dialog.
+4. Go back to **Settings** → **Marketplace**, open **xTool Card**, and select **Install**. Check that the version is the latest pre-release (for example 0.1.0-alpha.3), then select **Install** again in the dialog.
 5. Reload the browser page (in the Companion app, pull down to refresh).
 
 The Marketplace adds the card to **Settings** → **Dashboards** → **Resources** for you. To add the card, edit a dashboard, select **Add card**, and search for **xTool**.
@@ -137,57 +136,9 @@ Add them like any tile feature, under **Features** in the editor. Only the featu
 | Focus | `custom:xtool-focus` | Autofocus and the focus height. |
 | SafetyPro IF2 fan | `custom:xtool-safetypro-if2-fan` | Off, Auto and the fan speed. |
 
-## The xTool Laser integration
+## The xTool integration
 
-Install the [xTool Laser integration](https://github.com/thecodingdad/ha-xtool) from the Marketplace (or HACS), as its README describes. The editor offers only the features a laser has the entities for, so a feature that waits for an integration change does not appear until that change is released.
-
-**Works with the current release (v2.8.0, November 3, 2026):**
-
-- The state picture, progress edge, status light, xTool styles and collapsing.
-- The status badge: alarm, safety key, lid and firmware update.
-- **Job**: pause, resume and cancel.
-- **Controls**, **Configuration** and **Lights**: power, exhaust and cooling fans, fill lights, red dot, cover lock, buzzer and sleep, on the lasers that have them.
-- **Safety**: flame alarm, the stop when opened or moved checks, safety key and lid.
-- **Camera**: the camera pictures, without crop or perspective.
-- **SafetyPro IF2 fan**, though speeds can bounce back until #71 is merged.
-
-**Waits for an integration pull request:**
-
-| Card feature | Pull request |
-| --- | --- |
-| The P2: almost everything, including its status, cameras, crop presets, Position, Measure, its fill lights and red dots, and the **Overlays** feature | #60 |
-| **Overlay styles** (the card drawing the P2 overlays) and the Red dot close ring | #78 |
-| The connection badge (Ethernet, Wi-Fi or USB); until then it shows only Unavailable | #70 (F2 Ultra UV), #60 (P2) |
-| **Focus**, and the engraving lens in the state content | #70 |
-| Camera crop, perspective and the Calibration image on the F2 Ultra UV | #74 |
-| A faster camera picture, and how often it refreshes | #73 |
-| Keys that stay as tapped instead of flipping back until the next poll | #52 |
-| Steady SafetyPro IF2 2.0 fan speeds and Auto | #71 |
-| Initializing while the laser starts, Not responding when its Power switch is on but it does not answer, and readings unavailable while it is off | #72 |
-
-The pull requests in the original integration were opened between November 8 and 17, 2026. The maintainer has not reviewed or merged any of them yet.
-
-**The pull requests:**
-
-| Pull request | What it brings to the card | Depends on |
-| --- | --- | --- |
-| [#71 IF2 2.0](https://github.com/thecodingdad/ha-xtool/pull/71) | The SafetyPro IF2 fan feature: Off, Auto and speeds 1 to 4 | |
-| [#52 Hold written values](https://github.com/thecodingdad/ha-xtool/pull/52) | Keys that stay as tapped, instead of flipping back until the next poll | #71 |
-| [#70 F2 Ultra UV](https://github.com/thecodingdad/ha-xtool/pull/70) | Focusing and Warming up in the status, the engraving lens, the exhaust fan and red dot, the Focus feature, and the Connection sensor that the connection badge shows | |
-| [#73 WS-V2 cameras](https://github.com/thecodingdad/ha-xtool/pull/73) | A faster camera picture, and how often it refreshes | |
-| [#74 F2 Ultra UV cameras](https://github.com/thecodingdad/ha-xtool/pull/74) | Straightened pictures, a device per camera, Crop and Perspective, and the Calibration image | #70, #73 |
-| [#69 WS-V2 fixes](https://github.com/thecodingdad/ha-xtool/pull/69) | Failed jobs shown as failed, and a sleeping laser left alone | |
-| [#60 P2](https://github.com/thecodingdad/ha-xtool/pull/60) | Everything for the P2: status, cameras, crop presets, overlays, Position, lights, safety and the Connection sensor | #52, #69, #73, #74, #76 |
-| [#78 P2 overlay places](https://github.com/thecodingdad/ha-xtool/pull/78) | Where each overlay sits and the area each camera shows, so the card can draw the overlays in its own **Overlay styles**; the **Overlays** select (Integration or Card); the Red dot close ring | #60 |
-| [#76 P2 discovery](https://github.com/thecodingdad/ha-xtool/pull/76) | Finding a P2 by discovery | |
-| [#72 Power switch](https://github.com/thecodingdad/ha-xtool/pull/72) | Initializing while the laser starts, Not responding when its Power switch is on but it does not answer, readings unavailable while it is off, and auto power-off | |
-| [#68 Small fixes](https://github.com/thecodingdad/ha-xtool/pull/68) | Fill light brightness as in xTool Studio, and tidier device pages | |
-| [#55 Access control](https://github.com/thecodingdad/ha-xtool/pull/55) | The Access control switch, named as in xTool Studio and only on the units that have it | |
-| [#77 Name](https://github.com/thecodingdad/ha-xtool/pull/77) | The integration named xTool instead of xTool Laser | |
-
-Each pull request with a dependency contains the commits of the ones it depends on, so the maintainer can merge them in this order: #71, then #52; #70 and #73, then #74; #69 and #76, then #60, then #78. The others can be merged at any time.
-
-Once #77 is merged and released, the integration is named **xTool** instead of **xTool Laser** in the Marketplace and on its integration page.
+Install the [xTool integration](https://github.com/thecodingdad/ha-xtool) from the Marketplace (or HACS), as its README describes. The card needs **v2.9.0** (November 20, 2026) or later, which has every entity the card uses on the F2 Ultra UV and the P2. With an older version, the editor offers only the features the laser has entities for.
 
 ## Troubleshooting
 
