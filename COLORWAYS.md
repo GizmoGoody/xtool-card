@@ -4,4 +4,4 @@ The card's **Style** option draws the tile in the colors of an xTool machine: a 
 
 **[xTool Machine Colors](https://gizmogoody.github.io/xtool-card/colorways.html)** shows every style beside xTool's photo of the machine, with the colors the card draws and the colors sampled from the photo. The page is [docs/colorways.html](docs/colorways.html), published with GitHub Pages.
 
-The colors are `BODIES`, `WINDOWS` and `MODEL_STYLES` in `xtool-card.js`.
+The colors are `BODIES` and `WINDOWS` in `src/card/looks.ts`, and `MODEL_STYLES` in `src/machine/models.ts`.

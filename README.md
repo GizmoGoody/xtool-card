@@ -206,13 +206,25 @@ Once #77 is merged and released, the integration is named **xTool** instead of *
 
 ## Development
 
-The browser tests use the stand-ins in `tests/card` and can be run with:
+The card is written in TypeScript with [Lit](https://lit.dev) and built into one file with Rollup:
 
-```text
-python tests/card/run_card_tests.py
+- `src/xtool-card.ts` registers the card, its features and its editors, and prints the console badge.
+- `src/machine/`: the laser's entities, models, controls and overlays.
+- `src/features/`: the tile features.
+- `src/card/`: the card that wraps the tile card, and its styles.
+- `src/editor/`: the card and feature editors.
+
+```sh
+npm install
+npm run build        # dist/xtool-card.js
+npm run typecheck
+npm test             # unit tests (tests/unit)
+npm run test:browser # browser tests (tests/browser), on the built card
 ```
 
-Set `CHROME` to a Chromium-based browser executable when it is not on `PATH`.
+The browser tests load the card in a headless browser, with stand-ins for the parts of Home Assistant's frontend it uses (an F2 Ultra UV and a P2). They need Python and Chrome, Chromium or Edge; set `CHROME` to the browser's path when it is not found. `python tests/browser/run.py reference/prototype.js` runs them on the last single-file card. [tests/SPEC.md](tests/SPEC.md) lists the behaviors they check.
+
+GitHub Actions runs every check on each push. A push to `main` also publishes an alpha pre-release.
 
 ## License
 

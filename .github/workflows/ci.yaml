@@ -1,0 +1,45 @@
+# Checks every push and pull request: typecheck, unit tests, the build, and
+# the browser tests against the built card. The alpha workflow runs it too,
+# before it publishes (pushes to main run it there, not here).
+name: CI
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Browser tests
+        run: python3 tests/browser/run.py
+
+      # There is no lockfile in the repository yet: this one is kept to commit
+      - name: Keep the lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
