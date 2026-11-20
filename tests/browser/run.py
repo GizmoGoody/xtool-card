@@ -6,7 +6,9 @@ frontend (stand-ins.js), checks it, and writes the results into
 Chrome (or Chromium or Edge), prints the results and exits with 1 on any
 failure.
 
-Usage: python tests/card/run_card_tests.py
+Usage: python tests/browser/run.py [card.js]
+The card is the built one (dist/xtool-card.js) unless another file
+is given, such as the prototype (reference/prototype.js).
 Set CHROME to the browser's path if it is not found.
 """
 from __future__ import annotations
@@ -38,7 +40,7 @@ def find_browser() -> str:
     sys.exit("No Chrome, Chromium or Edge found; set CHROME to its path")
 
 
-def run_page(browser: str, page: Path) -> tuple[str, str]:
+def run_page(browser: str, page: Path, bundle: Path) -> tuple[str, str]:
     """Open a page and return its result and report."""
     out = subprocess.run(
         [
@@ -49,7 +51,7 @@ def run_page(browser: str, page: Path) -> tuple[str, str]:
             "--allow-file-access-from-files",
             "--virtual-time-budget=20000",
             "--dump-dom",
-            page.resolve().as_uri(),
+            f"{page.resolve().as_uri()}?bundle={bundle.resolve().as_uri()}",
         ],
         capture_output=True,
         text=True,
@@ -64,10 +66,15 @@ def run_page(browser: str, page: Path) -> tuple[str, str]:
 
 
 def main() -> int:
+    root = HERE.parent.parent
+    bundle = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "dist" / "xtool-card.js"
+    if not bundle.is_file():
+        sys.exit(f"No card at {bundle}: build it first (npm run build)")
     browser = find_browser()
+    print(f"Testing {bundle}")
     failed = False
     for page in sorted(HERE.glob("*.html")):
-        result, report = run_page(browser, page)
+        result, report = run_page(browser, page, bundle)
         print(f"== {page.name}: {result}")
         for line in report.splitlines():
             if result != "pass" or line.startswith("FAIL"):

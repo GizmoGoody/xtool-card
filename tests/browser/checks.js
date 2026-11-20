@@ -1,7 +1,7 @@
 /**
  * Checks for the xTool card test pages. A page runs its checks in an async
  * function passed to runChecks(); the results go into <pre id="report">,
- * whose data-result is "pass" or "fail" (read by run_card_tests.py).
+ * whose data-result is "pass" or "fail" (read by run.py).
  */
 
 const problems = [];
