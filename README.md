@@ -34,9 +34,7 @@ Each change is published as a new Alpha pre-release, 0.1.0-alpha.N, with a highe
   - xTool P2
 - **Hardware-tested:**
   - xTool F2 Ultra UV
-  - P2 basic controls
-- **In development:**
-  - P2 advanced controls
+  - xTool P2
 - **Other machines:**
   - The card may work where the integration exposes the expected entities. Please share what you find in [Discussions](https://github.com/GizmoGoody/xtool-card/discussions), and feel free to submit pull requests.
 
