@@ -17,6 +17,7 @@
     "test:browser": "python tests/browser/run.py"
   },
   "dependencies": {
+    "@gizmogoody/card-badge": "github:GizmoGoody/card-badge#v1.1.0",
     "lit": "3.3.1"
   },
   "devDependencies": {

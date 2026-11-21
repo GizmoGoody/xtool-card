@@ -13,7 +13,7 @@
 // - custom:xtool-lights         each light's icon and brightness slider
 // - custom:xtool-safetypro-if2-fan  the SafetyPro IF2 fan: off, auto and its speed
 // - custom:xtool-cameras        a camera, with keys to switch and a crop set with two taps
-import { printBadge } from "./badge";
+import { printBadge } from "@gizmogoody/card-badge";
 import { CARD_TYPE, EDITOR_TYPE, FEATURE_EDITOR_TYPE, VERSION } from "./const";
 import { define, type HomeAssistant } from "./ha";
 import { XtoolCard } from "./card/card";
@@ -52,5 +52,6 @@ if (!customElements.get(CARD_TYPE)) {
     version: VERSION,
     description: "Status and controls for an xTool laser.",
     repo: "xtool-card",
+    feedback: "discussions",
   });
 }
